@@ -17,7 +17,10 @@ internal static class Program
         builder.Services.AddHostedService<Entry>();
 
         // various services used in Entry.cs
-        builder.Services.AddTransient<IGameEngine, ThreeDEngine>();
+        builder.Services.AddSingleton<ITerrainGenerator, TerrainGenerator>();
+        builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
+        builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
+        builder.Services.AddTransient<IGameEngine, VibeGameEngine>();
 
         var host = builder.Build();
 
