@@ -1,5 +1,5 @@
 using System.Numerics;
-using Raylib_cs;
+using Raylib_CsLo;
 using VibeGame.Terrain;
 
 namespace VibeGame.Objects
@@ -61,7 +61,7 @@ namespace VibeGame.Objects
             float scale = MathF.Max(0.6f, trunkHeight / 3.0f);
 
             // Draw model at ground position
-            Raylib.DrawModel(model, pos, scale, Color.White);
+            Raylib.DrawModel(model, pos, scale, Raylib.WHITE);
         }
 
         private void EnsureModelsLoaded()

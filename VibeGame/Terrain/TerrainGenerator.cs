@@ -52,16 +52,17 @@ namespace VibeGame.Terrain
         {
             // Domain warp to break up grid-aligned patterns
             float warp = 0.35f;
-            float wa = _warpA.GetValue3D(worldX * TerrainScale * 0.5f + 100.0f, 0.0f, worldZ * TerrainScale * 0.5f + 100.0f);
-            float wb = _warpB.GetValue3D(worldX * TerrainScale * 0.5f - 100.0f, 0.0f, worldZ * TerrainScale * 0.5f - 100.0f);
+            // Sample warp noises without extra scaling – frequency already set in sources
+            float wa = _warpA.GetValue3D(worldX + 100.0f, 0.0f, worldZ + 100.0f);
+            float wb = _warpB.GetValue3D(worldX - 100.0f, 0.0f, worldZ - 100.0f);
             float wxWarp = worldX + ((wa + 1.0f) * 0.5f - 0.5f) * warp * 20f;
             float wzWarp = worldZ + ((wb + 1.0f) * 0.5f - 0.5f) * warp * 20f;
 
-            // Layered noises
-            float macro = (_macroFbm.GetValue3D(wxWarp * MacroScale, 0.0f, wzWarp * MacroScale) + 1f) * 0.5f; // 0..1
-            float baseVal = (_baseFbm.GetValue3D(wxWarp * TerrainScale, 0.0f, wzWarp * TerrainScale) + 1f) * 0.5f;
-            float ridgedVal = (_ridged.GetValue3D(wxWarp * TerrainScale * 0.6f, 0.0f, wzWarp * TerrainScale * 0.6f) + 1f) * 0.5f;
-            float detail = (_detailFbm.GetValue3D(wxWarp * DetailScale, 0.0f, wzWarp * DetailScale) + 1f) * 0.5f;
+            // Layered noises (do not multiply by scales again; sources already configured)
+            float macro = (_macroFbm.GetValue3D(wxWarp, 0.0f, wzWarp) + 1f) * 0.5f; // 0..1
+            float baseVal = (_baseFbm.GetValue3D(wxWarp, 0.0f, wzWarp) + 1f) * 0.5f;
+            float ridgedVal = (_ridged.GetValue3D(wxWarp, 0.0f, wzWarp) + 1f) * 0.5f;
+            float detail = (_detailFbm.GetValue3D(wxWarp, 0.0f, wzWarp) + 1f) * 0.5f;
 
             // Simple analytic hills fallback (guarantees visible relief even if noise degenerates)
             float sinHills = (MathF.Sin(wxWarp * 0.01f) + MathF.Cos(wzWarp * 0.012f)) * 0.25f +

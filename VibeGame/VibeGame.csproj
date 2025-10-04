@@ -16,7 +16,7 @@
     <PackageReference Include="AlvorEngine.FastNoiseLite" Version="1.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.9" />
-    <PackageReference Include="Raylib-cs" Version="7.0.1" />
+    <PackageReference Include="Raylib-CsLo" Version="4.2.0.9" />
     <PackageReference Include="SharpNoise" Version="0.12.1.1" />
   </ItemGroup>
 

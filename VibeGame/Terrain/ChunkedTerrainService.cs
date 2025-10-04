@@ -1,5 +1,5 @@
 using System.Numerics;
-using Raylib_cs;
+using Raylib_CsLo;
 
 namespace VibeGame.Terrain
 {
@@ -56,7 +56,7 @@ namespace VibeGame.Terrain
 
         public void Render(Camera3D camera, Color baseColor)
         {
-            var (ccx, ccz) = WorldToChunk(camera.Position.X, camera.Position.Z);
+            var (ccx, ccz) = WorldToChunk(camera.position.X, camera.position.Z);
             float chunkWorldSize = (_chunkSize - 1) * _tileSize;
             for (int dz = -_renderRadiusChunks; dz <= _renderRadiusChunks; dz++)
             {

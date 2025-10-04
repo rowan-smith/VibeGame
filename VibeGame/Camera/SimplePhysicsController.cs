@@ -1,5 +1,5 @@
 using System.Numerics;
-using Raylib_cs;
+using Raylib_CsLo;
 
 namespace VibeGame
 {
@@ -21,16 +21,16 @@ namespace VibeGame
         public void Integrate(ref Camera3D camera, float dt, Vector3 horizontalDisplacement, Func<float, float, float> groundHeightFunc)
         {
             // Track initial position to preserve camera forward by applying same delta to target
-            Vector3 startPos = camera.Position;
+            Vector3 startPos = camera.position;
 
             // Horizontal move first (horizontalDisplacement is already scaled by dt)
-            camera.Position += new Vector3(horizontalDisplacement.X, 0, horizontalDisplacement.Z);
+            camera.position += new Vector3(horizontalDisplacement.X, 0, horizontalDisplacement.Z);
 
             // Ground height under current position (eye height applied after sampling)
-            float groundY = groundHeightFunc(camera.Position.X, camera.Position.Z) + _eyeHeight;
+            float groundY = groundHeightFunc(camera.position.X, camera.position.Z) + _eyeHeight;
 
             // Jump input only when grounded
-            if (_isGrounded && Raylib.IsKeyPressed(KeyboardKey.Space))
+            if (_isGrounded && Raylib.IsKeyPressed(KeyboardKey.KEY_SPACE))
             {
                 _verticalVelocity = _jumpSpeed;
                 _isGrounded = false;
@@ -38,13 +38,16 @@ namespace VibeGame
 
             // Integrate vertical velocity
             _verticalVelocity += _gravity * dt;
-            camera.Position = new Vector3(camera.Position.X, camera.Position.Y + _verticalVelocity * dt, camera.Position.Z);
+            camera.position = camera.position with
+            {
+                Y = camera.position.Y + _verticalVelocity * dt,
+            };
 
             // Ground collision
-            groundY = groundHeightFunc(camera.Position.X, camera.Position.Z) + _eyeHeight;
-            if (camera.Position.Y <= groundY)
+            groundY = groundHeightFunc(camera.position.X, camera.position.Z) + _eyeHeight;
+            if (camera.position.Y <= groundY)
             {
-                camera.Position = new Vector3(camera.Position.X, groundY, camera.Position.Z);
+                camera.position = new Vector3(camera.position.X, groundY, camera.position.Z);
                 _verticalVelocity = 0f;
                 _isGrounded = true;
             }
@@ -54,8 +57,8 @@ namespace VibeGame
             }
 
             // Apply same positional delta to target to avoid fighting camera controller orientation
-            Vector3 delta = camera.Position - startPos;
-            camera.Target += delta;
+            Vector3 delta = camera.position - startPos;
+            camera.target += delta;
         }
     }
 }

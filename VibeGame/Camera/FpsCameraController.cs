@@ -1,5 +1,5 @@
 using System.Numerics;
-using Raylib_cs;
+using Raylib_CsLo;
 
 namespace VibeGame.Camera
 {
@@ -18,11 +18,11 @@ namespace VibeGame.Camera
         {
             // Mouse look
             Vector2 mouseDelta = Raylib.GetMouseDelta();
-            Vector3 forward = Vector3.Normalize(camera.Target - camera.Position);
-            Vector3 right = Vector3.Normalize(Vector3.Cross(forward, camera.Up));
+            Vector3 forward = Vector3.Normalize(camera.target - camera.position);
+            Vector3 right = Vector3.Normalize(Vector3.Cross(forward, camera.up));
 
             // Yaw around global up
-            Matrix4x4 yaw = Matrix4x4.CreateFromAxisAngle(camera.Up, -mouseDelta.X * _mouseSensitivity);
+            Matrix4x4 yaw = Matrix4x4.CreateFromAxisAngle(camera.up, -mouseDelta.X * _mouseSensitivity);
             forward = Vector3.TransformNormal(forward, yaw);
             right = Vector3.TransformNormal(right, yaw);
 
@@ -30,24 +30,24 @@ namespace VibeGame.Camera
             Vector3 pitchAxis = right;
             Matrix4x4 pitch = Matrix4x4.CreateFromAxisAngle(pitchAxis, -mouseDelta.Y * _mouseSensitivity);
             Vector3 newForward = Vector3.TransformNormal(forward, pitch);
-            float yDot = Vector3.Dot(newForward, camera.Up);
+            float yDot = Vector3.Dot(newForward, camera.up);
             if (yDot > -0.95f && yDot < 0.95f) forward = newForward;
 
             // Update camera target
-            camera.Target = camera.Position + forward;
+            camera.target = camera.position + forward;
 
             // Flattened directions for horizontal movement
             Vector3 flatForward = forward;
             flatForward.Y = 0;
             if (flatForward.LengthSquared() > 0.0001f) flatForward = Vector3.Normalize(flatForward);
-            Vector3 flatRight = Vector3.Normalize(Vector3.Cross(flatForward, camera.Up));
+            Vector3 flatRight = Vector3.Normalize(Vector3.Cross(flatForward, camera.up));
 
             // Keyboard input
             Vector3 horizMoveDir = Vector3.Zero;
-            if (Raylib.IsKeyDown(KeyboardKey.W)) horizMoveDir += flatForward;
-            if (Raylib.IsKeyDown(KeyboardKey.S)) horizMoveDir -= flatForward;
-            if (Raylib.IsKeyDown(KeyboardKey.A)) horizMoveDir -= flatRight;
-            if (Raylib.IsKeyDown(KeyboardKey.D)) horizMoveDir += flatRight;
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_W)) horizMoveDir += flatForward;
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_S)) horizMoveDir -= flatForward;
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_A)) horizMoveDir -= flatRight;
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_D)) horizMoveDir += flatRight;
             if (horizMoveDir.LengthSquared() > 1e-6f)
                 horizMoveDir = Vector3.Normalize(horizMoveDir);
 
