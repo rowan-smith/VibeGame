@@ -1,0 +1,27 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VibeGame", "VibeGame\VibeGame.csproj", "{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Logging", "Logging\Logging.csproj", "{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Items", "Items", "{556906A2-F4B2-4066-B200-B0B98E263172}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
