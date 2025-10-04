@@ -15,6 +15,39 @@ namespace VibeGame
         private const float TerrainLacunarity = 2.0f;
         private const float TerrainGain = 0.55f;
 
+        // Base infinite height function (no island falloff)
+        public float ComputeHeight(float worldX, float worldZ)
+        {
+            // Domain warp to break up grid-aligned patterns
+            float warp = 0.35f;
+            float wxWarp = worldX + (Noise.Fbm(worldX * TerrainScale * 0.5f + 100, worldZ * TerrainScale * 0.5f + 100, 3, 2.0f, 0.5f) - 0.5f) * warp * 20f;
+            float wzWarp = worldZ + (Noise.Fbm(worldX * TerrainScale * 0.5f - 100, worldZ * TerrainScale * 0.5f - 100, 3, 2.0f, 0.5f) - 0.5f) * warp * 20f;
+
+            float baseMountains = Noise.Fbm(wxWarp * TerrainScale, wzWarp * TerrainScale, TerrainOctaves, TerrainLacunarity, TerrainGain);
+            float ridged = Noise.RidgedFbm(wxWarp * TerrainScale * 0.6f, wzWarp * TerrainScale * 0.6f, 4, 2.0f, 0.5f);
+            float h01 = baseMountains * 0.7f + ridged * 0.6f;
+            return h01 * TerrainAmplitude;
+        }
+
+        public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
+        {
+            float[,] heights = new float[chunkSize, chunkSize];
+            // Important: Chunk world stride must match rendered tile coverage (chunkSize - 1) tiles
+            float chunkWorldSize = (chunkSize - 1) * TileSize;
+            float originX = chunkX * chunkWorldSize;
+            float originZ = chunkZ * chunkWorldSize;
+            for (int z = 0; z < chunkSize; z++)
+            {
+                for (int x = 0; x < chunkSize; x++)
+                {
+                    float wx = originX + x * TileSize;
+                    float wz = originZ + z * TileSize;
+                    heights[x, z] = ComputeHeight(wx, wz);
+                }
+            }
+            return heights;
+        }
+
         public float[,] GenerateHeights()
         {
             float[,] heights = new float[TerrainSize, TerrainSize];
@@ -27,24 +60,15 @@ namespace VibeGame
                     float wx = (x - half) * TileSize;
                     float wz = (z - half) * TileSize;
 
-                    // Domain warp to break up grid-aligned patterns
-                    float warp = 0.35f;
-                    float wxWarp = wx + (Noise.Fbm(wx * TerrainScale * 0.5f + 100, wz * TerrainScale * 0.5f + 100, 3, 2.0f, 0.5f) - 0.5f) * warp * 20f;
-                    float wzWarp = wz + (Noise.Fbm(wx * TerrainScale * 0.5f - 100, wz * TerrainScale * 0.5f - 100, 3, 2.0f, 0.5f) - 0.5f) * warp * 20f;
+                    float baseH = ComputeHeight(wx, wz);
 
-                    float baseMountains = Noise.Fbm(wxWarp * TerrainScale, wzWarp * TerrainScale, TerrainOctaves, TerrainLacunarity, TerrainGain);
-                    float ridged = Noise.RidgedFbm(wxWarp * TerrainScale * 0.6f, wzWarp * TerrainScale * 0.6f, 4, 2.0f, 0.5f);
-
-                    // Blend: base + some ridged for sharp peaks
-                    float h01 = baseMountains * 0.7f + ridged * 0.6f;
-
-                    // Edge falloff island
+                    // Edge falloff island for the finite preview map
                     float nx = (x / (float)(TerrainSize - 1)) * 2f - 1f;
                     float nz = (z / (float)(TerrainSize - 1)) * 2f - 1f;
                     float r = MathF.Sqrt(nx * nx + nz * nz);
                     float falloff = Math.Clamp(1f - MathF.Pow(MathF.Max(0f, r - 0.6f) / 0.4f, 2f), 0f, 1f);
 
-                    heights[x, z] = (h01 * falloff) * TerrainAmplitude;
+                    heights[x, z] = baseH * falloff;
                 }
             }
 

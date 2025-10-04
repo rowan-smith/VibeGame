@@ -20,6 +20,11 @@ internal static class Program
         builder.Services.AddSingleton<ITerrainGenerator, TerrainGenerator>();
         builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
+
+        // Game engine services
+        builder.Services.AddSingleton<ICameraController, FpsCameraController>();
+        builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
+        builder.Services.AddSingleton<IInfiniteTerrain, ChunkedTerrainService>();
         builder.Services.AddTransient<IGameEngine, VibeGameEngine>();
 
         var host = builder.Build();

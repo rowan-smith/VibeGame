@@ -7,7 +7,7 @@ namespace Logging;
 
 public sealed class VibeLogging : IDisposable
 {
-    private const string LogTemplate = "{Timestamp:dd-MM-yyyy HH:mm:ss} [{Level:u3}] {SourceContext}: {Message:lj} {Properties}{NewLine}{Exception}";
+    private const string LogTemplate = "{Timestamp:dd-MM-yyyy HH:mm:ss} [{Level:u3}] {SourceContext}: {Message:lj} {NewLine}{Exception}";
     
     private readonly ILogger _logger;
     private bool _disposed;
