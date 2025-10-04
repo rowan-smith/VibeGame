@@ -1,9 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.Numerics;
 using Raylib_cs;
 
-namespace VibeGame
+namespace VibeGame.Terrain
 {
     public class ChunkedTerrainService : IInfiniteTerrain
     {

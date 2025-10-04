@@ -1,7 +1,7 @@
 using System.Numerics;
 using Raylib_cs;
 
-namespace VibeGame
+namespace VibeGame.Terrain
 {
     public interface IInfiniteTerrain
     {

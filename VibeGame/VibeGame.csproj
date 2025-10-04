@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="LibNoise" Version="0.2.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.9" />
     <PackageReference Include="Raylib-cs" Version="7.0.1" />
@@ -29,6 +30,12 @@
         <None Include="assets\terrain\**\*.*">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Camera\" />
+      <Folder Include="Core\" />
+      <Folder Include="Terrain\" />
     </ItemGroup>
 
 </Project>

@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-using System.Numerics;
+﻿using System.Numerics;
+using VibeGame.Terrain;
 
-namespace VibeGame
+namespace VibeGame.Objects
 {
     public interface ITreeRenderer
     {

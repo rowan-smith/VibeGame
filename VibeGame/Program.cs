@@ -1,7 +1,9 @@
-﻿using System.Net.Mime;
-using Logging;
+﻿using Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using VibeGame.Camera;
+using VibeGame.Objects;
+using VibeGame.Terrain;
 
 namespace VibeGame;
 

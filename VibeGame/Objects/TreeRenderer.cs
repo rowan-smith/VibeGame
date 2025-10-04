@@ -1,10 +1,8 @@
-using System;
 using System.Numerics;
-using System.Collections.Generic;
-using System.IO;
 using Raylib_cs;
+using VibeGame.Terrain;
 
-namespace VibeGame
+namespace VibeGame.Objects
 {
     public class TreeRenderer : ITreeRenderer, IDisposable
     {

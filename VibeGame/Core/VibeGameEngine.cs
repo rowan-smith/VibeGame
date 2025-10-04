@@ -1,5 +1,6 @@
 using System.Numerics;
 using Raylib_cs;
+using VibeGame.Terrain;
 
 namespace VibeGame
 {

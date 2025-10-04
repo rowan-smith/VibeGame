@@ -1,7 +1,7 @@
 using System.Numerics;
 using Raylib_cs;
 
-namespace VibeGame
+namespace VibeGame.Camera
 {
     public class FpsCameraController : ICameraController
     {
@@ -37,7 +37,8 @@ namespace VibeGame
             camera.Target = camera.Position + forward;
 
             // Flattened directions for horizontal movement
-            Vector3 flatForward = forward; flatForward.Y = 0;
+            Vector3 flatForward = forward;
+            flatForward.Y = 0;
             if (flatForward.LengthSquared() > 0.0001f) flatForward = Vector3.Normalize(flatForward);
             Vector3 flatRight = Vector3.Normalize(Vector3.Cross(flatForward, camera.Up));
 
