@@ -1,7 +1,3 @@
-using LibNoise;
-using LibNoise.Filter;
-using LibNoise.Primitive;
-
 namespace VibeGame.Terrain
 {
     public class TerrainGenerator : ITerrainGenerator
@@ -10,51 +6,45 @@ namespace VibeGame.Terrain
         public int TerrainSize { get; } = 120;
         public float TileSize { get; } = 1.5f;
 
-        // Noise params (tuned for smoother rolling terrain)
-        private const float TerrainScale = 0.03f;
-        private const float TerrainAmplitude = 3.8f;
+        // Noise params (tuned for richer layered terrain)
+        private const float TerrainScale = 0.03f;       // mid frequency
+        private const float MacroScale = 0.008f;        // large hills/mountains
+        private const float DetailScale = 0.08f;        // small undulations
+        private const float TerrainAmplitude = 6.0f;    // overall amplitude increased
         private const int TerrainOctaves = 4;
         private const float TerrainLacunarity = 2.0f;
         private const float TerrainGain = 0.55f;
 
-        // LibNoise modules
-        private readonly SumFractal _warpA;
-        private readonly SumFractal _warpB;
-        private readonly SumFractal _baseFbm;
-        private readonly RidgedMultiFractal _ridged;
+        // Noise sources via FastNoiseLite
+        private readonly INoiseSource _warpA;
+        private readonly INoiseSource _warpB;
+        private readonly INoiseSource _baseFbm;
+        private readonly INoiseSource _macroFbm;
+        private readonly INoiseSource _detailFbm;
+        private readonly INoiseSource _ridged;
 
-        public TerrainGenerator()
+        public TerrainGenerator(
+            FastNoiseLite.NoiseType baseType = FastNoiseLite.NoiseType.OpenSimplex2,
+            FastNoiseLite.NoiseType macroType = FastNoiseLite.NoiseType.OpenSimplex2,
+            FastNoiseLite.NoiseType detailType = FastNoiseLite.NoiseType.OpenSimplex2S,
+            FastNoiseLite.NoiseType ridgedType = FastNoiseLite.NoiseType.OpenSimplex2S)
         {
             int seed = 1337;
             // Domain warp sources (lower frequency, few octaves)
-            _warpA = new SumFractal();
-            _warpA.Primitive3D = new ImprovedPerlin(seed + 1, NoiseQuality.Standard);
-            _warpA.Frequency = TerrainScale * 0.5f;
-            _warpA.Lacunarity = 2.0f;
-            _warpA.Gain = 0.5f;
-            _warpA.OctaveCount = 3f;
-
-            _warpB = new SumFractal();
-            _warpB.Primitive3D = new ImprovedPerlin(seed + 2, NoiseQuality.Standard);
-            _warpB.Frequency = TerrainScale * 0.5f;
-            _warpB.Lacunarity = 2.0f;
-            _warpB.Gain = 0.5f;
-            _warpB.OctaveCount = 3f;
+            _warpA = new FastNoiseLiteSource(seed + 1, FastNoiseLite.NoiseType.OpenSimplex2, TerrainScale * 0.5f, 3, 2.0f, 0.5f);
+            _warpB = new FastNoiseLiteSource(seed + 2, FastNoiseLite.NoiseType.OpenSimplex2, TerrainScale * 0.5f, 3, 2.0f, 0.5f);
 
             // Base terrain FBM
-            _baseFbm = new SumFractal();
-            _baseFbm.Primitive3D = new ImprovedPerlin(seed + 3, NoiseQuality.Standard);
-            _baseFbm.Frequency = TerrainScale;
-            _baseFbm.Lacunarity = TerrainLacunarity;
-            _baseFbm.Gain = TerrainGain;
-            _baseFbm.OctaveCount = TerrainOctaves;
+            _baseFbm = new FastNoiseLiteSource(seed + 3, baseType, TerrainScale, TerrainOctaves, TerrainLacunarity, TerrainGain);
+
+            // Macro terrain (broad hills)
+            _macroFbm = new FastNoiseLiteSource(seed + 10, macroType, MacroScale, 3, 2.0f, 0.5f);
+
+            // Detail terrain (small ripples)
+            _detailFbm = new FastNoiseLiteSource(seed + 11, detailType, DetailScale, 2, 2.2f, 0.55f);
 
             // Ridged contribution
-            _ridged = new RidgedMultiFractal();
-            _ridged.Primitive3D = new ImprovedPerlin(seed + 4, NoiseQuality.Standard);
-            _ridged.Frequency = TerrainScale * 0.6f;
-            _ridged.Lacunarity = 2.0f;
-            _ridged.OctaveCount = 4f;
+            _ridged = new FastNoiseLiteSource(seed + 4, ridgedType, TerrainScale * 0.6f, 4, 2.0f, 0.5f);
         }
 
         // Base infinite height function (no island falloff)
@@ -62,17 +52,39 @@ namespace VibeGame.Terrain
         {
             // Domain warp to break up grid-aligned patterns
             float warp = 0.35f;
-            float wa = _warpA.GetValue(worldX * TerrainScale * 0.5f + 100.0f, 0.0f, worldZ * TerrainScale * 0.5f + 100.0f);
-            float wb = _warpB.GetValue(worldX * TerrainScale * 0.5f - 100.0f, 0.0f, worldZ * TerrainScale * 0.5f - 100.0f);
+            float wa = _warpA.GetValue3D(worldX * TerrainScale * 0.5f + 100.0f, 0.0f, worldZ * TerrainScale * 0.5f + 100.0f);
+            float wb = _warpB.GetValue3D(worldX * TerrainScale * 0.5f - 100.0f, 0.0f, worldZ * TerrainScale * 0.5f - 100.0f);
             float wxWarp = worldX + ((wa + 1.0f) * 0.5f - 0.5f) * warp * 20f;
             float wzWarp = worldZ + ((wb + 1.0f) * 0.5f - 0.5f) * warp * 20f;
 
-            float baseVal = _baseFbm.GetValue(wxWarp * TerrainScale, 0.0f, wzWarp * TerrainScale);
-            float ridgedVal = _ridged.GetValue(wxWarp * TerrainScale * 0.6f, 0.0f, wzWarp * TerrainScale * 0.6f);
-            float base01 = (baseVal + 1.0f) * 0.5f;
-            float ridged01 = (ridgedVal + 1.0f) * 0.5f;
-            float h01 = base01 * 0.7f + ridged01 * 0.6f;
-            return h01 * TerrainAmplitude;
+            // Layered noises
+            float macro = (_macroFbm.GetValue3D(wxWarp * MacroScale, 0.0f, wzWarp * MacroScale) + 1f) * 0.5f; // 0..1
+            float baseVal = (_baseFbm.GetValue3D(wxWarp * TerrainScale, 0.0f, wzWarp * TerrainScale) + 1f) * 0.5f;
+            float ridgedVal = (_ridged.GetValue3D(wxWarp * TerrainScale * 0.6f, 0.0f, wzWarp * TerrainScale * 0.6f) + 1f) * 0.5f;
+            float detail = (_detailFbm.GetValue3D(wxWarp * DetailScale, 0.0f, wzWarp * DetailScale) + 1f) * 0.5f;
+
+            // Simple analytic hills fallback (guarantees visible relief even if noise degenerates)
+            float sinHills = (MathF.Sin(wxWarp * 0.01f) + MathF.Cos(wzWarp * 0.012f)) * 0.25f +
+                             (MathF.Sin(wxWarp * 0.035f + 1.3f) * MathF.Cos(wzWarp * 0.028f - 0.7f)) * 0.125f; // ~[-0.375,0.375]
+            float sin01 = Math.Clamp((sinHills + 0.5f), 0f, 1f);
+
+            // Terracing function to create geological layers subtly
+            float terrace(float v, float steps, float strength)
+            {
+                float t = MathF.Round(v * steps) / steps;
+                return v + (t - v) * strength;
+            }
+
+            // Combine layers (stronger macro and vertical exaggeration)
+            float h01 = 0.45f * baseVal + 0.5f * macro + 0.3f * ridgedVal + 0.08f * detail;
+            // Mix in analytic fallback to ensure non-flat result
+            h01 = h01 * 0.85f + sin01 * 0.15f;
+            h01 = Math.Clamp(h01, 0f, 1f);
+            h01 = terrace(h01, 8f, 0.28f);
+
+            // Vertical exaggeration for clarity
+            float exaggeration = 1.35f;
+            return h01 * TerrainAmplitude * exaggeration;
         }
 
         public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
