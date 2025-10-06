@@ -1,5 +1,8 @@
 using System.Numerics;
 using Raylib_CsLo;
+using Serilog;
+using Serilog.Core;
+using VibeGame.Core;
 
 namespace VibeGame.Terrain
 {
@@ -7,9 +10,12 @@ namespace VibeGame.Terrain
     // Now supports sampling a diffuse terrain texture to color triangles.
     public class TerrainRenderer : ITerrainRenderer
     {
-        // Terrain diffuse textures (low = mud/leaves, high = aerial rocks)
-        private readonly string _lowDiffusePath = Path.Combine("assets", "terrain", "brown_mud_leaves", "textures", "brown_mud_leaves_01_diff_4k.jpg");
-        private readonly string _highDiffusePath = Path.Combine("assets", "terrain", "aerial_rocks", "textures", "aerial_rocks_04_diff_4k.jpg");
+        // Terrain glTF models (will be loaded to validate and to leverage their referenced textures)
+        private readonly string _lowModelPath = Path.Combine("assets", "terrain", "brown_mud_leaves", "brown_mud_leaves_01_4k.gltf");
+        private readonly string _highModelPath = Path.Combine("assets", "terrain", "aerial_rocks", "aerial_rocks_04_4k.gltf");
+        // Albedo textures (PNG) used for terrain sampling/drawing
+        private readonly string _lowDiffusePath = Path.Combine("assets", "terrain", "brown_mud_leaves", "textures", "brown_mud_leaves_01_diff_4k.png");
+        private readonly string _highDiffusePath = Path.Combine("assets", "terrain", "aerial_rocks", "textures", "aerial_rocks_04_diff_4k.png");
 
         private Image _lowImage;
         private Image _highImage;
@@ -28,19 +34,33 @@ namespace VibeGame.Terrain
         private readonly float _highTiling = 1f / 8f;  // rocks: a bit larger to avoid noise
         private readonly float _textureBlend = 0.62f;  // how strongly textures influence final color
 
-        public TerrainRenderer()
+        private bool _texturesInitialized;
+        
+        private readonly ILogger logger = Log.ForContext<TerrainRenderer>();
+        private readonly ITextureManager _textureManager;
+        
+        public TerrainRenderer(ITextureManager textureManager)
         {
+            _textureManager = textureManager;
+            _texturesInitialized = false;
+        }
+
+        private void EnsureTextures()
+        {
+            if (_texturesInitialized) return;
             TryLoadTextures();
+            _texturesInitialized = true;
         }
 
         public void Render(float[,] heights, float tileSize, Camera3D camera, Color baseColor)
         {
+            EnsureTextures();
             int sizeX = heights.GetLength(0);
             int sizeZ = heights.GetLength(1);
             int half = sizeX / 2;
 
             Vector3 camPos = camera.position;
-            int viewRadiusTiles = 50; // reasonable default
+            int viewRadiusTiles = 32; // tighter default for performance
 
             int cx = (int)MathF.Round(camPos.X / tileSize) + half;
             int cz = (int)MathF.Round(camPos.Z / tileSize) + half;
@@ -59,6 +79,14 @@ namespace VibeGame.Terrain
                     float wz0 = (z - half) * tileSize;
                     float wx1 = wx0 + tileSize;
                     float wz1 = wz0 + tileSize;
+
+                    // Distance culling to reduce overdraw in far tiles
+                    float cxw = (wx0 + wx1) * 0.5f;
+                    float czw = (wz0 + wz1) * 0.5f;
+                    float dxw = cxw - camPos.X;
+                    float dzw = czw - camPos.Z;
+                    if ((dxw * dxw + dzw * dzw) > (viewRadiusTiles * tileSize) * (viewRadiusTiles * tileSize))
+                        continue;
 
                     float h00 = heights[x, z];
                     float h10 = heights[x + 1, z];
@@ -89,7 +117,7 @@ namespace VibeGame.Terrain
                         Vector2 uv10H = new Vector2(Frac(wx1 * _highTiling), Frac(wz0 * _highTiling));
 
                         // Low pass opaque with lighting
-                        Color baseLit = new Color((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), (byte)255);
+                        Color baseLit = new Color(255, 255, 255, 255);
                         if (_lowAvailable)
                             DrawTexturedTriangle(_lowTex, p00, p01, p10, uv00L, uv01L, uv10L, baseLit);
                         else
@@ -102,16 +130,18 @@ namespace VibeGame.Terrain
                             byte a01 = (byte)MathF.Round(Math.Clamp(b01 * _textureBlend, 0f, 1f) * 255f);
                             byte a10 = (byte)MathF.Round(Math.Clamp(b10 * _textureBlend, 0f, 1f) * 255f);
                             // We need separate colors per-vertex; RlGl uses one color state, so draw as three single-vertex color changes
+                            Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
                             RlGl.rlSetTexture(_highTex.id);
                             RlGl.rlBegin(RlGl.RL_TRIANGLES);
                             RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a00);
-                            RlGl.rlTexCoord2f(uv00H.X, uv00H.Y); RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
+                            RlGl.rlTexCoord2f(uv00H.X, 1f - uv00H.Y); RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
                             RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a01);
-                            RlGl.rlTexCoord2f(uv01H.X, uv01H.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                            RlGl.rlTexCoord2f(uv01H.X, 1f - uv01H.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
                             RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a10);
-                            RlGl.rlTexCoord2f(uv10H.X, uv10H.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                            RlGl.rlTexCoord2f(uv10H.X, 1f - uv10H.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
                             RlGl.rlEnd();
                             RlGl.rlSetTexture(0);
+                            Raylib.EndBlendMode();
                         }
 
                         // Triangle 2
@@ -138,32 +168,19 @@ namespace VibeGame.Terrain
                             byte a01b = (byte)MathF.Round(Math.Clamp(b011 * _textureBlend, 0f, 1f) * 255f);
                             byte a11b = (byte)MathF.Round(Math.Clamp(b111 * _textureBlend, 0f, 1f) * 255f);
                             byte a10b = (byte)MathF.Round(Math.Clamp(b101 * _textureBlend, 0f, 1f) * 255f);
+                            Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
                             RlGl.rlSetTexture(_highTex.id);
                             RlGl.rlBegin(RlGl.RL_TRIANGLES);
                             RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a01b);
-                            RlGl.rlTexCoord2f(uv01H2.X, uv01H2.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                            RlGl.rlTexCoord2f(uv01H2.X, 1f - uv01H2.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
                             RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a11b);
-                            RlGl.rlTexCoord2f(uv11H.X, uv11H.Y); RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
+                            RlGl.rlTexCoord2f(uv11H.X, 1f - uv11H.Y); RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
                             RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a10b);
-                            RlGl.rlTexCoord2f(uv10H2.X, uv10H2.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                            RlGl.rlTexCoord2f(uv10H2.X, 1f - uv10H2.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
                             RlGl.rlEnd();
                             RlGl.rlSetTexture(0);
+                            Raylib.EndBlendMode();
                         }
-                    }
-                    else
-                    {
-                        // Fallback to previous flat-colored rendering
-                        Vector3 n1 = Vector3.Normalize(Vector3.Cross(p01 - p00, p10 - p00));
-                        float diff1 = MathF.Max(0.35f, MathF.Min(1.0f, Vector3.Dot(n1, lightDir)));
-                        Color triCol1 = GetTriangleColor(wx0, wz0, wx0, wz1, wx1, wz0, (h00 + h01 + h10) / 3f, n1);
-                        Color c1 = Tint(triCol1, diff1);
-                        Raylib.DrawTriangle3D(p00, p01, p10, c1);
-
-                        Vector3 n2 = Vector3.Normalize(Vector3.Cross(p11 - p01, p10 - p01));
-                        float diff2 = MathF.Max(0.35f, MathF.Min(1.0f, Vector3.Dot(n2, lightDir)));
-                        Color triCol2 = GetTriangleColor(wx0, wz1, wx1, wz1, wx1, wz0, (h01 + h11 + h10) / 3f, n2);
-                        Color c2 = Tint(triCol2, diff2);
-                        Raylib.DrawTriangle3D(p01, p11, p10, c2);
                     }
                 }
             }
@@ -171,11 +188,12 @@ namespace VibeGame.Terrain
 
         public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, Camera3D camera, Color baseColor)
         {
+            EnsureTextures();
             int sizeX = heights.GetLength(0);
             int sizeZ = heights.GetLength(1);
 
             Vector3 camPos = camera.position;
-            int viewRadiusTiles = 50;
+            int viewRadiusTiles = 32;
 
             // Compute camera index in this chunk's tile space
             float localCamX = (camPos.X - originWorld.X) / tileSize;
@@ -198,6 +216,14 @@ namespace VibeGame.Terrain
                     float wx1 = wx0 + tileSize;
                     float wz1 = wz0 + tileSize;
 
+                    // Distance culling for chunked rendering path
+                    float cxw = (wx0 + wx1) * 0.5f;
+                    float czw = (wz0 + wz1) * 0.5f;
+                    float dxw = cxw - camPos.X;
+                    float dzw = czw - camPos.Z;
+                    if ((dxw * dxw + dzw * dzw) > (viewRadiusTiles * tileSize) * (viewRadiusTiles * tileSize))
+                        continue;
+
                     float h00 = heights[x, z];
                     float h10 = heights[x + 1, z];
                     float h01 = heights[x, z + 1];
@@ -208,59 +234,98 @@ namespace VibeGame.Terrain
                     Vector3 p01 = new Vector3(wx0, h01, wz1);
                     Vector3 p11 = new Vector3(wx1, h11, wz1);
 
-                    Vector3 n1 = Vector3.Normalize(Vector3.Cross(p01 - p00, p10 - p00));
-                    float diff1 = MathF.Max(0.35f, MathF.Min(1.0f, Vector3.Dot(n1, lightDir)));
-                    Color triCol1 = GetTriangleColor(wx0, wz0, wx0, wz1, wx1, wz0, (h00 + h01 + h10) / 3f, n1);
-                    Color c1 = Tint(triCol1, diff1);
-                    Raylib.DrawTriangle3D(p00, p01, p10, c1);
+                    if (_lowAvailable || _highAvailable)
+                    {
+                        // Triangle 1 with textures
+                        Vector3 n1 = Vector3.Normalize(Vector3.Cross(p01 - p00, p10 - p00));
+                        float diff1 = MathF.Max(0.35f, MathF.Min(1.0f, Vector3.Dot(n1, lightDir)));
+                        float b00 = ComputeBlend(h00, n1);
+                        float b01 = ComputeBlend(h01, n1);
+                        float b10 = ComputeBlend(h10, n1);
 
-                    Vector3 n2 = Vector3.Normalize(Vector3.Cross(p11 - p01, p10 - p01));
-                    float diff2 = MathF.Max(0.35f, MathF.Min(1.0f, Vector3.Dot(n2, lightDir)));
-                    Color triCol2 = GetTriangleColor(wx0, wz1, wx1, wz1, wx1, wz0, (h01 + h11 + h10) / 3f, n2);
-                    Color c2 = Tint(triCol2, diff2);
-                    Raylib.DrawTriangle3D(p01, p11, p10, c2);
+                        // UVs
+                        Vector2 uv00L = new Vector2(Frac(wx0 * _lowTiling), Frac(wz0 * _lowTiling));
+                        Vector2 uv01L = new Vector2(Frac(wx0 * _lowTiling), Frac(wz1 * _lowTiling));
+                        Vector2 uv10L = new Vector2(Frac(wx1 * _lowTiling), Frac(wz0 * _lowTiling));
+                        Vector2 uv00H = new Vector2(Frac(wx0 * _highTiling), Frac(wz0 * _highTiling));
+                        Vector2 uv01H = new Vector2(Frac(wx0 * _highTiling), Frac(wz1 * _highTiling));
+                        Vector2 uv10H = new Vector2(Frac(wx1 * _highTiling), Frac(wz0 * _highTiling));
+
+                        Color baseLit = new Color(255, 255, 255, 255);
+                        if (_lowAvailable)
+                            DrawTexturedTriangle(_lowTex, p00, p01, p10, uv00L, uv01L, uv10L, baseLit);
+                        else
+                            DrawTexturedTriangle(_highTex, p00, p01, p10, uv00H, uv01H, uv10H, baseLit);
+
+                        if (_highAvailable)
+                        {
+                            byte a00 = (byte)MathF.Round(Math.Clamp(b00 * _textureBlend, 0f, 1f) * 255f);
+                            byte a01 = (byte)MathF.Round(Math.Clamp(b01 * _textureBlend, 0f, 1f) * 255f);
+                            byte a10 = (byte)MathF.Round(Math.Clamp(b10 * _textureBlend, 0f, 1f) * 255f);
+                            Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
+                            RlGl.rlSetTexture(_highTex.id);
+                            RlGl.rlBegin(RlGl.RL_TRIANGLES);
+                            RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a00);
+                            RlGl.rlTexCoord2f(uv00H.X, 1f - uv00H.Y); RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
+                            RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a01);
+                            RlGl.rlTexCoord2f(uv01H.X, 1f - uv01H.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                            RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a10);
+                            RlGl.rlTexCoord2f(uv10H.X, 1f - uv10H.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                            RlGl.rlEnd();
+                            RlGl.rlSetTexture(0);
+                            Raylib.EndBlendMode();
+                        }
+
+                        // Triangle 2 with textures
+                        Vector3 n2 = Vector3.Normalize(Vector3.Cross(p11 - p01, p10 - p01));
+                        float diff2 = MathF.Max(0.35f, MathF.Min(1.0f, Vector3.Dot(n2, lightDir)));
+                        float b011 = ComputeBlend(h01, n2);
+                        float b111 = ComputeBlend(h11, n2);
+                        float b101 = ComputeBlend(h10, n2);
+
+                        Vector2 uv01L2 = uv01L;
+                        Vector2 uv11L = new Vector2(Frac(wx1 * _lowTiling), Frac(wz1 * _lowTiling));
+                        Vector2 uv10L2 = uv10L;
+                        Vector2 uv01H2 = uv01H;
+                        Vector2 uv11H = new Vector2(Frac(wx1 * _highTiling), Frac(wz1 * _highTiling));
+                        Vector2 uv10H2 = uv10H;
+
+                        Color baseLit2 = new Color((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), (byte)255);
+                        if (_lowAvailable)
+                            DrawTexturedTriangle(_lowTex, p01, p11, p10, uv01L2, uv11L, uv10L2, baseLit2);
+                        else
+                            DrawTexturedTriangle(_highTex, p01, p11, p10, uv01H2, uv11H, uv10H2, baseLit2);
+
+                        if (_highAvailable)
+                        {
+                            byte a01b = (byte)MathF.Round(Math.Clamp(b011 * _textureBlend, 0f, 1f) * 255f);
+                            byte a11b = (byte)MathF.Round(Math.Clamp(b111 * _textureBlend, 0f, 1f) * 255f);
+                            byte a10b = (byte)MathF.Round(Math.Clamp(b101 * _textureBlend, 0f, 1f) * 255f);
+                            Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
+                            RlGl.rlSetTexture(_highTex.id);
+                            RlGl.rlBegin(RlGl.RL_TRIANGLES);
+                            RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a01b);
+                            RlGl.rlTexCoord2f(uv01H2.X, 1f - uv01H2.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                            RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a11b);
+                            RlGl.rlTexCoord2f(uv11H.X, 1f - uv11H.Y); RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
+                            RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a10b);
+                            RlGl.rlTexCoord2f(uv10H2.X, 1f - uv10H2.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                            RlGl.rlEnd();
+                            RlGl.rlSetTexture(0);
+                            Raylib.EndBlendMode();
+                        }
+                    }
                 }
             }
         }
 
         private void TryLoadTextures()
         {
-            try
-            {
-                string Resolve(string rel)
-                {
-                    string wd = rel;
-                    string ex = Path.Combine(AppContext.BaseDirectory ?? string.Empty, rel);
-                    return File.Exists(wd) ? wd : (File.Exists(ex) ? ex : rel);
-                }
+            // Query TextureManager for preloaded textures
+            _lowAvailable = _textureManager.TryGet(TextureManager.LowDiffuseKey, out _lowTex) && _lowTex.id != 0;
+            _highAvailable = _textureManager.TryGet(TextureManager.HighDiffuseKey, out _highTex) && _highTex.id != 0;
 
-                string lowPath = Resolve(_lowDiffusePath);
-                if (File.Exists(lowPath))
-                {
-                    _lowImage = Raylib.LoadImage(lowPath);
-                    _lowTex = Raylib.LoadTextureFromImage(_lowImage);
-                    _lowW = _lowImage.width;
-                    _lowH = _lowImage.height;
-                    _lowAvailable = _lowW > 0 && _lowH > 0 && _lowTex.id != 0;
-                }
-                else _lowAvailable = false;
-
-                string highPath = Resolve(_highDiffusePath);
-                if (File.Exists(highPath))
-                {
-                    _highImage = Raylib.LoadImage(highPath);
-                    _highTex = Raylib.LoadTextureFromImage(_highImage);
-                    _highW = _highImage.width;
-                    _highH = _highImage.height;
-                    _highAvailable = _highW > 0 && _highH > 0 && _highTex.id != 0;
-                }
-                else _highAvailable = false;
-            }
-            catch
-            {
-                _lowAvailable = false;
-                _highAvailable = false;
-            }
+            logger.Information("[Terrain] Texture availability -> low: {Low}, high: {High}", _lowAvailable, _highAvailable);
         }
 
         private static float Frac(float v) => v - MathF.Floor(v);
@@ -269,12 +334,16 @@ namespace VibeGame.Terrain
             Vector2 uva, Vector2 uvb, Vector2 uvc, Color color)
         {
             if (tex.id == 0) return;
+            // Flip V to match raylib Image origin (top-left) with OpenGL (bottom-left)
+            float vA = 1f - uva.Y;
+            float vB = 1f - uvb.Y;
+            float vC = 1f - uvc.Y;
             RlGl.rlSetTexture(tex.id);
             RlGl.rlBegin(RlGl.RL_TRIANGLES);
             RlGl.rlColor4ub(color.r, color.g, color.b, color.a);
-            RlGl.rlTexCoord2f(uva.X, uva.Y); RlGl.rlVertex3f(a.X, a.Y, a.Z);
-            RlGl.rlTexCoord2f(uvb.X, uvb.Y); RlGl.rlVertex3f(b.X, b.Y, b.Z);
-            RlGl.rlTexCoord2f(uvc.X, uvc.Y); RlGl.rlVertex3f(c.X, c.Y, c.Z);
+            RlGl.rlTexCoord2f(uva.X, vA); RlGl.rlVertex3f(a.X, a.Y, a.Z);
+            RlGl.rlTexCoord2f(uvb.X, vB); RlGl.rlVertex3f(b.X, b.Y, b.Z);
+            RlGl.rlTexCoord2f(uvc.X, vC); RlGl.rlVertex3f(c.X, c.Y, c.Z);
             RlGl.rlEnd();
             RlGl.rlSetTexture(0);
         }

@@ -34,7 +34,6 @@
 
     <ItemGroup>
       <Folder Include="Camera\" />
-      <Folder Include="Core\" />
     </ItemGroup>
 
 </Project>

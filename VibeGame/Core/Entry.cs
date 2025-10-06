@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Serilog;
+using VibeGame.Core;
 
 namespace VibeGame
 {
@@ -8,16 +9,21 @@ namespace VibeGame
         private readonly ILogger logger = Log.ForContext<Entry>();
         private readonly IGameEngine _engine;
         private readonly IHostApplicationLifetime _appLifetime;
+        private readonly ITextureManager _textureManager;
 
-        public Entry(IGameEngine engine, IHostApplicationLifetime appLifetime)
+        public Entry(IGameEngine engine, IHostApplicationLifetime appLifetime, ITextureManager textureManager)
         {
             _engine = engine;
             _appLifetime = appLifetime;
+            _textureManager = textureManager;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            logger.Information("Launching 3DEngine (Raylib) first-person Corolla demo...");
+            logger.Information("Launching VibeGame (Raylib)...");
+
+            // Install Raylib -> Serilog log bridge so all Raylib output goes through our logger
+            RaylibLogBridge.Install();
             try
             {
                 await _engine.RunAsync();

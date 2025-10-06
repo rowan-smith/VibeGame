@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using VibeGame.Camera;
 using VibeGame.Objects;
 using VibeGame.Terrain;
+using VibeGame.Core;
 
 namespace VibeGame;
 
@@ -27,6 +28,7 @@ internal static class Program
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
         builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
         builder.Services.AddSingleton<IInfiniteTerrain, ChunkedTerrainService>();
+        builder.Services.AddSingleton<ITextureManager, TextureManager>();
         builder.Services.AddTransient<IGameEngine, VibeGameEngine>();
 
         var host = builder.Build();

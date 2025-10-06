@@ -1,5 +1,6 @@
 using System.Numerics;
 using Raylib_CsLo;
+using VibeGame.Objects;
 
 namespace VibeGame.Terrain
 {
@@ -7,15 +8,18 @@ namespace VibeGame.Terrain
     {
         private readonly ITerrainGenerator _gen;
         private readonly ITerrainRenderer _renderer;
+        private readonly ITreeRenderer _treeRenderer;
         private readonly Dictionary<(int cx, int cz), float[,]> _chunks = new();
+        private readonly Dictionary<(int cx, int cz), List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)>> _trees = new();
         private readonly int _chunkSize;
         private readonly float _tileSize;
         private int _renderRadiusChunks = 2;
 
-        public ChunkedTerrainService(ITerrainGenerator gen, ITerrainRenderer renderer)
+        public ChunkedTerrainService(ITerrainGenerator gen, ITerrainRenderer renderer, ITreeRenderer treeRenderer)
         {
             _gen = gen;
             _renderer = renderer;
+            _treeRenderer = treeRenderer;
             _chunkSize = gen.TerrainSize;
             _tileSize = gen.TileSize;
         }
@@ -42,7 +46,17 @@ namespace VibeGame.Terrain
                     var key = (ccx + dx, ccz + dz);
                     if (!_chunks.ContainsKey(key))
                     {
-                        _chunks[key] = _gen.GenerateHeightsForChunk(key.Item1, key.Item2, _chunkSize);
+                        var heights = _gen.GenerateHeightsForChunk(key.Item1, key.Item2, _chunkSize);
+                        _chunks[key] = heights;
+
+                        // Generate a few trees for this chunk and cache with proper world offset
+                        if (_treeRenderer != null)
+                        {
+                            float chunkWorldSize = (_chunkSize - 1) * _tileSize;
+                            Vector2 origin = new Vector2(key.Item1 * chunkWorldSize, key.Item2 * chunkWorldSize);
+                            var list = _treeRenderer.GenerateTrees(_gen, heights, origin, 18);
+                            _trees[key] = list;
+                        }
                     }
                 }
             }
@@ -67,9 +81,33 @@ namespace VibeGame.Terrain
                     {
                         heights = _gen.GenerateHeightsForChunk(key.Item1, key.Item2, _chunkSize);
                         _chunks[key] = heights;
+
+                        // If heights were missing, ensure trees are also generated
+                        if (_treeRenderer != null && !_trees.ContainsKey(key))
+                        {
+                            Vector2 origin2 = new Vector2(key.Item1 * chunkWorldSize, key.Item2 * chunkWorldSize);
+                            var list = _treeRenderer.GenerateTrees(_gen, heights, origin2, 18);
+                            _trees[key] = list;
+                        }
                     }
                     Vector2 origin = new Vector2(key.Item1 * chunkWorldSize, key.Item2 * chunkWorldSize);
                     _renderer.RenderAt(heights, _tileSize, origin, camera, baseColor);
+
+                    // Draw trees for this chunk
+                    if (_treeRenderer != null && _trees.TryGetValue(key, out var trees))
+                    {
+                        // Distance-based culling for trees to improve frame rate
+                        float maxTreeDist = 180f; // meters
+                        float maxTreeDist2 = maxTreeDist * maxTreeDist;
+                        var cam = camera.position;
+                        foreach (var t in trees)
+                        {
+                            float ddx = t.pos.X - cam.X;
+                            float ddz = t.pos.Z - cam.Z;
+                            if ((ddx * ddx + ddz * ddz) > maxTreeDist2) continue;
+                            _treeRenderer.DrawTree(t.pos, t.trunkHeight, t.trunkRadius, t.canopyRadius);
+                        }
+                    }
                 }
             }
         }

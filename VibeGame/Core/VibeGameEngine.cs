@@ -1,6 +1,7 @@
 using System.Numerics;
 using Raylib_CsLo;
 using VibeGame.Terrain;
+using VibeGame.Core;
 
 namespace VibeGame
 {
@@ -9,19 +10,24 @@ namespace VibeGame
         private readonly ICameraController _cameraController;
         private readonly IPhysicsController _physics;
         private readonly IInfiniteTerrain _infiniteTerrain;
+        private readonly ITextureManager _textureManager;
 
-        public VibeGameEngine(ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain infiniteTerrain)
+        public VibeGameEngine(ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain infiniteTerrain, ITextureManager textureManager)
         {
             _cameraController = cameraController;
             _physics = physics;
             _infiniteTerrain = infiniteTerrain;
+            _textureManager = textureManager;
         }
 
-        public Task RunAsync()
+        public async Task RunAsync()
         {
             Raylib.InitWindow(1280, 720, "VibeGame - Simple Engine");
             Raylib.SetTargetFPS(75);
             Raylib.DisableCursor(); // capture mouse for FPS look
+
+            // Now that GPU context exists, preload textures
+            await _textureManager.PreloadAsync();
 
             // Basic FPS-style camera
             Camera3D camera = new Camera3D
@@ -45,7 +51,8 @@ namespace VibeGame
                 float dt = Raylib.GetFrameTime();
 
                 // Update chunk cache around camera
-                _infiniteTerrain.UpdateAround(camera.position, 2);
+                // Render fewer surrounding chunks for better performance
+                _infiniteTerrain.UpdateAround(camera.position, 1);
 
                 // Input-driven orientation + desired horizontal move
                 Vector3 horizMove = _cameraController.UpdateAndGetHorizontalMove(ref camera, dt);
@@ -64,7 +71,6 @@ namespace VibeGame
             }
 
             Raylib.CloseWindow();
-            return Task.CompletedTask;
         }
     }
 }
