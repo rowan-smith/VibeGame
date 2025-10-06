@@ -5,6 +5,7 @@ using VibeGame.Camera;
 using VibeGame.Objects;
 using VibeGame.Terrain;
 using VibeGame.Core;
+using VibeGame.Biomes;
 
 namespace VibeGame;
 
@@ -23,6 +24,11 @@ internal static class Program
         builder.Services.AddSingleton<ITerrainGenerator, TerrainGenerator>();
         builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
+
+        // Biomes and providers
+        builder.Services.AddSingleton<IBiome, BirchBiome>();
+        builder.Services.AddSingleton<IBiome, PineBiome>();
+        builder.Services.AddSingleton<IBiomeProvider, SimpleBiomeProvider>();
 
         // Game engine services
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
