@@ -1,3 +1,5 @@
+using VibeGame.Biomes.Environment;
+
 namespace VibeGame.Terrain
 {
     public class TerrainGenerator : ITerrainGenerator
@@ -24,12 +26,13 @@ namespace VibeGame.Terrain
         private readonly INoiseSource _ridged;
 
         public TerrainGenerator(
+            MultiNoiseConfig? cfg = null,
             FastNoiseLite.NoiseType baseType = FastNoiseLite.NoiseType.OpenSimplex2,
             FastNoiseLite.NoiseType macroType = FastNoiseLite.NoiseType.OpenSimplex2,
             FastNoiseLite.NoiseType detailType = FastNoiseLite.NoiseType.OpenSimplex2S,
             FastNoiseLite.NoiseType ridgedType = FastNoiseLite.NoiseType.OpenSimplex2S)
         {
-            int seed = 1337;
+            int seed = cfg?.Seed ?? 1337;
             // Domain warp sources (lower frequency, few octaves)
             _warpA = new FastNoiseLiteSource(seed + 1, FastNoiseLite.NoiseType.OpenSimplex2, TerrainScale * 0.5f, 3, 2.0f, 0.5f);
             _warpB = new FastNoiseLiteSource(seed + 2, FastNoiseLite.NoiseType.OpenSimplex2, TerrainScale * 0.5f, 3, 2.0f, 0.5f);

@@ -5,13 +5,13 @@ namespace VibeGame.Biomes.Spawners
 {
     public class BirchTreeSpawner : ITreeSpawner
     {
-        public List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
+        public List<(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
             ITerrainGenerator terrain,
             Vector2 originWorld,
             int chunkSize,
             int targetCount)
         {
-            var list = new List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)>();
+            var list = new List<(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)>();
             float tile = terrain.TileSize;
             float chunkWorldSize = (chunkSize - 1) * tile;
 
@@ -41,7 +41,7 @@ namespace VibeGame.Biomes.Spawners
                 float trunkHeight = 2.2f + HashToRange(i * 19 + 7, 0.6f, 3.2f);
                 float trunkRadius = 0.18f + HashToRange(i * 37 + 9, -0.03f, 0.10f);
                 float canopyRadius = trunkHeight * HashToRange(i * 41 + 13, 0.5f, 0.7f);
-                list.Add((new Vector3(wx, baseY, wz), trunkHeight, trunkRadius, canopyRadius));
+                list.Add(("birch", new Vector3(wx, baseY, wz), trunkHeight, trunkRadius, canopyRadius));
             }
 
             return list;

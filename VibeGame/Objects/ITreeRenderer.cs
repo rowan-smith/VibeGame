@@ -12,6 +12,6 @@ namespace VibeGame.Objects
             Vector2 originWorld,
             int count);
 
-        void DrawTree(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius);
+        void DrawTree(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius);
     }
 }

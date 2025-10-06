@@ -16,8 +16,8 @@ namespace VibeGame.Core
         public const string HighDiffuseKey = "terrain.high.diffuse";
 
         // Paths relative to repo/game working directory
-        private static readonly string LowDiffusePathRel = Path.Combine("assets", "terrain", "brown_mud_leaves", "textures", "brown_mud_leaves_01_diff_4k.png");
-        private static readonly string HighDiffusePathRel = Path.Combine("assets", "terrain", "aerial_rocks", "textures", "aerial_rocks_04_diff_4k.png");
+        private static readonly string LowDiffusePathRel = Path.Combine("assets", "models", "environment", "terrain", "brown_mud_leaves", "textures", "brown_mud_leaves_01_diff_4k.png");
+        private static readonly string HighDiffusePathRel = Path.Combine("assets", "models", "environment", "terrain", "aerial_rocks", "textures", "aerial_rocks_04_diff_4k.png");
 
         public Task PreloadAsync(CancellationToken cancellationToken = default)
         {
@@ -156,6 +156,27 @@ namespace VibeGame.Core
             }
             texture = default;
             return false;
+        }
+
+        public bool TryGetOrLoadByPath(string relativeOrAbsolutePath, out Texture texture)
+        {
+            texture = default;
+            if (string.IsNullOrWhiteSpace(relativeOrAbsolutePath)) return false;
+
+            // Normalize to absolute path and use it as the cache key
+            string path = Path.IsPathRooted(relativeOrAbsolutePath)
+                ? relativeOrAbsolutePath
+                : ResolveExistingPath(relativeOrAbsolutePath.Replace('/', Path.DirectorySeparatorChar));
+
+            string key;
+            try { key = Path.GetFullPath(path); }
+            catch { key = path; }
+
+            // Load if needed
+            LoadTextureIfMissing(key, path, CancellationToken.None);
+
+            // Return from cache if present
+            return TryGet(key, out texture);
         }
 
         public void Dispose()

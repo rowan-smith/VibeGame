@@ -1,0 +1,43 @@
+{
+  "Id": "verdigris_expanse",
+  "DisplayName": "Verdigris Expanse",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.6,
+      "Moisture": 0.3,
+      "Altitude": 0.2,
+      "Fertility": 0.2,
+      "Roughness": 0.4,
+      "VegetationDensity": 0.2
+    },
+    "Weights": {
+      "WtTemp": 1.0,
+      "WtMoisture": 1.3,
+      "WtElevation": 0.9,
+      "WtFertility": 0.9
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.25,
+      "Frequency": 0.8,
+      "Persistence": 0.45,
+      "Lacunarity": 2.1,
+      "Detail": 0.5
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 107, "G": 142, "B": 35, "A": 255 },
+    "Secondary": { "R": 184, "G": 115, "B": 51, "A": 255 },
+    "Accent": { "R": 139, "G": 115, "B": 85, "A": 255 }
+  },
+  "AllowedObjects": [],
+  "DominantFlora": ["Thornbrush", "Oxide Ferns"],
+  "DominantFauna": [],
+  "SurfaceMaterial": "Corroded Soil",
+  "WeatherPatterns": ["Acid Rain", "Wind Gusts"],
+  "AssetTags": ["rust", "metallic-rock", "dry-grass"],
+  "LightingModifier": 0.95,
+  "FeatureDescription": "A corroded wasteland where the soil glows faintly green from mineral decay.",
+  "SpecialFeatures": ["Acid pools", "metallic ruins"],
+  "MusicTag": "industrial"
+}

@@ -9,18 +9,16 @@ namespace VibeGame
         private readonly ILogger logger = Log.ForContext<Entry>();
         private readonly IGameEngine _engine;
         private readonly IHostApplicationLifetime _appLifetime;
-        private readonly ITextureManager _textureManager;
 
-        public Entry(IGameEngine engine, IHostApplicationLifetime appLifetime, ITextureManager textureManager)
+        public Entry(IGameEngine engine, IHostApplicationLifetime appLifetime)
         {
             _engine = engine;
             _appLifetime = appLifetime;
-            _textureManager = textureManager;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            logger.Information("Launching VibeGame (Raylib)...");
+            logger.Information("Launching Veilborne (Raylib)...");
 
             // Install Raylib -> Serilog log bridge so all Raylib output goes through our logger
             RaylibLogBridge.Install();

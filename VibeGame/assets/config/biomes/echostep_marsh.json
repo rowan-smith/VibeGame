@@ -1,0 +1,43 @@
+{
+  "Id": "echostep_marsh",
+  "DisplayName": "Echostep Marsh",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.6,
+      "Moisture": 0.9,
+      "Altitude": 0.05,
+      "Fertility": 0.85,
+      "Roughness": 0.2,
+      "VegetationDensity": 0.8
+    },
+    "Weights": {
+      "WtTemp": 0.8,
+      "WtMoisture": 1.5,
+      "WtElevation": 1.1,
+      "WtFertility": 1.2
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.2,
+      "Frequency": 0.7,
+      "Persistence": 0.5,
+      "Lacunarity": 2.2,
+      "Detail": 0.6
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 0, "G": 128, "B": 128, "A": 255 },
+    "Secondary": { "R": 0, "G": 100, "B": 0, "A": 255 },
+    "Accent": { "R": 148, "G": 0, "B": 211, "A": 255 }
+  },
+  "AllowedObjects": [],
+  "DominantFlora": ["Reeds", "Spirit Lilies"],
+  "DominantFauna": [],
+  "SurfaceMaterial": "Wet Mud",
+  "WeatherPatterns": ["Thick fog", "faint whispers"],
+  "AssetTags": ["mud", "swamp", "mist"],
+  "LightingModifier": 0.9,
+  "FeatureDescription": "A foggy wetland where echoes never quite fade, and lights drift just out of reach.",
+  "SpecialFeatures": ["Floating lights", "sinkholes"],
+  "MusicTag": "swamp"
+}

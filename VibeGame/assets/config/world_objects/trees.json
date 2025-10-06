@@ -1,0 +1,41 @@
+{
+  "WorldObjects": [
+    {
+      "Id": "maple_tree",
+      "DisplayName": "Maple Tree",
+      "Description": "A sturdy deciduous tree known for its rich amber leaves and dense wood. Common in temperate biomes.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["aetherwild_grove"],
+        "SpawnDensity": 0.4,
+        "AltitudeRange": [0.2, 0.6],
+        "TemperatureRange": [0.4, 0.8],
+        "MoistureRange": [0.3, 0.7],
+        "ClusterRadius": 5
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 300,
+        "AreaRadius": 1.0,
+        "ColliderRadius": 0.45
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/maple_tree.glb", "Weight": 0.6 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.85, 1.0, 0.85],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [1.0, 0.7, 0.5],
+          "Winter": [0.8, 0.8, 0.8]
+        },
+        "BaseScale": [0.03, 0.03, 0.03],
+        "ScaleVariance": 0.08,
+        "RandomRotationY": true
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 using System.Numerics;
 using Raylib_CsLo;
 using VibeGame.Terrain;
+using VibeGame.Core.WorldObjects;
 
 namespace VibeGame.Objects
 {
@@ -8,6 +9,16 @@ namespace VibeGame.Objects
     {
         private readonly List<Model> _models = new();
         private bool _modelsLoaded;
+
+        private readonly ITreesRegistry _treesRegistry;
+        // Cache of loaded models per tree id with configured weights
+        private readonly Dictionary<string, List<(Model model, float weight)>> _modelsById = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _loadAttempted = new(StringComparer.OrdinalIgnoreCase);
+
+        public TreeRenderer(ITreesRegistry treesRegistry)
+        {
+            _treesRegistry = treesRegistry;
+        }
 
         public List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
             ITerrainGenerator terrain,
@@ -53,39 +64,46 @@ namespace VibeGame.Objects
             return list;
         }
 
-        public void DrawTree(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)
+        public void DrawTree(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)
         {
-            EnsureModelsLoaded();
-            if (_models.Count == 0)
+            if (string.IsNullOrWhiteSpace(treeId)) return;
+
+            // Ensure models for this id are loaded from TreesRegistry
+            EnsureModelsForIdLoaded(treeId);
+            if (!_modelsById.TryGetValue(treeId, out var entries) || entries.Count == 0)
             {
-                // Fallback: draw a simple procedural tree so something is always visible
-                // Draw trunk as a cylinder standing on the ground
-                Vector3 trunkPos = new Vector3(pos.X, pos.Y + trunkHeight * 0.5f, pos.Z);
-                Raylib.DrawCylinder(trunkPos, trunkRadius, trunkRadius * 0.9f, trunkHeight, 12, new Color(110, 82, 54, 255));
-                // Draw canopy as a green sphere
-                Vector3 canopyPos = new Vector3(pos.X, pos.Y + trunkHeight + canopyRadius * 0.8f, pos.Z);
-                Raylib.DrawSphere(canopyPos, canopyRadius, new Color(34, 139, 34, 255));
+                // No models configured for this id; respect config by drawing nothing
                 return;
             }
 
-            // Deterministically select a model based on position
-            int seed = (int)(pos.X * 73856093) ^ (int)(pos.Z * 19349663);
+            // Deterministically select a model based on position and treeId using weights
+            int seed = HashCode.Combine(treeId.GetHashCode(StringComparison.OrdinalIgnoreCase), (int)pos.X, (int)pos.Z);
             if (seed < 0) seed = -seed;
-            int index = seed % _models.Count;
-            var model = _models[index];
+            float t = ((uint)seed % 10000) / 10000f; // [0,1)
 
-            // Scale up for visibility, based on desired trunk height
-            // Models ship in various unit scales. Make them significantly larger by default.
-            // Previous: max(6.0, trunkHeight * 3.5)
+            float totalW = 0f;
+            for (int i = 0; i < entries.Count; i++) totalW += MathF.Max(0.0001f, entries[i].weight);
+            float accum = 0f;
+            Model model = entries[0].model;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                float w = MathF.Max(0.0001f, entries[i].weight) / totalW;
+                accum += w;
+                if (t <= accum)
+                {
+                    model = entries[i].model;
+                    break;
+                }
+            }
+
+            // Scale based on desired trunk height; models come at varying unit scales
             float scale = MathF.Max(24.0f, trunkHeight * 16.0f);
 
-            // Offset model so its bottom sits on terrain at pos.Y. We rotate models upright (see DrawModelEx below).
-            // Many tree assets are Z-up; after a -90deg rotation around X, original Z becomes Y.
+            // Align model base to the ground; many assets are Z-up, rotate -90deg around X
             var bbox = Raylib.GetModelBoundingBox(model);
-            float baseOffset = -bbox.min.Z * scale; // align base to ground post-rotation
+            float baseOffset = -bbox.min.Z * scale;
             Vector3 modelPos = new Vector3(pos.X, pos.Y + baseOffset, pos.Z);
 
-            // Draw model upright (rotate -90 degrees about X so Z-up assets stand vertically)
             Raylib.DrawModelEx(model, modelPos, new Vector3(1, 0, 0), -90f, new Vector3(scale, scale, scale), Raylib.WHITE);
         }
 
@@ -96,41 +114,101 @@ namespace VibeGame.Objects
             try
             {
                 string baseDir = AppContext.BaseDirectory;
-                string treesDir = Path.Combine(baseDir, "assets", "trees");
-                if (Directory.Exists(treesDir))
+
+                // Preferred location in this project
+                string[] candidateDirs = new[]
                 {
-                    // Prefer only GLB (self-contained) to avoid native loader crashes with external-buffer GLTF
-                    var glbFiles = Directory.GetFiles(treesDir, "*.glb");
-                    if (glbFiles.Length > 0)
+                    Path.Combine(baseDir, "assets", "models", "world", "trees"),
+                    // Backward-compatible legacy location
+                    Path.Combine(baseDir, "assets", "trees")
+                };
+
+                foreach (var dir in candidateDirs)
+                {
+                    if (!Directory.Exists(dir)) continue;
+                    var glbFiles = Array.Empty<string>();
+                    try { glbFiles = Directory.GetFiles(dir, "*.glb"); } catch { /* ignore */ }
+                    foreach (var f in glbFiles)
                     {
-                        foreach (var f in glbFiles)
+                        try
                         {
-                            try
-                            {
-                                var model = Raylib.LoadModel(f);
-                                _models.Add(model);
-                            }
-                            catch
-                            {
-                                // skip invalid model; continue
-                            }
+                            var model = Raylib.LoadModel(f);
+                            _models.Add(model);
+                        }
+                        catch
+                        {
+                            // skip invalid model; continue
+                        }
+                    }
+                    // If we loaded any from preferred dir, no need to scan others
+                    if (_models.Count > 0) break;
+                }
+            }
+            catch
+            {
+                // Swallow: we intentionally avoid fallback drawing when models are missing
+            }
+        }
+
+        private void EnsureModelsForIdLoaded(string treeId)
+        {
+            if (string.IsNullOrWhiteSpace(treeId)) return;
+            if (_loadAttempted.Contains(treeId)) return;
+            _loadAttempted.Add(treeId);
+
+            if (!_treesRegistry.TryGet(treeId, out var def)) return;
+            var list = new List<(Model model, float weight)>();
+            try
+            {
+                if (def.Assets != null && def.Assets.Models != null)
+                {
+                    foreach (var m in def.Assets.Models)
+                    {
+                        if (string.IsNullOrWhiteSpace(m.Path)) continue;
+                        try
+                        {
+                            var model = Raylib.LoadModel(m.Path);
+                            float w = m.Weight <= 0f ? 1f : m.Weight;
+                            list.Add((model, w));
+                        }
+                        catch
+                        {
+                            // skip this asset
                         }
                     }
                 }
             }
             catch
             {
-                // swallow; no fallback drawing
+                // ignore load errors; we will simply not render this id
+            }
+
+            if (list.Count > 0)
+            {
+                _modelsById[treeId] = list;
             }
         }
 
         public void Dispose()
         {
+            // Unload generic models if any were loaded
             foreach (var m in _models)
             {
                 try { Raylib.UnloadModel(m); } catch { /* ignore */ }
             }
             _models.Clear();
+
+            // Unload per-id models
+            foreach (var kv in _modelsById)
+            {
+                var list = kv.Value;
+                foreach (var (model, _) in list)
+                {
+                    try { Raylib.UnloadModel(model); } catch { /* ignore */ }
+                }
+            }
+            _modelsById.Clear();
+            _loadAttempted.Clear();
         }
 
         private static float HashToRange(int seed, float min, float max)

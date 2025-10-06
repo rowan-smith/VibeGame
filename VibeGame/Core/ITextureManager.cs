@@ -9,5 +9,8 @@ namespace VibeGame.Core
 
         // Gets a loaded texture by key; returns false if not available yet.
         bool TryGet(string key, out Texture texture);
+
+        // Loads a texture from a relative or absolute path if not cached yet; returns false if load failed.
+        bool TryGetOrLoadByPath(string relativeOrAbsolutePath, out Texture texture);
     }
 }

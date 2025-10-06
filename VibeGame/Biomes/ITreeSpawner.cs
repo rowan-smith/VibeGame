@@ -8,7 +8,8 @@ namespace VibeGame.Biomes
     {
         // Generate deterministic tree instances for a chunk.
         // originWorld is the lower-left world coordinate of the chunk.
-        List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
+        // Returns a list where each instance includes the treeId (world object id)
+        List<(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
             ITerrainGenerator terrain,
             Vector2 originWorld,
             int chunkSize,

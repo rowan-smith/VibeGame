@@ -1,0 +1,43 @@
+{
+  "Id": "shatterglass_desert",
+  "DisplayName": "Shatterglass Desert",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.95,
+      "Moisture": 0.05,
+      "Altitude": 0.1,
+      "Fertility": 0.05,
+      "Roughness": 0.2,
+      "VegetationDensity": 0.0
+    },
+    "Weights": {
+      "WtTemp": 1.4,
+      "WtMoisture": 1.6,
+      "WtElevation": 0.8,
+      "WtFertility": 1.2
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.15,
+      "Frequency": 0.6,
+      "Persistence": 0.3,
+      "Lacunarity": 1.9,
+      "Detail": 0.4
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 238, "G": 232, "B": 170, "A": 255 },
+    "Secondary": { "R": 0, "G": 188, "B": 212, "A": 255 },
+    "Accent": { "R": 245, "G": 245, "B": 245, "A": 255 }
+  },
+  "AllowedObjects": [],
+  "DominantFlora": [],
+  "DominantFauna": [],
+  "SurfaceMaterial": "Crystalline Sand",
+  "WeatherPatterns": ["Heat shimmer", "mirages"],
+  "AssetTags": ["sand", "crystal", "dune"],
+  "LightingModifier": 1.2,
+  "FeatureDescription": "Sunlight fractures through dunes of shimmering glass, blinding those who wander too long.",
+  "SpecialFeatures": ["Crystal monoliths", "reflective plains"],
+  "MusicTag": "desert"
+}

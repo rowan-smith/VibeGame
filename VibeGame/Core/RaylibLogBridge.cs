@@ -1,8 +1,7 @@
-using System;
-using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
-using Serilog;
+using System.Runtime.InteropServices;
 using Raylib_CsLo;
+using Serilog;
 
 namespace VibeGame.Core
 {
@@ -16,23 +15,28 @@ namespace VibeGame.Core
 
         public static unsafe void Install()
         {
-            if (_installed) return;
+            if (_installed)
+            {
+                return;
+            }
 
             try
             {
                 // Route all raylib logs to our callback
-                Raylib.SetTraceLogCallback((delegate* unmanaged[Cdecl]<int, sbyte*, sbyte*, void>)&TraceCallback);
+                Raylib.SetTraceLogCallback(&TraceCallback);
+
                 // Let raylib emit all levels; filtering is done by Serilog configuration
                 Raylib.SetTraceLogLevel((int)TraceLogLevel.LOG_ALL);
+
                 _installed = true;
             }
             catch (Exception ex)
             {
-                Log.ForContext(typeof(RaylibLogBridge)).Warning(ex, "Failed to install Raylib log bridge");
+                Logger.Warning(ex, "Failed to install Raylib log bridge");
             }
         }
 
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
         private static unsafe void TraceCallback(int logLevel, sbyte* text, sbyte* args)
         {
             string message = Marshal.PtrToStringUTF8((IntPtr)text) ?? string.Empty;

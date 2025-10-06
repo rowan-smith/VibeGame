@@ -5,13 +5,13 @@ namespace VibeGame.Biomes.Spawners
 {
     public class PineTreeSpawner : ITreeSpawner
     {
-        public List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
+        public List<(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
             ITerrainGenerator terrain,
             Vector2 originWorld,
             int chunkSize,
             int targetCount)
         {
-            var list = new List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)>();
+            var list = new List<(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)>();
             float tile = terrain.TileSize;
             float chunkWorldSize = (chunkSize - 1) * tile;
 
@@ -41,7 +41,7 @@ namespace VibeGame.Biomes.Spawners
                 float trunkHeight = 3.0f + HashToRange(i * 17 + 11, 1.4f, 4.5f);
                 float trunkRadius = 0.25f + HashToRange(i * 37 + 19, -0.02f, 0.18f);
                 float canopyRadius = trunkHeight * HashToRange(i * 41 + 29, 0.35f, 0.55f);
-                list.Add((new Vector3(wx, baseY, wz), trunkHeight, trunkRadius, canopyRadius));
+                list.Add(("pine", new Vector3(wx, baseY, wz), trunkHeight, trunkRadius, canopyRadius));
             }
 
             return list;

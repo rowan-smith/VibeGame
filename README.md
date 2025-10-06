@@ -1,7 +1,10 @@
-# VibeGame
+# Veilborne
+Horizons dissolve before they arrive.
+
+## Information
 A game created by vibe coding, there is no objective for the game. We will just see where this ends up over time.
 
-# Rules
+## Rules
 1. The majority of code is to be written by an AI
 2. You can do minor code changes to optimise what the AI has produced.
    - Example 1: The AI was asked to refactor code into a class and dependency inject. It does but keep the old code as a fallback in a try catch. You can remove the catch (and old code), and just use the new class.
