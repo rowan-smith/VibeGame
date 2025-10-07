@@ -47,6 +47,7 @@ internal static class Program
 
         // various services used in Entry.cs
         builder.Services.AddSingleton<ITerrainGenerator, TerrainGenerator>();
+        builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
         builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
         builder.Services.AddSingleton<VibeGame.Objects.IWorldObjectRenderer, VibeGame.Objects.WorldObjectRenderer>();
@@ -103,6 +104,9 @@ internal static class Program
         builder.Services.AddSingleton<ChunkedTerrainService>();
         // Hybrid service composes the heightmap and adds local editable voxels
         builder.Services.AddSingleton<IInfiniteTerrain, HybridTerrainService>();
+        // Register texture downscaler implementation
+        builder.Services.AddSingleton<ITextureDownscaler, VibeGame.Core.Downscalers.ImageSharpTextureDownscaler>();
+
         builder.Services.AddSingleton<ITextureManager, TextureManager>();
         builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
         builder.Services.AddTransient<IGameEngine, VibeGameEngine>();

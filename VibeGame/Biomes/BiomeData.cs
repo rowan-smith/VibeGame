@@ -125,5 +125,26 @@ namespace VibeGame.Biomes
         public List<string> SpecialFeatures { get; set; } = new();    // Rare or special objects/features
         public string? MusicTag { get; set; }                          // Optional background music
         public List<string> AllowedObjects { get; set; } = new();     // WorldObjects allowed to spawn in this biome
+
+        // Surface texture layering and rules for this biome (optional)
+        public List<SurfaceTextureLayer> SurfaceTextures { get; set; } = new();
+        public Dictionary<string, TextureRule> TextureRules { get; set; } = new();
+    }
+
+    // A surface texture layer reference with blending range [0..1] (semantic depends on engine rule e.g. altitude/weight)
+    public sealed class SurfaceTextureLayer
+    {
+        public string TextureId { get; set; } = string.Empty;
+        public float BlendMin { get; set; } = 0f;
+        public float BlendMax { get; set; } = 1f;
+    }
+
+    // Constraints for applying a given texture by terrain properties (all optional)
+    public sealed class TextureRule
+    {
+        public float? MinAltitude { get; set; }
+        public float? MaxAltitude { get; set; }
+        public float? SlopeMin { get; set; }
+        public float? SlopeMax { get; set; }
     }
 }

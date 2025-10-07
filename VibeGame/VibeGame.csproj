@@ -20,6 +20,7 @@
     <PackageReference Include="SharpNoise" Version="0.12.1.1" />
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
     <PackageReference Include="Svg.Skia" Version="2.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
   </ItemGroup>
 
     <ItemGroup>
@@ -47,6 +48,34 @@
         <None Update="assets\models\world\trees\Trees.glb">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_diff_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_diff_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_nor_gl_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_rough_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_arm_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_diff_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_nor_gl_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\config\terrain\aerial_rocks.json">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="assets\textures\terrain\" />
     </ItemGroup>
 
 </Project>

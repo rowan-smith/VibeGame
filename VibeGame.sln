@@ -9,8 +9,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Items", "Items", "{556906A2
 		.gitignore = .gitignore
 		LICENSE = LICENSE
 		README.md = README.md
-		biome_data.md = biome_data.md
-		asset_file_structure.md = asset_file_structure.md
+		Planning\asset_file_structure.md = Planning\asset_file_structure.md
+		Planning\biome_data.md = Planning\biome_data.md
+		Planning\terrain_planning.md = Planning\terrain_planning.md
 	EndProjectSection
 EndProject
 Global

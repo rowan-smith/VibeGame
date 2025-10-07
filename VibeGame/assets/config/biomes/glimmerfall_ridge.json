@@ -30,6 +30,17 @@
     "Secondary": { "R": 0, "G": 127, "B": 255, "A": 255 },
     "Accent": { "R": 112, "G": 128, "B": 144, "A": 255 }
   },
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
   "AllowedObjects": [],
   "DominantFlora": ["Cliff Moss", "Frost Fern"],
   "DominantFauna": [],

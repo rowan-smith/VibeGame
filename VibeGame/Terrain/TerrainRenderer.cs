@@ -6,23 +6,14 @@ using VibeGame.Core;
 
 namespace VibeGame.Terrain
 {
+    using VibeGame.Biomes;
     // Renderer that draws a simple heightmap mesh and applies basic lighting and biome-like color layers.
     // Now supports sampling a diffuse terrain texture to color triangles.
     public class TerrainRenderer : ITerrainRenderer
     {
-        // Terrain glTF models (will be loaded to validate and to leverage their referenced textures)
-        private readonly string _lowModelPath = Path.Combine("assets", "models", "environment", "terrain", "brown_mud_leaves", "brown_mud_leaves_01_4k.gltf");
-        private readonly string _highModelPath = Path.Combine("assets", "models", "environment", "terrain", "aerial_rocks", "aerial_rocks_04_4k.gltf");
-        // Albedo textures (PNG) used for terrain sampling/drawing
-        private readonly string _lowDiffusePath = Path.Combine("assets", "models", "environment", "terrain", "brown_mud_leaves", "textures", "brown_mud_leaves_01_diff_4k.png");
-        private readonly string _highDiffusePath = Path.Combine("assets", "models", "environment", "terrain", "aerial_rocks", "textures", "aerial_rocks_04_diff_4k.png");
 
-        private Image _lowImage;
-        private Image _highImage;
         private bool _lowAvailable;
         private bool _highAvailable;
-        private int _lowW, _lowH;
-        private int _highW, _highH;
 
         // GPU textures for proper per-pixel sampling during rendering
         private Texture _lowTex;
@@ -30,8 +21,8 @@ namespace VibeGame.Terrain
 
         // World UV tiling controls how many texture repeats per world unit.
         // Smaller value = larger texels. Example 1 repeat every 2 world units => 0.5f
-        private readonly float _lowTiling = 1f / 6f;   // mud/leaves: larger features
-        private readonly float _highTiling = 1f / 8f;  // rocks: a bit larger to avoid noise
+        private float _lowTiling = 1f / 6f;   // mud/leaves: larger features
+        private float _highTiling = 1f / 8f;  // rocks: a bit larger to avoid noise
         private readonly float _textureBlend = 0.62f;  // how strongly textures influence final color
         private readonly float _biomeTintStrength = 0.22f; // 0=no tint, 1=full biome color over texture
 
@@ -39,10 +30,16 @@ namespace VibeGame.Terrain
         
         private readonly ILogger logger = Log.ForContext<TerrainRenderer>();
         private readonly ITextureManager _textureManager;
+        private readonly ITerrainTextureRegistry _terrainTextures;
+        private string? _lastBiomeIdApplied;
+        private Dictionary<string, VibeGame.Biomes.TextureRule>? _currentRules;
+        private string? _lowTextureId;
+        private string? _highTextureId;
         
-        public TerrainRenderer(ITextureManager textureManager)
+        public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures)
         {
             _textureManager = textureManager;
+            _terrainTextures = terrainTextures;
             _texturesInitialized = false;
         }
 
@@ -137,9 +134,10 @@ namespace VibeGame.Terrain
                         // High pass overlay with per-vertex alpha = blend * strength
                         if (_highAvailable)
                         {
-                            byte a00 = (byte)MathF.Round(Math.Clamp(b00 * _textureBlend, 0f, 1f) * 255f);
-                            byte a01 = (byte)MathF.Round(Math.Clamp(b01 * _textureBlend, 0f, 1f) * 255f);
-                            byte a10 = (byte)MathF.Round(Math.Clamp(b10 * _textureBlend, 0f, 1f) * 255f);
+                            float gate1 = HighRuleGate(n1);
+                            byte a00 = (byte)MathF.Round(Math.Clamp(b00 * _textureBlend * gate1, 0f, 1f) * 255f);
+                            byte a01 = (byte)MathF.Round(Math.Clamp(b01 * _textureBlend * gate1, 0f, 1f) * 255f);
+                            byte a10 = (byte)MathF.Round(Math.Clamp(b10 * _textureBlend * gate1, 0f, 1f) * 255f);
                             // We need separate colors per-vertex; RlGl uses one color state, so draw as three single-vertex color changes
                             Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
                             RlGl.rlSetTexture(_highTex.id);
@@ -181,9 +179,10 @@ namespace VibeGame.Terrain
 
                         if (_highAvailable)
                         {
-                            byte a01b = (byte)MathF.Round(Math.Clamp(b011 * _textureBlend, 0f, 1f) * 255f);
-                            byte a11b = (byte)MathF.Round(Math.Clamp(b111 * _textureBlend, 0f, 1f) * 255f);
-                            byte a10b = (byte)MathF.Round(Math.Clamp(b101 * _textureBlend, 0f, 1f) * 255f);
+                            float gate2 = HighRuleGate(n2);
+                            byte a01b = (byte)MathF.Round(Math.Clamp(b011 * _textureBlend * gate2, 0f, 1f) * 255f);
+                            byte a11b = (byte)MathF.Round(Math.Clamp(b111 * _textureBlend * gate2, 0f, 1f) * 255f);
+                            byte a10b = (byte)MathF.Round(Math.Clamp(b101 * _textureBlend * gate2, 0f, 1f) * 255f);
                             Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
                             RlGl.rlSetTexture(_highTex.id);
                             RlGl.rlBegin(RlGl.RL_TRIANGLES);
@@ -335,21 +334,13 @@ namespace VibeGame.Terrain
 
         private void TryLoadTextures()
         {
-            // Use DI-provided TextureManager. For now we only require the diffuse PNG sample (low).
-            _lowAvailable = _textureManager.TryGet(TextureManager.LowDiffuseKey, out _lowTex) && _lowTex.id != 0;
-            _highAvailable = _textureManager.TryGet(TextureManager.HighDiffuseKey, out _highTex) && _highTex.id != 0;
+            // With config-driven biome textures, availability is determined by what ApplyBiomeTextures has set.
+            _lowAvailable = _lowTex.id != 0;
+            _highAvailable = _highTex.id != 0;
 
-            // Temporarily disable the high layer to avoid accidental usage of a normal map as albedo.
-            // We will re-enable once a proper high-layer diffuse is confirmed.
-            _highAvailable = false;
-
-            logger.Information("[Terrain] Texture availability -> low: {Low}, high (disabled): {High}", _lowAvailable, _highAvailable);
-
-            if (!_lowAvailable)
-            {
-                // Require at least the base diffuse PNG; render will be meaningless without it.
-                throw new InvalidOperationException("Terrain base diffuse texture was not loaded. Ensure ITextureManager.PreloadAsync ran and assets exist.");
-            }
+            logger.Debug("[Terrain] Texture availability -> low: {Low}, high: {High}", _lowAvailable, _highAvailable);
+            // No exception here; in chunked rendering, ApplyBiomeTextures is called before RenderAt.
+            // If nothing is available yet, rendering will be skipped until a biome applies textures.
         }
 
 
@@ -373,25 +364,6 @@ namespace VibeGame.Terrain
             RlGl.rlSetTexture(0);
         }
 
-        private static void DrawTexturedQuad(Texture tex, Vector3 p00, Vector3 p10, Vector3 p11, Vector3 p01,
-            Vector2 uv00, Vector2 uv10, Vector2 uv11, Vector2 uv01, Color color)
-        {
-            if (tex.id == 0) return;
-            float v00 = 1f - uv00.Y;
-            float v10 = 1f - uv10.Y;
-            float v11 = 1f - uv11.Y;
-            float v01 = 1f - uv01.Y;
-            // Use rlSetTexture for proper batching with raylib default 3D mode
-            RlGl.rlSetTexture(tex.id);
-            RlGl.rlBegin(RlGl.RL_QUADS);
-            RlGl.rlColor4ub(color.r, color.g, color.b, color.a);
-            RlGl.rlTexCoord2f(uv00.X, v00); RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
-            RlGl.rlTexCoord2f(uv10.X, v10); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
-            RlGl.rlTexCoord2f(uv11.X, v11); RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
-            RlGl.rlTexCoord2f(uv01.X, v01); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
-            RlGl.rlEnd();
-            RlGl.rlSetTexture(0);
-        }
 
         private static float Smoothstep(float edge0, float edge1, float x)
         {
@@ -409,140 +381,45 @@ namespace VibeGame.Terrain
             return ht;
         }
 
-        private Color GetTriangleColor(float wxA, float wzA, float wxB, float wzB, float wxC, float wzC, float heightAvg, Vector3 normal)
+
+
+
+
+
+        // Gate the high/overlay texture based on biome TextureRules for the high texture id
+        private float HighRuleGate(Vector3 normal)
         {
-            Color biome = SampleLayerColor(heightAvg, normal);
+            if (string.IsNullOrWhiteSpace(_highTextureId) || _currentRules == null)
+                return 1f;
+            if (!_currentRules.TryGetValue(_highTextureId, out var rule) || rule == null)
+                return 1f;
 
-            if (!_lowAvailable && !_highAvailable)
-                return biome;
-
-            // Triangle centroid
-            float cx = (wxA + wxB + wxC) / 3f;
-            float cz = (wzA + wzB + wzC) / 3f;
-
-            // Height-based blend between low and high textures with smoothstep
-            float lowMax = 3.2f;   // below this fully low texture
-            float highMin = 4.2f;  // above this fully high texture
-            float ht = Math.Clamp((heightAvg - lowMax) / Math.Max(0.0001f, highMin - lowMax), 0f, 1f);
-            // smoothstep
-            ht = ht * ht * (3f - 2f * ht);
-
-            // Slope promotes rocks
+            // Compute slope angle in degrees from surface normal
             float upDot = MathF.Max(0f, Vector3.Dot(Vector3.UnitY, Vector3.Normalize(normal)));
-            float slope = 1f - upDot; // 0 flat, 1 vertical
-            float rockBoost = Math.Clamp((slope - 0.35f) / 0.35f, 0f, 1f); // cliffs -> more rocks
-            ht = Math.Clamp(ht + rockBoost * 0.5f, 0f, 1f);
+            upDot = Math.Clamp(upDot, -1f, 1f);
+            float slopeDeg = MathF.Acos(upDot) * (180f / MathF.PI);
 
-            // Sample both textures (average to reduce noise)
-            Color lowCol = _lowAvailable ? AverageTextureSample(_lowImage, _lowW, _lowH, _lowTiling, cx, cz, 0.35f) : biome;
-            Color highCol = _highAvailable ? AverageTextureSample(_highImage, _highW, _highH, _highTiling, cx, cz, 0.35f) : biome;
+            float gate = 1f;
+            bool hasMin = rule.SlopeMin.HasValue;
+            bool hasMax = rule.SlopeMax.HasValue;
+            if (hasMin && hasMax)
+            {
+                gate = Smoothstep(rule.SlopeMin!.Value, rule.SlopeMax!.Value, slopeDeg);
+            }
+            else if (hasMin)
+            {
+                gate = slopeDeg >= rule.SlopeMin!.Value ? 1f : 0f;
+            }
+            else if (hasMax)
+            {
+                gate = slopeDeg <= rule.SlopeMax!.Value ? 1f : 0f;
+            }
 
-            // Vibrance: mild saturation boost
-            lowCol = Vibrance(lowCol, 0.15f);
-            highCol = Vibrance(highCol, 0.18f);
-
-            Color texBlend = Lerp(lowCol, highCol, ht);
-
-            // Combine with biome base color
-            float blendStrength = _textureBlend; // can reduce a bit on extreme slopes to keep lighting readable
-            float slopeReduce = 1f - Math.Clamp((slope - 0.8f) / 0.2f, 0f, 1f) * 0.25f;
-            blendStrength = Math.Clamp(blendStrength * slopeReduce, 0f, 1f);
-            return Lerp(biome, texBlend, blendStrength);
+            // Altitude rules are ignored in this overlay gate because we do not
+            // have per-vertex world height here; the terrain blend already encodes height.
+            return Math.Clamp(gate, 0f, 1f);
         }
 
-        private static Color SampleTexture(Image img, int w, int h, float tiling, float worldX, float worldZ)
-        {
-            if (w <= 0 || h <= 0)
-                return new Color(160, 160, 160, 255);
-            float u = worldX * tiling;
-            float v = worldZ * tiling;
-            u = u - MathF.Floor(u);
-            v = v - MathF.Floor(v);
-            int px = Math.Clamp((int)MathF.Floor(u * w), 0, w - 1);
-            int py = Math.Clamp((int)MathF.Floor(v * h), 0, h - 1);
-            unsafe { return Raylib.GetImageColor(img, px, py); }
-        }
-
-        private static Color AverageTextureSample(Image img, int w, int h, float tiling, float worldX, float worldZ, float radiusWorld)
-        {
-            Color c0 = SampleTexture(img, w, h, tiling, worldX, worldZ);
-            Color c1 = SampleTexture(img, w, h, tiling, worldX + radiusWorld, worldZ);
-            Color c2 = SampleTexture(img, w, h, tiling, worldX - radiusWorld, worldZ);
-            Color c3 = SampleTexture(img, w, h, tiling, worldX, worldZ + radiusWorld);
-            Color c4 = SampleTexture(img, w, h, tiling, worldX, worldZ - radiusWorld);
-            int r = c0.r + c1.r + c2.r + c3.r + c4.r;
-            int g = c0.g + c1.g + c2.g + c3.g + c4.g;
-            int b = c0.b + c1.b + c2.b + c3.b + c4.b;
-            int a = c0.a + c1.a + c2.a + c3.a + c4.a;
-            return new Color((byte)(r / 5), (byte)(g / 5), (byte)(b / 5), (byte)(a / 5));
-        }
-
-        private static Color Desaturate(Color c, float amount)
-        {
-            amount = Math.Clamp(amount, 0f, 1f);
-            float gray = 0.299f * c.r + 0.587f * c.g + 0.114f * c.b;
-            byte r = (byte)MathF.Round(c.r + (gray - c.r) * amount);
-            byte g = (byte)MathF.Round(c.g + (gray - c.g) * amount);
-            byte b = (byte)MathF.Round(c.b + (gray - c.b) * amount);
-            return new Color(r, g, b, c.a);
-        }
-
-        private static Color Vibrance(Color c, float amount)
-        {
-            // Increase saturation while preserving luminance approximately
-            amount = Math.Clamp(amount, 0f, 1f);
-            float gray = 0.299f * c.r + 0.587f * c.g + 0.114f * c.b;
-            float rf = c.r - gray;
-            float gf = c.g - gray;
-            float bf = c.b - gray;
-            // Push away from gray
-            float scale = 1f + amount * 0.9f;
-            int r = (int)MathF.Round(gray + rf * scale);
-            int g = (int)MathF.Round(gray + gf * scale);
-            int b = (int)MathF.Round(gray + bf * scale);
-            // Clamp
-            r = Math.Clamp(r, 0, 255);
-            g = Math.Clamp(g, 0, 255);
-            b = Math.Clamp(b, 0, 255);
-            return new Color((byte)r, (byte)g, (byte)b, c.a);
-        }
-
-        private static Color SampleLayerColor(float height, Vector3 normal)
-        {
-            // Basic biome layering: lower = dirt/sand, mid = grass, high/steep = rock/snow
-            float slope = 1.0f - MathF.Max(0f, Vector3.Dot(Vector3.UnitY, Vector3.Normalize(normal))); // 0 flat, 1 vertical
-
-            // Define palette
-            Color sand = new Color(194, 178, 128, 255);
-            Color dirt = new Color(120, 100, 80, 255);
-            Color grass = new Color(60, 120, 60, 255);
-            Color rock = new Color(120, 120, 120, 255);
-            Color snow = new Color(235, 235, 235, 255);
-
-            // Height thresholds (world units)
-            float h0 = 0.5f;   // sand beach
-            float h1 = 1.5f;   // dirt
-            float h2 = 3.0f;   // grass
-            float h3 = 5.5f;   // rock
-
-            Color low = height < h0 ? sand : (height < h1 ? dirt : (height < h2 ? grass : (height < h3 ? rock : snow)));
-            Color high = height < h0 ? dirt : (height < h1 ? grass : (height < h2 ? rock : snow));
-
-            // Blend by fractional part within tier for smoother transitions
-            float t = 0.0f;
-            if (height < h0) t = Math.Clamp((height - 0.0f) / MathF.Max(0.0001f, h0 - 0.0f), 0f, 1f);
-            else if (height < h1) t = Math.Clamp((height - h0) / MathF.Max(0.0001f, h1 - h0), 0f, 1f);
-            else if (height < h2) t = Math.Clamp((height - h1) / MathF.Max(0.0001f, h2 - h1), 0f, 1f);
-            else if (height < h3) t = Math.Clamp((height - h2) / MathF.Max(0.0001f, h3 - h2), 0f, 1f);
-            else t = Math.Clamp((height - h3) / 3.0f, 0f, 1f);
-
-            Color baseCol = Lerp(low, high, t);
-
-            // Increase rock/snow influence on steep slopes
-            float steep = Math.Clamp((slope - 0.4f) / 0.6f, 0f, 1f);
-            Color steepCol = Lerp(baseCol, height > h2 ? rock : dirt, steep * 0.6f);
-            return steepCol;
-        }
 
         private static Color Lerp(Color a, Color b, float t)
         {
@@ -554,12 +431,74 @@ namespace VibeGame.Terrain
             return new Color(r, g, bch, aCh);
         }
 
-        private static Color Tint(Color c, float factor)
+
+        public void ApplyBiomeTextures(BiomeData biome)
         {
-            byte r = (byte)MathF.Round(c.r * factor);
-            byte g = (byte)MathF.Round(c.g * factor);
-            byte b = (byte)MathF.Round(c.b * factor);
-            return new Color(r, g, b, c.a);
+            if (biome == null) return;
+            if (!string.IsNullOrEmpty(_lastBiomeIdApplied) && string.Equals(_lastBiomeIdApplied, biome.Id, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            try
+            {
+                Texture low = default;
+                Texture high = default;
+                bool lowOk = false, highOk = false;
+                float lt = _lowTiling, ht = _highTiling;
+
+                var layers = biome.SurfaceTextures ?? new List<SurfaceTextureLayer>();
+                _lowTextureId = null;
+                _highTextureId = null;
+
+                if (layers.Count > 0)
+                {
+                    var id0 = layers[0].TextureId;
+                    _lowTextureId = id0;
+                    var p0 = _terrainTextures.GetResolvedAlbedoPath(id0);
+                    if (!string.IsNullOrWhiteSpace(p0) && _textureManager.TryGetOrLoadByPath(p0!, out low) && low.id != 0)
+                    {
+                        lowOk = true;
+                        lt = 1f / MathF.Max(0.001f, _terrainTextures.GetTileSizeOrDefault(id0, 6f));
+                    }
+                }
+                if (layers.Count > 1)
+                {
+                    var id1 = layers[1].TextureId;
+                    _highTextureId = id1;
+                    var p1 = _terrainTextures.GetResolvedAlbedoPath(id1);
+                    if (!string.IsNullOrWhiteSpace(p1) && _textureManager.TryGetOrLoadByPath(p1!, out high) && high.id != 0)
+                    {
+                        highOk = true;
+                        ht = 1f / MathF.Max(0.001f, _terrainTextures.GetTileSizeOrDefault(id1, 8f));
+                    }
+                }
+
+                if (lowOk)
+                {
+                    _lowTex = low;
+                    _lowAvailable = true;
+                    _lowTiling = lt;
+                }
+                if (highOk)
+                {
+                    _highTex = high;
+                    _highAvailable = true;
+                    _highTiling = ht;
+                }
+                else
+                {
+                    _highAvailable = false;
+                }
+
+                // Cache rules map for gating of high layer
+                _currentRules = biome.TextureRules != null && biome.TextureRules.Count > 0 ? new Dictionary<string, VibeGame.Biomes.TextureRule>(biome.TextureRules, StringComparer.OrdinalIgnoreCase) : null;
+
+                _lastBiomeIdApplied = biome.Id;
+                logger.Debug("[Terrain] Applied biome textures for {BiomeId}: lowOk={Low} highOk={High}", biome.Id, lowOk, highOk);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Failed to apply biome textures for {BiomeId}", biome.Id);
+            }
         }
 
     }

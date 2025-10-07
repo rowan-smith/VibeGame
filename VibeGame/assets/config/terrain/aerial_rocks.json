@@ -1,0 +1,28 @@
+{
+  "Id": "aerial_rocks",
+  "DisplayName": "Aerial Rocks",
+  "Textures": {
+    "Albedo": "textures/terrain/aerial_rocks/aerial_rocks_04_diff_4k.png",
+    "Normal": "textures/terrain/aerial_rocks/aerial_rocks_04_nor_gl_4k.png",
+    "Roughness": "textures/terrain/aerial_rocks/aerial_rocks_04_rough_4k.png"
+  },
+  "PackedChannels": {},
+  "TileSize": 8.0,
+  "NoiseWeight": 0.7,
+
+  "LOD": {
+    "Strategy": "Downscale",       // Or "External"
+    "GenerateMipmaps": true,       // Let GPU handle mipmap chain
+    "MaxMipLevel": 4               // Limit number of mip levels if desired
+  }
+
+// If External
+//  "LOD": {
+//    "Strategy": "External",
+//    "Levels": {
+//      "0": "textures/terrain/brown_mud_leaves/brown_mud_leaves_01_diff_4k.png",
+//      "1": "textures/terrain/brown_mud_leaves/brown_mud_leaves_01_diff_2k.png",
+//      "2": "textures/terrain/brown_mud_leaves/brown_mud_leaves_01_diff_1k.png"
+//    }
+//  }
+}

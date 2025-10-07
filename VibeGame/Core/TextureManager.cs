@@ -8,16 +8,17 @@ namespace VibeGame.Core
         private readonly ILogger _logger = Log.ForContext<TextureManager>();
         private readonly object _lock = new object();
         private readonly Dictionary<string, Texture> _textures = new();
+        private readonly VibeGame.Terrain.ITerrainTextureRegistry _terrainTextures;
         private Task? _preloadTask;
         private bool _disposed;
 
-        // Well-known keys used by the game
-        public const string LowDiffuseKey = "terrain.low.diffuse";
-        public const string HighDiffuseKey = "terrain.high.diffuse";
+        private readonly ITextureDownscaler _downscaler;
 
-        // Paths relative to repo/game working directory
-        private static readonly string LowDiffusePathRel = Path.Combine("assets", "models", "environment", "terrain", "brown_mud_leaves", "textures", "brown_mud_leaves_01_diff_4k.png");
-        private static readonly string HighDiffusePathRel = Path.Combine("assets", "models", "environment", "terrain", "aerial_rocks", "textures", "aerial_rocks_04_diff_4k.png");
+        public TextureManager(VibeGame.Terrain.ITerrainTextureRegistry terrainTextures, ITextureDownscaler downscaler)
+        {
+            _terrainTextures = terrainTextures;
+            _downscaler = downscaler;
+        }
 
         public Task PreloadAsync(CancellationToken cancellationToken = default)
         {
@@ -45,15 +46,27 @@ namespace VibeGame.Core
             {
                 _logger.Information("Preloading textures...");
 
-                // Resolve paths from multiple possible roots (bin/, repo/, etc.)
-                var lowPath = ResolveExistingPath(LowDiffusePathRel);
-                var highPath = ResolveExistingPath(HighDiffusePathRel);
+                int before;
+                lock (_lock) { before = _textures.Count; }
 
-                // Load textures sequentially on the current thread to respect GL context affinity
-                LoadTextureIfMissing(LowDiffuseKey, lowPath, ct);
-                LoadTextureIfMissing(HighDiffuseKey, highPath, ct);
+                // Preload albedo textures from terrain texture registry
+                foreach (var def in _terrainTextures.GetAll())
+                {
+                    if (ct.IsCancellationRequested) break;
+                    var rel = _terrainTextures.GetResolvedAlbedoPath(def.Id);
+                    if (string.IsNullOrWhiteSpace(rel)) continue;
 
-                _logger.Information("Preload complete: {Count} textures", _textures.Count);
+                    var path = ResolveExistingPath(rel);
+                    string key;
+                    try { key = Path.GetFullPath(path); }
+                    catch { key = path; }
+
+                    LoadTextureIfMissing(key, path, ct);
+                }
+
+                int after;
+                lock (_lock) { after = _textures.Count; }
+                _logger.Information("Preload complete: {Count} textures (loaded {Delta} new)", after, after - before);
             }
             catch (OperationCanceledException)
             {
@@ -101,8 +114,10 @@ namespace VibeGame.Core
                     return;
                 }
 
-                // Load image then create GPU texture
-                var img = Raylib.LoadImage(path);
+                // Load image via selected downscaler (may perform runtime downscale)
+                var img = _downscaler.LoadImageWithDownscale(path);
+                
+                
                 var tex = Raylib.LoadTextureFromImage(img);
                 Raylib.UnloadImage(img); // free CPU memory, keep GPU texture
 

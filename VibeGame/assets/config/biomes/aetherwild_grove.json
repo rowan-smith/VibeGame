@@ -30,6 +30,19 @@
     "Secondary": { "R": 80, "G": 200, "B": 120, "A": 255 },
     "Accent": { "R": 181, "G": 126, "B": 220, "A": 255 }
   },
+
+  "SurfaceTextures": [
+    {
+      "TextureId": "aerial_rocks",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "aerial_rocks": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
+  
   "AllowedObjects": ["maple_tree"],
   "DominantFlora": ["Glowcap Trees", "Luminous Vines"],
   "DominantFauna": [],

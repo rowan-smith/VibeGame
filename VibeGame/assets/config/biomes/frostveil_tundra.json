@@ -30,6 +30,17 @@
     "Secondary": { "R": 250, "G": 250, "B": 250, "A": 255 },
     "Accent": { "R": 200, "G": 200, "B": 200, "A": 255 }
   },
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
   "AllowedObjects": [],
   "DominantFlora": ["Frozen Shrubs", "Lichen"],
   "DominantFauna": [],

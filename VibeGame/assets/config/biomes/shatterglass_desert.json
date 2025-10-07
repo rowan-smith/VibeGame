@@ -30,6 +30,17 @@
     "Secondary": { "R": 0, "G": 188, "B": 212, "A": 255 },
     "Accent": { "R": 245, "G": 245, "B": 245, "A": 255 }
   },
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
   "AllowedObjects": [],
   "DominantFlora": [],
   "DominantFauna": [],

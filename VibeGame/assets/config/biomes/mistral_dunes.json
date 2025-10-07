@@ -30,6 +30,17 @@
     "Secondary": { "R": 54, "G": 117, "B": 136, "A": 255 },
     "Accent": { "R": 183, "G": 65, "B": 14, "A": 255 }
   },
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
   "AllowedObjects": [],
   "DominantFlora": ["Desert Palms", "Thornbloom"],
   "DominantFauna": [],

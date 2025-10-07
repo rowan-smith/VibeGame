@@ -107,49 +107,6 @@ namespace VibeGame.Objects
             Raylib.DrawModelEx(model, modelPos, new Vector3(1, 0, 0), -90f, new Vector3(scale, scale, scale), Raylib.WHITE);
         }
 
-        private void EnsureModelsLoaded()
-        {
-            if (_modelsLoaded) return;
-            _modelsLoaded = true; // avoid reentry
-            try
-            {
-                string baseDir = AppContext.BaseDirectory;
-
-                // Preferred location in this project
-                string[] candidateDirs = new[]
-                {
-                    Path.Combine(baseDir, "assets", "models", "world", "trees"),
-                    // Backward-compatible legacy location
-                    Path.Combine(baseDir, "assets", "trees")
-                };
-
-                foreach (var dir in candidateDirs)
-                {
-                    if (!Directory.Exists(dir)) continue;
-                    var glbFiles = Array.Empty<string>();
-                    try { glbFiles = Directory.GetFiles(dir, "*.glb"); } catch { /* ignore */ }
-                    foreach (var f in glbFiles)
-                    {
-                        try
-                        {
-                            var model = Raylib.LoadModel(f);
-                            _models.Add(model);
-                        }
-                        catch
-                        {
-                            // skip invalid model; continue
-                        }
-                    }
-                    // If we loaded any from preferred dir, no need to scan others
-                    if (_models.Count > 0) break;
-                }
-            }
-            catch
-            {
-                // Swallow: we intentionally avoid fallback drawing when models are missing
-            }
-        }
-
         private void EnsureModelsForIdLoaded(string treeId)
         {
             if (string.IsNullOrWhiteSpace(treeId)) return;

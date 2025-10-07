@@ -28,6 +28,10 @@ namespace VibeGame.Biomes.Environment
         public string? MusicTag { get; set; }
         public List<string> AllowedObjects { get; set; } = new();
 
+        // New: Surface textures and rules
+        public List<SurfaceTextureLayerDto> SurfaceTextures { get; set; } = new();
+        public Dictionary<string, TextureRuleDto> TextureRules { get; set; } = new();
+
         public BiomeData ToBiomeData()
         {
             var b = ProceduralData?.Base ?? new BaseProceduralDto();
@@ -75,7 +79,9 @@ namespace VibeGame.Biomes.Environment
                 FeatureDescription = FeatureDescription,
                 SpecialFeatures = new List<string>(SpecialFeatures),
                 MusicTag = MusicTag,
-                AllowedObjects = new List<string>(AllowedObjects)
+                AllowedObjects = new List<string>(AllowedObjects),
+                SurfaceTextures = SurfaceTextures.Select(s => new SurfaceTextureLayer { TextureId = s.TextureId, BlendMin = s.BlendMin, BlendMax = s.BlendMax }).ToList(),
+                TextureRules = TextureRules.ToDictionary(kv => kv.Key, kv => new TextureRule { MinAltitude = kv.Value.MinAltitude, MaxAltitude = kv.Value.MaxAltitude, SlopeMin = kv.Value.SlopeMin, SlopeMax = kv.Value.SlopeMax })
             };
         }
 
@@ -129,5 +135,21 @@ namespace VibeGame.Biomes.Environment
         public float Persistence { get; set; } = 0.5f;
         public float Lacunarity { get; set; } = 2.0f;
         public float Detail { get; set; } = 0f;
+    }
+
+    // Texture layering DTOs from biome JSON
+    public sealed class SurfaceTextureLayerDto
+    {
+        public string TextureId { get; set; } = string.Empty;
+        public float BlendMin { get; set; } = 0f;
+        public float BlendMax { get; set; } = 1f;
+    }
+
+    public sealed class TextureRuleDto
+    {
+        public float? MinAltitude { get; set; }
+        public float? MaxAltitude { get; set; }
+        public float? SlopeMin { get; set; }
+        public float? SlopeMax { get; set; }
     }
 }

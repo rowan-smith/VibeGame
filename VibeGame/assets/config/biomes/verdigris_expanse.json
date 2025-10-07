@@ -30,6 +30,17 @@
     "Secondary": { "R": 184, "G": 115, "B": 51, "A": 255 },
     "Accent": { "R": 139, "G": 115, "B": 85, "A": 255 }
   },
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
   "AllowedObjects": [],
   "DominantFlora": ["Thornbrush", "Oxide Ferns"],
   "DominantFauna": [],

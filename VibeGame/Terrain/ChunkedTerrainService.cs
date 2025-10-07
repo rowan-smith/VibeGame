@@ -285,6 +285,8 @@ namespace VibeGame.Terrain
                     byte b = (byte)Math.Clamp((int)(bc.B * lm), 0, 255);
                     Color biomeColor = new Color(r, g, b, (byte)255);
 
+                    // Apply biome-specific terrain textures for this chunk before rendering
+                    _renderer.ApplyBiomeTextures(biomeForChunk.Data);
                     _renderer.RenderAt(heights, _tileSize, origin, camera, biomeColor);
 
                     // Draw world objects for this chunk
