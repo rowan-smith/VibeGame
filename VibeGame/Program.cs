@@ -1,5 +1,4 @@
-﻿using System.IO;
-using Logging;
+﻿using Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VibeGame.Biomes;
@@ -7,6 +6,7 @@ using VibeGame.Biomes.Environment;
 using VibeGame.Biomes.Spawners;
 using VibeGame.Camera;
 using VibeGame.Core;
+using VibeGame.Core.Downscalers;
 using VibeGame.Core.Items;
 using VibeGame.Core.WorldObjects;
 using VibeGame.Objects;
@@ -50,7 +50,7 @@ internal static class Program
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
         builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
-        builder.Services.AddSingleton<VibeGame.Objects.IWorldObjectRenderer, VibeGame.Objects.WorldObjectRenderer>();
+        builder.Services.AddSingleton<IWorldObjectRenderer, WorldObjectRenderer>();
         builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();
         builder.Services.AddSingleton<IEnvironmentSampler, MultiNoiseSampler>();
 
@@ -65,7 +65,7 @@ internal static class Program
                 var trees = sp.GetRequiredService<ITreesRegistry>();
 
                 // Use config-driven world object spawner (trees) honoring AllowedObjects when provided
-                VibeGame.Objects.IWorldObjectSpawner spawner = new VibeGame.Biomes.Spawners.ConfigTreeWorldObjectSpawner(
+                IWorldObjectSpawner spawner = new ConfigTreeWorldObjectSpawner(
                     trees,
                     sampler,
                     captured.AllowedObjects
@@ -101,11 +101,25 @@ internal static class Program
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
         builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
         // Register base heightmap terrain as a concrete service
-        builder.Services.AddSingleton<ChunkedTerrainService>();
+        builder.Services.AddSingleton<ReadOnlyTerrainService>();
         // Hybrid service composes the heightmap and adds local editable voxels
-        builder.Services.AddSingleton<IInfiniteTerrain, HybridTerrainService>();
+        builder.Services.AddSingleton<EditableTerrainService>();
+        // Far distance low-LOD ring (coarse height mesh)
+        builder.Services.AddSingleton<LowLodTerrainService>();
+        
+        // Ring configuration (can be made configurable via JSON later)
+        builder.Services.AddSingleton(new TerrainRingConfig
+        {
+            EditableRadius = 2,
+            ReadOnlyRadius = 6,
+            LowLodRadius = 12,
+            MaxActiveVoxelChunks = 128
+        });
+        
+        // Terrain manager orchestrates ring services and is used by the engine
+        builder.Services.AddSingleton<IInfiniteTerrain, TerrainManager>();
         // Register texture downscaler implementation
-        builder.Services.AddSingleton<ITextureDownscaler, VibeGame.Core.Downscalers.ImageSharpTextureDownscaler>();
+        builder.Services.AddSingleton<ITextureDownscaler, ImageSharpTextureDownscaler>();
 
         builder.Services.AddSingleton<ITextureManager, TextureManager>();
         builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();

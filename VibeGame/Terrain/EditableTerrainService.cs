@@ -9,9 +9,9 @@ using VibeGame.Biomes;
 namespace VibeGame.Terrain
 {
     // Hybrid terrain: heightmap surface + local editable voxel chunks
-    public class HybridTerrainService : IInfiniteTerrain, IEditableTerrain
+    public class EditableTerrainService : IInfiniteTerrain, IEditableTerrain
     {
-        private readonly ChunkedTerrainService _heightmap;
+        private readonly ReadOnlyTerrainService _heightmap;
         private readonly int _voxelChunkSize;
         private readonly float _voxelSize;
 
@@ -29,7 +29,7 @@ namespace VibeGame.Terrain
         private int _centerChunkX;
         private int _centerChunkZ;
 
-        public HybridTerrainService(ChunkedTerrainService heightmap)
+        public EditableTerrainService(ReadOnlyTerrainService heightmap)
         {
             _heightmap = heightmap;
             _voxelChunkSize = 32;
@@ -55,7 +55,8 @@ namespace VibeGame.Terrain
             // Snap Y to ground voxel layer so edits are near the terrain surface
             float groundY = _heightmap.SampleHeight(worldPos.X, worldPos.Z);
             int cy = (int)MathF.Floor(groundY / span);
-            int voxRad = Math.Clamp(radiusChunks, 1, 2); // keep it small
+            // Keep voxel bubble very tight for performance (visual overlay only near player)
+            int voxRad = 1; // fixed near-ring overlay only
             var baseKey = WorldToVoxelChunk(new Vector3(worldPos.X, cy * span, worldPos.Z));
             for (int dz = -voxRad; dz <= voxRad; dz++)
             for (int dx = -voxRad; dx <= voxRad; dx++)
@@ -79,7 +80,16 @@ namespace VibeGame.Terrain
                 }
             }
 
-            // Evict farthest chunks if exceeding cap
+            // Remove far chunks outside a small safety radius to keep dictionary tiny
+            foreach (var kv in _voxels.ToArray())
+            {
+                var ch = kv.Value;
+                Vector3 c = ch.OriginWorld + new Vector3(ch.Size * ch.VoxelSize * 0.5f);
+                if (GetRingForWorld(c) > 2)
+                    _voxels.Remove(kv.Key);
+            }
+
+            // Evict farthest chunks if somehow still exceeding cap
             if (_voxels.Count > _maxActiveVoxelChunks)
             {
                 var ordered = _voxels.OrderByDescending(p => Vector3.Distance(worldPos, p.Value.OriginWorld));
@@ -124,17 +134,32 @@ namespace VibeGame.Terrain
             return _heightmap.GetNearbyObjectColliders(worldPos, range);
         }
 
+        public bool RenderBaseHeightmap { get; set; } = true;
+
         public void Render(Camera3D camera, Color baseColor)
         {
-            // Draw the full heightmap terrain first; we'll overlay voxel surfaces slightly above it.
+            // Optionally draw the full heightmap terrain first; we'll overlay voxel surfaces slightly above it.
             // This avoids visible holes along chunk borders when voxel chunks are present.
-            _heightmap.Render(camera, baseColor);
+            if (RenderBaseHeightmap)
+            {
+                _heightmap.Render(camera, baseColor);
+            }
 
             // Overlay voxel chunk surfaces (semi-transparent) to visualize edits
             foreach (var v in _voxels.Values)
             {
-                // Biome-tinted color with alpha varying by LOD
+                // Quick ring/distance culling: only draw very near chunks
                 Vector3 center = v.OriginWorld + new Vector3(v.Size * v.VoxelSize * 0.5f);
+                int ring = GetRingForWorld(center);
+                if (ring > 1) continue; // overlay only in immediate ring
+
+                // Simple distance culling relative to camera
+                float dx = center.X - camera.position.X;
+                float dz = center.Z - camera.position.Z;
+                float maxDist = (_heightmap.ChunkSize - 1) * _heightmap.TileSize * 1.5f; // within ~1.5 chunks
+                if ((dx * dx + dz * dz) > maxDist * maxDist) continue;
+
+                // Biome-tinted color with alpha varying by LOD
                 var biome = _heightmap.GetBiomeAt(center.X, center.Z);
                 var bc = biome.Data.ColorPalette.Primary;
                 float lm = MathF.Max(0.2f, biome.Data.LightingModifier);
@@ -155,6 +180,9 @@ namespace VibeGame.Terrain
             // Then overlay voxel chunk bounds with LOD-colored wires
             foreach (var v in _voxels.Values)
             {
+                // Only draw debug bounds for near chunks to avoid excessive line drawing
+                Vector3 center = v.OriginWorld + new Vector3(v.Size * v.VoxelSize * 0.5f);
+                if (GetRingForWorld(center) > 1) continue;
                 Color c = v.LodLevel == 0 ? new Color(0, 220, 255, 220)
                                           : (v.LodLevel == 1 ? new Color(140, 160, 255, 220) : new Color(180, 120, 255, 220));
                 v.RenderDebugBounds(c);

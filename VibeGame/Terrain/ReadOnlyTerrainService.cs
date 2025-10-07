@@ -5,7 +5,7 @@ using VibeGame.Biomes;
 
 namespace VibeGame.Terrain
 {
-    public class ChunkedTerrainService : IInfiniteTerrain
+    public class ReadOnlyTerrainService : IInfiniteTerrain
     {
         private readonly ITerrainGenerator _gen;
         private readonly ITerrainRenderer _renderer;
@@ -50,7 +50,7 @@ namespace VibeGame.Terrain
             return list;
         }
 
-        public ChunkedTerrainService(ITerrainGenerator gen, ITerrainRenderer renderer, VibeGame.Objects.IWorldObjectRenderer objectRenderer, IBiomeProvider biomeProvider)
+        public ReadOnlyTerrainService(ITerrainGenerator gen, ITerrainRenderer renderer, VibeGame.Objects.IWorldObjectRenderer objectRenderer, IBiomeProvider biomeProvider)
         {
             _gen = gen;
             _renderer = renderer;
