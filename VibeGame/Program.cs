@@ -46,13 +46,13 @@ internal static class Program
         builder.Services.AddHostedService<Entry>();
 
         // various services used in Entry.cs
-        builder.Services.AddSingleton<ITerrainGenerator, TerrainGenerator>();
+        builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(new VibeGame.Biomes.Environment.MultiNoiseConfig { Seed = VibeGame.Core.WorldGlobals.Seed }));
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
         builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
         builder.Services.AddSingleton<IWorldObjectRenderer, WorldObjectRenderer>();
         builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();
-        builder.Services.AddSingleton<IEnvironmentSampler, MultiNoiseSampler>();
+        builder.Services.AddSingleton<IEnvironmentSampler>(sp => new VibeGame.Biomes.Environment.MultiNoiseSampler(new VibeGame.Biomes.Environment.MultiNoiseConfig { Seed = VibeGame.Core.WorldGlobals.Seed }));
 
         // Biomes and providers
         // Register biomes from unified configuration (no hardcoded classes)
@@ -107,17 +107,38 @@ internal static class Program
         // Far distance low-LOD ring (coarse height mesh)
         builder.Services.AddSingleton<LowLodTerrainService>();
         
-        // Ring configuration (can be made configurable via JSON later)
+        // Ring configuration (optionally loaded from assets\\config\\world.json)
+        var worldCfg = VibeGame.Core.WorldGlobals.Config;
         builder.Services.AddSingleton(new TerrainRingConfig
         {
-            EditableRadius = 2,
-            ReadOnlyRadius = 6,
-            LowLodRadius = 12,
-            MaxActiveVoxelChunks = 128
+            EditableRadius = worldCfg?.EditableRadius ?? 3,
+            ReadOnlyRadius = worldCfg?.ReadOnlyRadius ?? 6,
+            LowLodRadius = worldCfg?.LowLodRadius ?? 12,
+            MaxActiveVoxelChunks = worldCfg?.MaxActiveVoxelChunks ?? 128
         });
         
         // Terrain manager orchestrates ring services and is used by the engine
         builder.Services.AddSingleton<IInfiniteTerrain, TerrainManager>();
+        // Expose the same TerrainManager instance via its concrete type
+        builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
+
+        // Register higher-level world systems
+        builder.Services.AddSingleton(sp => new BiomeManager(
+            VibeGame.Core.WorldGlobals.Seed,
+            sp.GetRequiredService<IBiomeProvider>(),
+            sp.GetRequiredService<ITerrainGenerator>()));
+        builder.Services.AddSingleton(sp => new VibeGame.Objects.ObjectSpawner(
+            VibeGame.Core.WorldGlobals.Seed,
+            sp.GetRequiredService<ITerrainGenerator>(),
+            sp.GetRequiredService<IBiomeProvider>()));
+        builder.Services.AddSingleton(sp => new VibeGame.Core.Player(new System.Numerics.Vector3(0f, 0f, 0f)));
+        builder.Services.AddSingleton(sp => new VibeGame.Core.World(
+            VibeGame.Core.WorldGlobals.Seed,
+            sp.GetRequiredService<VibeGame.Core.Player>(),
+            sp.GetRequiredService<TerrainManager>(),
+            sp.GetRequiredService<BiomeManager>(),
+            sp.GetRequiredService<VibeGame.Objects.ObjectSpawner>()));
+
         // Register texture downscaler implementation
         builder.Services.AddSingleton<ITextureDownscaler, ImageSharpTextureDownscaler>();
 

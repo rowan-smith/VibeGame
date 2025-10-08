@@ -67,6 +67,34 @@ namespace VibeGame.Terrain
             {
                 if (_heights.ContainsKey(key)) continue;
                 var fine = _gen.GenerateHeightsForChunk(key.cx, key.cz, _chunkSize);
+                // Apply the same biome-dependent overlay used in ReadOnlyTerrainService so rings align
+                float chunkWorldSize = (_chunkSize - 1) * _tileSize;
+                Vector2 origin = new Vector2(key.cx * chunkWorldSize, key.cz * chunkWorldSize);
+                var biome = _biomeProvider.GetBiomeAt(origin, _gen);
+                var mods = biome.Data.ProceduralData.NoiseModifiers;
+                if (mods.HeightScale != 0f)
+                {
+                    int octaves = Math.Clamp(1 + (int)MathF.Round(mods.Detail * 5f), 1, 6);
+                    float baseFreq = 0.03f;
+                    float freq = baseFreq * (mods.Frequency <= 0f ? 1f : mods.Frequency);
+                    float lac = mods.Lacunarity <= 0f ? 2.0f : mods.Lacunarity;
+                    float gain = mods.Persistence;
+
+                    int seed = HashCode.Combine(VibeGame.Core.WorldGlobals.Seed, biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
+                    var overlay = new FastNoiseLiteSource(seed, FastNoiseLite.NoiseType.OpenSimplex2, freq, octaves, lac, gain);
+
+                    for (int z = 0; z < _chunkSize; z++)
+                    {
+                        for (int x = 0; x < _chunkSize; x++)
+                        {
+                            float wx = origin.X + x * _tileSize;
+                            float wz = origin.Y + z * _tileSize;
+                            float n = overlay.GetValue3D(wx, 0f, wz);
+                            float delta = n * (mods.HeightScale * 6.0f);
+                            fine[x, z] += delta;
+                        }
+                    }
+                }
                 var coarse = Downsample(fine, _lodStride);
                 _heights[key] = coarse;
             }
@@ -87,6 +115,34 @@ namespace VibeGame.Terrain
             if (!_heights.TryGetValue((cx, cz), out var h))
             {
                 var fine = _gen.GenerateHeightsForChunk(cx, cz, _chunkSize);
+                // Apply biome overlay like ReadOnlyTerrainService to match visual terrain
+                float chunkWorldSize = (_chunkSize - 1) * _tileSize;
+                Vector2 origin = new Vector2(cx * chunkWorldSize, cz * chunkWorldSize);
+                var biome = _biomeProvider.GetBiomeAt(origin, _gen);
+                var mods = biome.Data.ProceduralData.NoiseModifiers;
+                if (mods.HeightScale != 0f)
+                {
+                    int octaves = Math.Clamp(1 + (int)MathF.Round(mods.Detail * 5f), 1, 6);
+                    float baseFreq = 0.03f;
+                    float freq = baseFreq * (mods.Frequency <= 0f ? 1f : mods.Frequency);
+                    float lac = mods.Lacunarity <= 0f ? 2.0f : mods.Lacunarity;
+                    float gain = mods.Persistence;
+
+                    int seed = HashCode.Combine(VibeGame.Core.WorldGlobals.Seed, biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
+                    var overlay = new FastNoiseLiteSource(seed, FastNoiseLite.NoiseType.OpenSimplex2, freq, octaves, lac, gain);
+
+                    for (int z = 0; z < _chunkSize; z++)
+                    {
+                        for (int x = 0; x < _chunkSize; x++)
+                        {
+                            float wx = origin.X + x * _tileSize;
+                            float wz = origin.Y + z * _tileSize;
+                            float n = overlay.GetValue3D(wx, 0f, wz);
+                            float delta = n * (mods.HeightScale * 6.0f);
+                            fine[x, z] += delta;
+                        }
+                    }
+                }
                 h = Downsample(fine, _lodStride);
                 _heights[(cx, cz)] = h;
             }
@@ -116,24 +172,48 @@ namespace VibeGame.Terrain
 
         public void Render(Camera3D camera, Color baseColor)
         {
+            // Group visible chunks by biome to minimize texture binds and logging in hot paths
+            float chunkWorldSize = (_chunkSize - 1) * _tileSize;
+            Vector3 camPos = camera.position;
+            Vector3 fwd = new Vector3(camera.target.X - camPos.X, 0f, camera.target.Z - camPos.Z);
+            if (fwd.LengthSquared() < 0.0001f) fwd = new Vector3(0f, 0f, 1f);
+            fwd = Vector3.Normalize(fwd);
+            float fovyRad = MathF.PI * (camera.fovy / 180f);
+            float cosLimit = MathF.Cos(MathF.Min(1.39626f, fovyRad * 0.75f));
+
+            // Collect visible chunks with their biomes
+            var visible = new List<((int cx, int cz) key, Vector2 origin, IBiome biome)>();
             foreach (var kv in _heights)
             {
                 var key = kv.Key;
                 int dx = key.cx;
                 int dz = key.cz;
 
-                // Skip inner exclusion if any
-                // Determine center relative to camera chunk to compute distance
-                // (We rely on UpdateAround to have skipped inner already, but keep a safety check)
-                // No camera reference here; compute based on last radius is sufficient
-
-                float chunkWorldSize = (_chunkSize - 1) * _tileSize;
                 Vector2 origin = new Vector2(dx * chunkWorldSize, dz * chunkWorldSize);
+                Vector3 center = new Vector3(origin.X + chunkWorldSize * 0.5f, 0f, origin.Y + chunkWorldSize * 0.5f);
+                Vector3 toC = new Vector3(center.X - camPos.X, 0f, center.Z - camPos.Z);
+                float dist2 = toC.LengthSquared();
+                if (dist2 > 1e-4f) toC /= MathF.Sqrt(dist2);
+                // Perform approximate frustum culling: skip if largely behind camera and not extremely near
+                if (dist2 > (chunkWorldSize * 0.75f) * (chunkWorldSize * 0.75f) && Vector3.Dot(fwd, toC) < cosLimit)
+                    continue;
 
-                // Apply biome textures for this chunk before rendering
                 var biome = _biomeProvider.GetBiomeAt(origin, _gen);
-                _renderer.ApplyBiomeTextures(biome.Data);
-                _renderer.RenderAt(kv.Value, _tileSize * _lodStride, origin, camera, baseColor);
+                visible.Add((key, origin, biome));
+            }
+
+            // Group by biome id to reduce switching
+            foreach (var group in visible.GroupBy(v => v.biome.Id, StringComparer.OrdinalIgnoreCase))
+            {
+                var first = group.First();
+                _renderer.ApplyBiomeTextures(first.biome.Data);
+                foreach (var item in group)
+                {
+                    if (_heights.TryGetValue(item.key, out var heights))
+                    {
+                        _renderer.RenderAt(heights, _tileSize * _lodStride, item.origin, camera, baseColor);
+                    }
+                }
             }
         }
 

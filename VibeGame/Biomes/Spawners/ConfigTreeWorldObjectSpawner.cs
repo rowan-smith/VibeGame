@@ -61,7 +61,7 @@ namespace VibeGame.Biomes.Spawners
 
             // Distribute count among candidates
             int perType = Math.Max(1, count / candidateDefs.Count);
-            int seedBase = HashCode.Combine(biomeId.GetHashCode(StringComparison.OrdinalIgnoreCase), (int)originWorld.X, (int)originWorld.Y, heights.GetLength(0));
+            int seedBase = HashCode.Combine(VibeGame.Core.WorldGlobals.Seed, biomeId.GetHashCode(StringComparison.OrdinalIgnoreCase), (int)originWorld.X, (int)originWorld.Y, heights.GetLength(0));
 
             foreach (var def in candidateDefs)
             {

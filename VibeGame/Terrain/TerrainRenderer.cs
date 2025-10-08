@@ -493,7 +493,7 @@ namespace VibeGame.Terrain
                 _currentRules = biome.TextureRules != null && biome.TextureRules.Count > 0 ? new Dictionary<string, VibeGame.Biomes.TextureRule>(biome.TextureRules, StringComparer.OrdinalIgnoreCase) : null;
 
                 _lastBiomeIdApplied = biome.Id;
-                logger.Debug("[Terrain] Applied biome textures for {BiomeId}: lowOk={Low} highOk={High}", biome.Id, lowOk, highOk);
+                logger.Verbose("[Terrain] Applied biome textures for {BiomeId}: lowOk={Low} highOk={High}", biome.Id, lowOk, highOk);
             }
             catch (Exception ex)
             {

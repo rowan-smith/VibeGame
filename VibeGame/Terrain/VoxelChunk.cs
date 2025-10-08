@@ -16,18 +16,20 @@ namespace VibeGame.Terrain
         // Density convention: >0 solid, <0 empty; iso-surface at 0
         private readonly float[,,] _density;
 
-        // Cached mesh metadata placeholder (no real mesh for now)
+        // Cached greedy mesh data for rendering
         public class MeshCache
         {
             public int LodLevel;
             public int TriangleCount;
             public DateTime GeneratedAt;
+            internal VoxelGreedyMesher.MeshData Data = new VoxelGreedyMesher.MeshData();
         }
 
         public MeshCache? CachedMesh { get; private set; }
         public bool IsDirty { get; private set; }
         public int LodLevel { get; set; }
 
+        private readonly object _meshLock = new object();
         private Task? _rebuildTask;
         private CancellationTokenSource? _cts;
 
@@ -68,49 +70,36 @@ namespace VibeGame.Terrain
             return (dx * dx + dy * dy + dz * dz) <= radius * radius;
         }
 
-        // Simulate async mesh rebuild with caching
+        // Enqueue async greedy mesh rebuild and cache results
         public void EnqueueRebuild()
         {
             if (!IsDirty) return;
             _cts?.Cancel();
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
-            _rebuildTask = Task.Run(async () =>
+            _rebuildTask = Task.Run(() =>
             {
                 try
                 {
-                    // Simulate background work
-                    await Task.Delay(10, token);
-                    int tris = EstimateTriangleCount();
-                    CachedMesh = new MeshCache
+                    var data = VoxelGreedyMesher.Build(this, this.LodLevel);
+                    var cache = new MeshCache
                     {
                         LodLevel = this.LodLevel,
-                        TriangleCount = tris,
-                        GeneratedAt = DateTime.UtcNow
+                        TriangleCount = data.Triangles.Length / 3,
+                        GeneratedAt = DateTime.UtcNow,
+                        Data = data
                     };
-                    IsDirty = false;
+                    lock (_meshLock)
+                    {
+                        CachedMesh = cache;
+                        IsDirty = false;
+                    }
                 }
                 catch (OperationCanceledException)
                 {
                     // ignored
                 }
             }, token);
-        }
-
-        private int EstimateTriangleCount()
-        {
-            // Very rough estimate: proportionally to number of boundary voxels
-            int n = Size;
-            int boundary = 0;
-            for (int z = 1; z < n - 1; z++)
-            for (int y = 1; y < n - 1; y++)
-            for (int x = 1; x < n - 1; x++)
-            {
-                float d = _density[x, y, z];
-                // If near surface (around 0), count approximate triangles
-                if (d > -0.2f && d < 0.2f) boundary++;
-            }
-            return boundary * 2; // placeholder
         }
 
         public void RenderDebugBounds(Color color)
@@ -120,41 +109,26 @@ namespace VibeGame.Terrain
             Raylib.DrawCubeWires(center, size.X, size.Y, size.Z, color);
         }
 
-        // Very simple surface visualization: draw cubes at density boundary voxels
-        public void RenderSurfaceCubes(Color color)
+        // Render greedy-meshed triangles with simple backface culling relative to camera
+        public void RenderSurfaceCubes(Color color, Camera3D camera)
         {
-            int n = Size;
-            float vs = VoxelSize;
-            // LOD-aware stepping to reduce draw calls
-            int step = LodLevel <= 0 ? 1 : (LodLevel == 1 ? 2 : 3);
-            // Slight vertical bias to avoid z-fighting with the heightmap surface
-            float yBias = vs * 0.03f;
-
-            for (int z = 1; z < n - 1; z += step)
+            var cache = CachedMesh;
+            if (cache == null || cache.TriangleCount == 0) return;
+            var tris = cache.Data.Triangles;
+            var norms = cache.Data.Normals;
+            Vector3 cam = camera.position;
+            for (int i = 0, t = 0; i < tris.Length; i += 3, t++)
             {
-                for (int y = 1; y < n - 1; y += step)
-                {
-                    for (int x = 1; x < n - 1; x += step)
-                    {
-                        float d = _density[x, y, z];
-                        // Only draw near-surface solids
-                        if (d <= 0f) continue;
-
-                        bool boundary =
-                            _density[x - 1, y, z] < 0f || _density[x + 1, y, z] < 0f ||
-                            _density[x, y - 1, z] < 0f || _density[x, y + 1, z] < 0f ||
-                            _density[x, y, z - 1] < 0f || _density[x, y, z + 1] < 0f;
-
-                        if (!boundary) continue;
-
-                        Vector3 center = new Vector3(
-                            OriginWorld.X + (x + 0.5f) * vs,
-                            OriginWorld.Y + (y + 0.5f) * vs + yBias,
-                            OriginWorld.Z + (z + 0.5f) * vs);
-                        Vector3 size = new Vector3(vs, vs, vs);
-                        Raylib.DrawCubeV(center, size, color);
-                    }
-                }
+                Vector3 a = tris[i];
+                Vector3 b = tris[i + 1];
+                Vector3 c = tris[i + 2];
+                Vector3 centroid = new Vector3((a.X + b.X + c.X) / 3f, (a.Y + b.Y + c.Y) / 3f, (a.Z + b.Z + c.Z) / 3f);
+                Vector3 view = cam - centroid;
+                float len2 = view.LengthSquared();
+                if (len2 > 1e-6f) view /= MathF.Sqrt(len2);
+                Vector3 n = norms[t];
+                if (Vector3.Dot(n, view) <= 0f) continue; // backface culled
+                Raylib.DrawTriangle3D(a, b, c, color);
             }
         }
     }

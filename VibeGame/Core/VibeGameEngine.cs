@@ -14,6 +14,7 @@ namespace VibeGame
         private readonly ITextureManager _textureManager;
         private readonly IItemRegistry _itemRegistry;
         private readonly int _startSeed;
+        private readonly VibeGame.Core.World _world;
 
         private bool _debugVisible = false;
         private int _renderRadius = 4;
@@ -37,13 +38,14 @@ namespace VibeGame
         // Cache for small UI-held models
         private readonly Dictionary<string, Model> _modelCache = new();
 
-        public VibeGameEngine(ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain infiniteTerrain, ITextureManager textureManager, IItemRegistry itemRegistry)
+        public VibeGameEngine(ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain infiniteTerrain, ITextureManager textureManager, IItemRegistry itemRegistry, VibeGame.Core.World world)
         {
             _cameraController = cameraController;
             _physics = physics;
             _infiniteTerrain = infiniteTerrain;
             _textureManager = textureManager;
             _itemRegistry = itemRegistry;
+            _world = world;
             _startSeed = Environment.TickCount;
         }
 
@@ -128,6 +130,9 @@ namespace VibeGame
                     camera.target.Y = camera.position.Y;
                 }
 
+                // Initialize world player position to camera start
+                _world.Player.Position = camera.position;
+
                 // Reset session state
                 _isPaused = false;
                 _requestReturnToMenu = false;
@@ -162,14 +167,10 @@ namespace VibeGame
                         if (_selectedHotbar < 0) _selectedHotbar += HotbarSlotCount;
                     }
 
-                    // Update chunk cache around camera regardless so background remains up-to-date
-                    _infiniteTerrain.UpdateAround(camera.position, _renderRadius);
-
-                    // Optional: pump background jobs for hybrid voxel terrain
-                    if (_infiniteTerrain is IEditableTerrain editable)
-                    {
-                        editable.PumpAsyncJobs();
-                    }
+                        // Sync world player position and update world systems
+                    _world.Player.Position = camera.position;
+                    _world.Update(camera.position);
+                    _world.PumpAsyncJobs();
 
                     // Input-driven orientation + desired horizontal move
                     Vector3 horizMove = Vector3.Zero;

@@ -165,7 +165,8 @@ namespace VibeGame.Core
             {
                 if (_textures.TryGetValue(key, out texture))
                 {
-                    _logger.Debug("Texture {Key} found: id={Id}", key, texture.id);
+                    // Downgrade noisy cache-hit logging to Verbose to avoid hot-path spam
+                    _logger.Verbose("Texture {Key} found: id={Id}", key, texture.id);
                     return texture.id != 0;
                 }
             }

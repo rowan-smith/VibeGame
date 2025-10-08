@@ -56,7 +56,7 @@ namespace VibeGame.Terrain
             float groundY = _heightmap.SampleHeight(worldPos.X, worldPos.Z);
             int cy = (int)MathF.Floor(groundY / span);
             // Keep voxel bubble very tight for performance (visual overlay only near player)
-            int voxRad = 1; // fixed near-ring overlay only
+            int voxRad = 3; // 3 editable chunks around the player
             var baseKey = WorldToVoxelChunk(new Vector3(worldPos.X, cy * span, worldPos.Z));
             for (int dz = -voxRad; dz <= voxRad; dz++)
             for (int dx = -voxRad; dx <= voxRad; dx++)
@@ -146,18 +146,27 @@ namespace VibeGame.Terrain
             }
 
             // Overlay voxel chunk surfaces (semi-transparent) to visualize edits
+            Vector3 camPos = camera.position;
+            Vector3 fwd = new Vector3(camera.target.X - camPos.X, 0f, camera.target.Z - camPos.Z);
+            if (fwd.LengthSquared() < 0.0001f) fwd = new Vector3(0f, 0f, 1f);
+            fwd = Vector3.Normalize(fwd);
+            float fovyRad = MathF.PI * (camera.fovy / 180f);
+            float cosLimit = MathF.Cos(MathF.Min(1.39626f, fovyRad * 0.75f));
+
             foreach (var v in _voxels.Values)
             {
-                // Quick ring/distance culling: only draw very near chunks
+                // Chunk center in world
                 Vector3 center = v.OriginWorld + new Vector3(v.Size * v.VoxelSize * 0.5f);
                 int ring = GetRingForWorld(center);
-                if (ring > 1) continue; // overlay only in immediate ring
+                if (ring > 3) continue; // render within 3-chunk ring
 
-                // Simple distance culling relative to camera
-                float dx = center.X - camera.position.X;
-                float dz = center.Z - camera.position.Z;
-                float maxDist = (_heightmap.ChunkSize - 1) * _heightmap.TileSize * 1.5f; // within ~1.5 chunks
-                if ((dx * dx + dz * dz) > maxDist * maxDist) continue;
+                // Angle/distance culling to approximate frustum
+                Vector3 toC = new Vector3(center.X - camPos.X, 0f, center.Z - camPos.Z);
+                float dist2 = toC.LengthSquared();
+                if (dist2 > 1e-4f) toC /= MathF.Sqrt(dist2);
+                float chunkWorld = (_heightmap.ChunkSize - 1) * _heightmap.TileSize;
+                if (dist2 > (chunkWorld * 1.75f) * (chunkWorld * 1.75f) && Vector3.Dot(fwd, toC) < cosLimit)
+                    continue;
 
                 // Biome-tinted color with alpha varying by LOD
                 var biome = _heightmap.GetBiomeAt(center.X, center.Z);
@@ -168,7 +177,7 @@ namespace VibeGame.Terrain
                 byte b = (byte)Math.Clamp((int)(bc.B * lm), 0, 255);
                 byte a = v.LodLevel == 0 ? (byte)210 : v.LodLevel == 1 ? (byte)170 : (byte)130;
                 Color c = new Color(r, g, b, a);
-                v.RenderSurfaceCubes(c);
+                v.RenderSurfaceCubes(c, camera);
             }
         }
 
@@ -180,9 +189,9 @@ namespace VibeGame.Terrain
             // Then overlay voxel chunk bounds with LOD-colored wires
             foreach (var v in _voxels.Values)
             {
-                // Only draw debug bounds for near chunks to avoid excessive line drawing
+                // Only draw debug bounds for reasonably near chunks to avoid excessive line drawing
                 Vector3 center = v.OriginWorld + new Vector3(v.Size * v.VoxelSize * 0.5f);
-                if (GetRingForWorld(center) > 1) continue;
+                if (GetRingForWorld(center) > 3) continue;
                 Color c = v.LodLevel == 0 ? new Color(0, 220, 255, 220)
                                           : (v.LodLevel == 1 ? new Color(140, 160, 255, 220) : new Color(180, 120, 255, 220));
                 v.RenderDebugBounds(c);

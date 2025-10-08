@@ -307,7 +307,7 @@ A detailed, modular checklist for implementing a **multi-ring voxel terrain stre
     - [ ] ReadOnlyTerrain: high detail cached shader
     - [ ] LowLodTerrain: horizon-color blended
 - [ ] Add LOD morphing/crossfade transitions
-- [ ] Implement frustum culling
+- [x] Implement frustum culling
     - [ ] Optionally add occlusion culling later
 
 ---

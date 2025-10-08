@@ -13,6 +13,8 @@ namespace VibeGame.Terrain
         private readonly IBiomeProvider _biomeProvider;
         private readonly Dictionary<(int cx, int cz), float[,]> _chunks = new();
         private readonly Dictionary<(int cx, int cz), List<VibeGame.Objects.SpawnedObject>> _objects = new();
+        // Cache per-chunk vertical bounds for quick culling/debug
+        private readonly Dictionary<(int cx, int cz), (float minY, float maxY)> _chunkBounds = new();
         private readonly int _chunkSize;
         private readonly float _tileSize;
         private int _renderRadiusChunks = 2;
@@ -107,8 +109,8 @@ namespace VibeGame.Terrain
                     float lac = mods.Lacunarity <= 0f ? 2.0f : mods.Lacunarity;
                     float gain = mods.Persistence;
 
-                    // Stable global seed per biome (do NOT vary per chunk to avoid seams)
-                    int seed = HashCode.Combine(biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
+                    // Stable global seed per biome (combined with World.Seed; do NOT vary per chunk to avoid seams)
+                    int seed = HashCode.Combine(VibeGame.Core.WorldGlobals.Seed, biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
                     var overlay = new FastNoiseLiteSource(seed, FastNoiseLite.NoiseType.OpenSimplex2, freq, octaves, lac, gain);
 
                     for (int z = 0; z < _chunkSize; z++)
@@ -126,6 +128,23 @@ namespace VibeGame.Terrain
                 }
 
                 _chunks[key] = heights;
+
+                // Compute and cache vertical bounds for culling/debug
+                float minY = float.MaxValue;
+                float maxY = float.MinValue;
+                int sx2 = heights.GetLength(0);
+                int sz2 = heights.GetLength(1);
+                for (int z2 = 0; z2 < sz2; z2++)
+                {
+                    for (int x2 = 0; x2 < sx2; x2++)
+                    {
+                        float h2 = heights[x2, z2];
+                        if (h2 < minY) minY = h2;
+                        if (h2 > maxY) maxY = h2;
+                    }
+                }
+                if (float.IsInfinity(minY) || float.IsInfinity(maxY)) { minY = 0f; maxY = 1f; }
+                _chunkBounds[key] = (minY, maxY);
 
                 // Generate biome-specific world objects for this chunk and filter by actual biome membership
                 if (_objectRenderer != null)
@@ -150,6 +169,7 @@ namespace VibeGame.Terrain
                 {
                     _chunks.Remove(k);
                     _objects.Remove(k);
+                    _chunkBounds.Remove(k);
                 }
             }
         }
@@ -171,7 +191,7 @@ namespace VibeGame.Terrain
                 float lac = mods.Lacunarity <= 0f ? 2.0f : mods.Lacunarity;
                 float gain = mods.Persistence;
 
-                int seed = HashCode.Combine(biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
+                int seed = HashCode.Combine(VibeGame.Core.WorldGlobals.Seed, biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
                 var overlay = new FastNoiseLiteSource(seed, FastNoiseLite.NoiseType.OpenSimplex2, freq, octaves, lac, gain);
                 float n = overlay.GetValue3D(worldX, 0f, worldZ); // [-1,1]
                 float delta = n * (mods.HeightScale * 6.0f); // 6.0 ~= TerrainGenerator amplitude baseline
@@ -213,21 +233,29 @@ namespace VibeGame.Terrain
                         _chunks[key] = heights;
                     }
 
-                    // Compute min/max height for this chunk to build a wireframe box
-                    float minY = float.MaxValue;
-                    float maxY = float.MinValue;
-                    int sx = heights.GetLength(0);
-                    int sz = heights.GetLength(1);
-                    for (int z = 0; z < sz; z++)
+                    // Use cached bounds if available, compute once otherwise
+                    float minY, maxY;
+                    if (_chunkBounds.TryGetValue(key, out var mm))
                     {
-                        for (int x = 0; x < sx; x++)
-                        {
-                            float h = heights[x, z];
-                            if (h < minY) minY = h;
-                            if (h > maxY) maxY = h;
-                        }
+                        minY = mm.minY; maxY = mm.maxY;
                     }
-                    if (float.IsInfinity(minY) || float.IsInfinity(maxY)) { minY = 0f; maxY = 1f; }
+                    else
+                    {
+                        minY = float.MaxValue; maxY = float.MinValue;
+                        int sx = heights.GetLength(0);
+                        int sz = heights.GetLength(1);
+                        for (int z = 0; z < sz; z++)
+                        {
+                            for (int x = 0; x < sx; x++)
+                            {
+                                float h = heights[x, z];
+                                if (h < minY) minY = h;
+                                if (h > maxY) maxY = h;
+                            }
+                        }
+                        if (float.IsInfinity(minY) || float.IsInfinity(maxY)) { minY = 0f; maxY = 1f; }
+                        _chunkBounds[key] = (minY, maxY);
+                    }
 
                     Vector3 min = new Vector3(key.Item1 * chunkWorldSize, minY - 0.3f, key.Item2 * chunkWorldSize);
                     Vector3 size = new Vector3(chunkWorldSize, MathF.Max(0.6f, (maxY - minY) + 0.6f), chunkWorldSize);
@@ -246,6 +274,7 @@ namespace VibeGame.Terrain
         {
             var (ccx, ccz) = WorldToChunk(camera.position.X, camera.position.Z);
             float chunkWorldSize = (_chunkSize - 1) * _tileSize;
+            string? lastBiomeId = null;
             for (int dz = -_renderRadiusChunks; dz <= _renderRadiusChunks; dz++)
             {
                 for (int dx = -_renderRadiusChunks; dx <= _renderRadiusChunks; dx++)
@@ -276,6 +305,49 @@ namespace VibeGame.Terrain
                     }
                     Vector2 origin = new Vector2(key.Item1 * chunkWorldSize, key.Item2 * chunkWorldSize);
 
+                    // Compute/retrieve vertical bounds for culling
+                    float minY, maxY;
+                    if (_chunkBounds.TryGetValue(key, out var mm2))
+                    {
+                        minY = mm2.minY; maxY = mm2.maxY;
+                    }
+                    else
+                    {
+                        minY = float.MaxValue; maxY = float.MinValue;
+                        int sx3 = heights.GetLength(0);
+                        int sz3 = heights.GetLength(1);
+                        for (int z3 = 0; z3 < sz3; z3++)
+                        {
+                            for (int x3 = 0; x3 < sx3; x3++)
+                            {
+                                float h3 = heights[x3, z3];
+                                if (h3 < minY) minY = h3;
+                                if (h3 > maxY) maxY = h3;
+                            }
+                        }
+                        if (float.IsInfinity(minY) || float.IsInfinity(maxY)) { minY = 0f; maxY = 1f; }
+                        _chunkBounds[key] = (minY, maxY);
+                    }
+
+                    // Simple angle/distance culling against camera forward vector (approximate frustum)
+                    Vector3 camPos = camera.position;
+                    Vector3 fwd = new Vector3(camera.target.X - camPos.X, 0f, camera.target.Z - camPos.Z);
+                    if (fwd.LengthSquared() < 0.0001f) fwd = new Vector3(0f, 0f, 1f);
+                    fwd = Vector3.Normalize(fwd);
+                    Vector3 center = new Vector3(origin.X + chunkWorldSize * 0.5f, (minY + maxY) * 0.5f, origin.Y + chunkWorldSize * 0.5f);
+                    Vector3 toC = new Vector3(center.X - camPos.X, 0f, center.Z - camPos.Z);
+                    float dist2 = toC.LengthSquared();
+                    if (dist2 > 1e-4f)
+                    {
+                        toC /= MathF.Sqrt(dist2);
+                    }
+                    float fovyRad = MathF.PI * (camera.fovy / 180f);
+                    float cosLimit = MathF.Cos(MathF.Min(1.39626f, fovyRad * 0.75f)); // cap near 80deg
+                    if (dist2 > (chunkWorldSize * 0.75f) * (chunkWorldSize * 0.75f) && Vector3.Dot(fwd, toC) < cosLimit)
+                    {
+                        continue; // culled
+                    }
+
                     // Determine biome color tint for this chunk using primary palette color and lighting modifier
                     var biomeForChunk = _biomeProvider.GetBiomeAt(origin, _gen);
                     var bc = biomeForChunk.Data.ColorPalette.Primary;
@@ -285,8 +357,12 @@ namespace VibeGame.Terrain
                     byte b = (byte)Math.Clamp((int)(bc.B * lm), 0, 255);
                     Color biomeColor = new Color(r, g, b, (byte)255);
 
-                    // Apply biome-specific terrain textures for this chunk before rendering
-                    _renderer.ApplyBiomeTextures(biomeForChunk.Data);
+                    // Apply biome-specific terrain textures for this chunk before rendering (avoid redundant binds)
+                    if (lastBiomeId == null || !string.Equals(lastBiomeId, biomeForChunk.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _renderer.ApplyBiomeTextures(biomeForChunk.Data);
+                        lastBiomeId = biomeForChunk.Id;
+                    }
                     _renderer.RenderAt(heights, _tileSize, origin, camera, biomeColor);
 
                     // Draw world objects for this chunk
