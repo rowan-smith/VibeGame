@@ -12,7 +12,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Items", "Items", "{556906A2
 		Planning\asset_file_structure.md = Planning\asset_file_structure.md
 		Planning\biome_data.md = Planning\biome_data.md
 		Planning\terrain_planning.md = Planning\terrain_planning.md
+		Planning\project_planning_v2.md = Planning\project_planning_v2.md
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne", "Veilborne\Veilborne.csproj", "{294CAC83-5B74-4748-8FCE-3C75C1E81F28}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,5 +31,9 @@ Global
 		{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8B8CD512-35F1-4D56-9BFA-5999F67C5E9A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{294CAC83-5B74-4748-8FCE-3C75C1E81F28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{294CAC83-5B74-4748-8FCE-3C75C1E81F28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{294CAC83-5B74-4748-8FCE-3C75C1E81F28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{294CAC83-5B74-4748-8FCE-3C75C1E81F28}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
