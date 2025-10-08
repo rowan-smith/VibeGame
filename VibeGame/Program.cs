@@ -1,4 +1,5 @@
-﻿using Logging;
+﻿using System.Numerics;
+using Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VibeGame.Biomes;
@@ -18,7 +19,7 @@ internal static class Program
 {
     public static async Task Main(string[] args)
     {
-        using var logging = new VibeLogging();
+        using var logging = new LoggingService();
 
         var builder = Host.CreateApplicationBuilder(args);
 
@@ -46,13 +47,13 @@ internal static class Program
         builder.Services.AddHostedService<Entry>();
 
         // various services used in Entry.cs
-        builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(new VibeGame.Biomes.Environment.MultiNoiseConfig { Seed = VibeGame.Core.WorldGlobals.Seed }));
+        builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
         builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
         builder.Services.AddSingleton<IWorldObjectRenderer, WorldObjectRenderer>();
         builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();
-        builder.Services.AddSingleton<IEnvironmentSampler>(sp => new VibeGame.Biomes.Environment.MultiNoiseSampler(new VibeGame.Biomes.Environment.MultiNoiseConfig { Seed = VibeGame.Core.WorldGlobals.Seed }));
+        builder.Services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
 
         // Biomes and providers
         // Register biomes from unified configuration (no hardcoded classes)
@@ -106,9 +107,9 @@ internal static class Program
         builder.Services.AddSingleton<EditableTerrainService>();
         // Far distance low-LOD ring (coarse height mesh)
         builder.Services.AddSingleton<LowLodTerrainService>();
-        
+
         // Ring configuration (optionally loaded from assets\\config\\world.json)
-        var worldCfg = VibeGame.Core.WorldGlobals.Config;
+        var worldCfg = WorldGlobals.Config;
         builder.Services.AddSingleton(new TerrainRingConfig
         {
             EditableRadius = worldCfg?.EditableRadius ?? 3,
@@ -116,7 +117,7 @@ internal static class Program
             LowLodRadius = worldCfg?.LowLodRadius ?? 12,
             MaxActiveVoxelChunks = worldCfg?.MaxActiveVoxelChunks ?? 128
         });
-        
+
         // Terrain manager orchestrates ring services and is used by the engine
         builder.Services.AddSingleton<IInfiniteTerrain, TerrainManager>();
         // Expose the same TerrainManager instance via its concrete type
@@ -124,20 +125,20 @@ internal static class Program
 
         // Register higher-level world systems
         builder.Services.AddSingleton(sp => new BiomeManager(
-            VibeGame.Core.WorldGlobals.Seed,
+            WorldGlobals.Seed,
             sp.GetRequiredService<IBiomeProvider>(),
             sp.GetRequiredService<ITerrainGenerator>()));
-        builder.Services.AddSingleton(sp => new VibeGame.Objects.ObjectSpawner(
-            VibeGame.Core.WorldGlobals.Seed,
+        builder.Services.AddSingleton(sp => new ObjectSpawner(
+            WorldGlobals.Seed,
             sp.GetRequiredService<ITerrainGenerator>(),
             sp.GetRequiredService<IBiomeProvider>()));
-        builder.Services.AddSingleton(sp => new VibeGame.Core.Player(new System.Numerics.Vector3(0f, 0f, 0f)));
-        builder.Services.AddSingleton(sp => new VibeGame.Core.World(
-            VibeGame.Core.WorldGlobals.Seed,
-            sp.GetRequiredService<VibeGame.Core.Player>(),
+        builder.Services.AddSingleton(sp => new Player(new Vector3(0f, 0f, 0f)));
+        builder.Services.AddSingleton(sp => new World(
+            WorldGlobals.Seed,
+            sp.GetRequiredService<Player>(),
             sp.GetRequiredService<TerrainManager>(),
             sp.GetRequiredService<BiomeManager>(),
-            sp.GetRequiredService<VibeGame.Objects.ObjectSpawner>()));
+            sp.GetRequiredService<ObjectSpawner>()));
 
         // Register texture downscaler implementation
         builder.Services.AddSingleton<ITextureDownscaler, ImageSharpTextureDownscaler>();

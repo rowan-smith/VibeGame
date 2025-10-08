@@ -5,14 +5,14 @@ using Serilog;
 
 namespace Logging;
 
-public sealed class VibeLogging : IDisposable
+public sealed class LoggingService : IDisposable
 {
     private const string LogTemplate = "{Timestamp:dd-MM-yyyy HH:mm:ss} [{Level:u3}] {SourceContext}: {Message:lj} {NewLine}{Exception}";
     
     private readonly ILogger _logger;
     private bool _disposed;
 
-    public VibeLogging()
+    public LoggingService()
     {
         var configuration = LoggingUtils.LoadConfiguration();
         _logger = CreateLogger(configuration);
