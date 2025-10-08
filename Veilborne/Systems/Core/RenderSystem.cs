@@ -16,6 +16,9 @@ public class RenderSystem : IRenderSystem
     public int Priority => 200; // Render after camera update
     public SystemCategory Category => SystemCategory.Rendering;
     public bool RunsWhenPaused => true;
+    
+    private List<Vector3> _testCubes;
+    private Random _random = new Random();
 
     public RenderSystem(Player player, CameraSystem cameraSystem)
     {
@@ -25,8 +28,16 @@ public class RenderSystem : IRenderSystem
 
     public void Initialize()
     {
-        // Only initialize render-related resources
-        // No window creation here
+        _testCubes = new List<Vector3>();
+
+        // Generate 10 random cubes
+        for (int i = 0; i < 10; i++)
+        {
+            float x = (float)(_random.NextDouble() * 50 - 25); // -25 to 25
+            float z = (float)(_random.NextDouble() * 50 - 25); // -25 to 25
+            float y = 0.5f; // cube sits on plane, half height
+            _testCubes.Add(new Vector3(x, y, z));
+        }
     }
 
     public void Update(GameTime time, GameState state)
@@ -37,23 +48,21 @@ public class RenderSystem : IRenderSystem
     {
         Raylib.BeginMode3D(_cameraSystem.Camera);
 
-        // Simple ground
+        // Draw ground
         Raylib.DrawPlane(Vector3.Zero, new Vector2(50, 50), Raylib.LIGHTGRAY);
 
+        // Draw test cubes
+        foreach (var pos in _testCubes)
+        {
+            Raylib.DrawCube(pos, 1f, 1f, 1f, Raylib.RED);
+            Raylib.DrawCubeWires(pos, 1f, 1f, 1f, Raylib.BLACK);
+        }
+
         // Draw entities
-        // Render all entities with TransformComponent
         foreach (var entity in state.EntitiesWith<TransformComponent>())
         {
             var t = entity.Transform;
-
-            // Default: simple red cube
-            Raylib.DrawCube(t.Position, 1f, 2f, 1f, Raylib.RED);
-
-            // Optional: Add a gizmo / debug indicator for player
-            if (entity is Player)
-            {
-                Raylib.DrawCubeWires(t.Position, 1f, 2f, 1f, Raylib.RED);
-            }
+            Raylib.DrawCube(t.Position, 1f, 2f, 1f, Raylib.BLUE);
         }
 
         Raylib.EndMode3D();

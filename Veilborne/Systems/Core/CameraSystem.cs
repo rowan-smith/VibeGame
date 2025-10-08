@@ -17,9 +17,7 @@ public class CameraSystem : ISystem
 
     // Tunables
     private const float Sensitivity = 0.02f;   // radians per pixel
-    private const float FollowLerp = 10f;        // how quickly camera target follows player
-    private const float Distance = 10f;          // orbit radius
-    private const float TargetHeight = 1.0f;     // player eye height
+    private const float TargetHeight = 1.0f;   // player eye height
 
     public int Priority => 100;
     public SystemCategory Category => SystemCategory.Camera;
@@ -53,8 +51,8 @@ public class CameraSystem : ISystem
         if (_mouseCaptured)
         {
             var delta = Raylib.GetMouseDelta();
-            _yaw += delta.X * Sensitivity;
-            _pitch -= delta.Y * Sensitivity;
+            _yaw -= delta.X * Sensitivity;   // left/right now works
+            _pitch -= delta.Y * Sensitivity; // up/down works
             _pitch = Math.Clamp(_pitch, -1.553343f, 1.553343f); // ±89°
         }
 

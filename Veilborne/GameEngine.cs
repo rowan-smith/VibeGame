@@ -29,7 +29,7 @@ public class GameEngine
 
         // Initialize Raylib window and timing BEFORE any world/system initialization
         Raylib.SetConfigFlags(ConfigFlags.FLAG_VSYNC_HINT);
-        Raylib.InitWindow(800, 600, "Veilborne");
+        Raylib.InitWindow(1280, 720, "Veilborne");
         Raylib.SetTargetFPS(TargetFrameRate);
         
         // Raylib.SetExitKey(KeyboardKey.KEY_NULL); // Disable default ESC-to-exit

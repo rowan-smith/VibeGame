@@ -32,12 +32,14 @@ public static class ServiceRegistration
 
     private static void RegisterSystems(this IServiceCollection services)
     {
-        // Automatically register all ISystem implementations
+        // Automatically register all ISystem implementations as singletons
+        // This ensures systems that depend on other systems (e.g., RenderSystem -> CameraSystem)
+        // receive the same instances that are updated by the SystemManager each frame.
         services.Scan(scan => scan
             .FromAssembliesOf(typeof(ISystem))
             .AddClasses(c => c.AssignableTo<ISystem>())
             .AsSelfWithInterfaces()
-            .WithTransientLifetime());
+            .WithSingletonLifetime());
     }
 
     private static void RegisterShared(this IServiceCollection services)
