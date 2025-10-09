@@ -27,10 +27,15 @@ namespace Veilborne.Core.Systems.Core
             _input = input;
         }
 
-        public void Initialize() { }
+        public void Initialize() {}
 
         public void Update(GameTime time, GameState state)
         {
+            if (_input.IsKeyPressed(Key.Escape))
+            {
+                time.State = EngineState.Exiting;
+            }
+
             // Toggle pause
             if (_input.IsKeyPressed(Key.P))
             {
@@ -40,7 +45,9 @@ namespace Veilborne.Core.Systems.Core
             }
 
             if (time.State != EngineState.Running)
+            {
                 return;
+            }
 
             var player = state.Player;
             var transform = player.Transform;
@@ -57,13 +64,30 @@ namespace Veilborne.Core.Systems.Core
 
             Vector3 move = Vector3.Zero;
 
-            if (_input.IsKeyDown(Key.W)) { move += forward; }
-            if (_input.IsKeyDown(Key.S)) move -= forward;
-            if (_input.IsKeyDown(Key.A)) move -= right;
-            if (_input.IsKeyDown(Key.D)) move += right;
+            if (_input.IsKeyDown(Key.W))
+            {
+                move += forward;
+            }
+
+            if (_input.IsKeyDown(Key.S))
+            {
+                move -= forward;
+            }
+
+            if (_input.IsKeyDown(Key.A))
+            {
+                move += right;
+            }
+
+            if (_input.IsKeyDown(Key.D))
+            {
+                move -= right;
+            }
 
             if (move != Vector3.Zero)
+            {
                 transform.Position += Vector3.Normalize(move) * MoveSpeed * time.DeltaTime;
+            }
 
             if (_input.IsKeyDown(Key.Space) && physics != null && physics.IsGrounded)
             {
@@ -72,6 +96,6 @@ namespace Veilborne.Core.Systems.Core
             }
         }
 
-        public void Shutdown() { }
+        public void Shutdown() {}
     }
 }

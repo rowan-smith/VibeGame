@@ -4,7 +4,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Veilborne.Core;
-using Veilborne.Core.Infrastructure;
 
 namespace Veilborne.Windows;
 
@@ -22,11 +21,19 @@ class Program
         builder.Services.AddGameServices();
         builder.Services.AddWindowsGameServices();
 
-        builder.Services.AddHostedService<Entry>();
-
         var host = builder.Build();
 
-        host.Run();
+        // Resolve the game from DI
+        var game = host.Services.GetRequiredService<VeilborneGame>();
+
+        // Run the host asynchronously in background
+        host.RunAsync();
+
+        // Run MonoGame on the **main thread**
+        game.Run();
+
+        // Once the game exits, shutdown the host
+        host.StopAsync().GetAwaiter().GetResult();
     }
 }
 

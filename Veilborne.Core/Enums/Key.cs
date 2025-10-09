@@ -8,5 +8,6 @@ namespace Veilborne.Core.Enums
         D,
         Space,
         P,
+        Escape,
     }
 }

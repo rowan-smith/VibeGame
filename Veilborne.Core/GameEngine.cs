@@ -30,6 +30,8 @@ public class GameEngine
         _worldManager.AddWorld(initialWorld);
         _worldManager.Initialize();
         _stopwatch.Start();
+        // Start in running state so movement works without manual toggle
+        _gameTime.State = EngineState.Running;
     }
 
     public void Update(float deltaTime)
@@ -50,5 +52,10 @@ public class GameEngine
         _worldManager.Shutdown();
         _stopwatch.Stop();
         _renderer.CloseWindow();
+    }
+
+    public EngineState GetEngineState()
+    {
+        return _gameTime.State;
     }
 }

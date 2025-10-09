@@ -40,6 +40,7 @@ public class KeyboardInputProvider : IInputProvider
         Key.D => Keys.D,
         Key.Space => Keys.Space,
         Key.P => Keys.P,
+        Key.Escape => Keys.Escape,
         _ => Keys.None
     };
 }

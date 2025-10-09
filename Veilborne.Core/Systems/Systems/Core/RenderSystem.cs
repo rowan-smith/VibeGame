@@ -47,20 +47,32 @@ public class RenderSystem : IRenderSystem
             var camera = _cameraFactory.CreateFrom(cameraComp);
             _renderer.Begin3D(camera);
 
-            _renderer.DrawPlane(Vector3.Zero, new Vector2(50, 50), Color.LightGray);
+            // Draw the ground plane
+            _renderer.DrawPlane(new Vector3(0, -0.01f, 0), new Vector2(50, 50), Color.LightGray);
 
+            // Draw your test cubes (always red)
             foreach (var pos in _testCubes)
-                _renderer.DrawCube(pos, new Vector3(1, 1, 1), Color.Red, true);
+            {
+                var aboveGround = pos + new Vector3(0, 0.5f, 0); // half cube height
+                _renderer.DrawCube(aboveGround, new Vector3(1,1,1), Color.Red);
+            }
 
+            // Draw all other entities that are not test cubes (blue)
             foreach (var e in state.EntitiesWith<TransformComponent>())
             {
                 var t = e.Transform;
+
+                // Skip positions that are already in _testCubes
+                if (_testCubes.Contains(t.Position)) 
+                    continue;
+
                 _renderer.DrawCube(t.Position, new Vector3(1, 2, 1), Color.Blue);
             }
 
             _renderer.End3D();
         }
 
+        // Overlay text if paused
         if (time.State == EngineState.Paused)
         {
             _renderer.DrawText("Paused", 600, 340, 20, Color.Red);

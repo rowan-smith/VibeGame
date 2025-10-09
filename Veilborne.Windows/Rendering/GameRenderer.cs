@@ -11,15 +11,28 @@ namespace Veilborne.Windows.Rendering;
 public class GameRenderer : IRenderer
 {
     private GraphicsDevice? _graphics;
+    private GraphicsDeviceManager? _graphicsManager;
+    private GameWindow? _window;
     private SpriteBatch? _spriteBatch;
     private BasicEffect? _effect;
-
     private VertexPositionColor[]? _cubeVertices;
     private short[]? _cubeIndices;
 
     public GameRenderer()
     {
         // Defer graphics initialization until the Game provides the GraphicsDevice
+    }
+
+    // Called by the hosting Game to provide the GameWindow
+    public void AttachWindow(GameWindow window)
+    {
+        _window = window;
+    }
+
+    // Called by the hosting Game to provide the GraphicsDeviceManager
+    public void AttachGraphicsManager(GraphicsDeviceManager graphicsManager)
+    {
+        _graphicsManager = graphicsManager;
     }
 
     // Called by the hosting Game once GraphicsDevice is available
@@ -30,16 +43,21 @@ public class GameRenderer : IRenderer
         _effect = new BasicEffect(graphics) { VertexColorEnabled = true };
         InitializeCube();
     }
-    
+
     public void InitWindow(int width, int height, string title)
     {
-        if (_graphics != null)
+        if (_graphicsManager != null)
         {
-            // MonoGame typically creates the window through Game class, so here we just set the viewport
-            _graphics.Viewport = new Viewport(0, 0, width, height);
+            _graphicsManager.PreferredBackBufferWidth = width;
+            _graphicsManager.PreferredBackBufferHeight = height;
+            _graphicsManager.ApplyChanges();
+        }
+
+        if (_window != null)
+        {
+            _window.Title = title;
         }
     }
-
 
     public void CloseWindow()
     {
@@ -94,6 +112,10 @@ public class GameRenderer : IRenderer
         var world = Matrix.CreateScale(size.ToXna()) * Matrix.CreateTranslation(position.ToXna());
         _effect!.World = world;
 
+        _effect.VertexColorEnabled = false; // Use uniform color
+        _effect.DiffuseColor = new Vector3(color.R / 255f, color.G / 255f, color.B / 255f);
+        _effect.Alpha = color.A / 255f;
+
         _graphics!.RasterizerState = wireframe
             ? new RasterizerState { FillMode = FillMode.WireFrame }
             : new RasterizerState { FillMode = FillMode.Solid };
@@ -117,10 +139,10 @@ public class GameRenderer : IRenderer
         EnsureReady();
         var vertices = new[]
         {
-            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(-size.X/2, 0, -size.Y/2) + position.ToXna(), color.ToXna()),
-            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(size.X/2, 0, -size.Y/2) + position.ToXna(), color.ToXna()),
-            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(size.X/2, 0, size.Y/2) + position.ToXna(), color.ToXna()),
-            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(-size.X/2, 0, size.Y/2) + position.ToXna(), color.ToXna()),
+            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(-size.X / 2, 0, -size.Y / 2) + position.ToXna(), color.ToXna()),
+            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(size.X / 2, 0, -size.Y / 2) + position.ToXna(), color.ToXna()),
+            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(size.X / 2, 0, size.Y / 2) + position.ToXna(), color.ToXna()),
+            new VertexPositionColor(new Microsoft.Xna.Framework.Vector3(-size.X / 2, 0, size.Y / 2) + position.ToXna(), color.ToXna()),
         };
 
         short[] indices = { 0, 1, 2, 2, 3, 0 };
