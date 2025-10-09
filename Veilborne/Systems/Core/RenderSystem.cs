@@ -13,50 +13,60 @@ public class RenderSystem : IRenderSystem
     public SystemCategory Category => SystemCategory.Rendering;
     public bool RunsWhenPaused => true;
 
-    private List<Vector3> _testCubes;
-    private Random _random = new Random();
+    private List<Vector3> _testCubes = new();
+    private Random _random = new();
 
     public void Initialize()
     {
-        _testCubes = new List<Vector3>();
-
         // Generate 10 random cubes
         for (int i = 0; i < 10; i++)
         {
-            float x = (float)(_random.NextDouble() * 50 - 25); // -25 to 25
-            float z = (float)(_random.NextDouble() * 50 - 25); // -25 to 25
-            float y = 0.5f; // cube sits on plane, half height
+            float x = (float)(_random.NextDouble() * 50 - 25);
+            float z = (float)(_random.NextDouble() * 50 - 25);
+            float y = 0.5f; // half-height
             _testCubes.Add(new Vector3(x, y, z));
         }
     }
 
     public void Update(GameTime time, GameState state)
     {
+        // No internal update logic yet
     }
 
     public void Render(GameTime time, GameState state)
     {
-        var cameraComponent = state.Player.GetComponent<CameraComponent>();
-        Raylib.BeginMode3D(cameraComponent!.Camera);
+        // Get all entities with a CameraComponent
+        var cameras = state.EntitiesWith<CameraComponent, TransformComponent>();
 
-        // Draw ground
-        Raylib.DrawPlane(Vector3.Zero, new Vector2(50, 50), Raylib.LIGHTGRAY);
-
-        // Draw test cubes
-        foreach (var pos in _testCubes)
+        foreach (var entity in cameras)
         {
-            Raylib.DrawCube(pos, 1f, 1f, 1f, Raylib.RED);
-            Raylib.DrawCubeWires(pos, 1f, 1f, 1f, Raylib.BLACK);
-        }
+            var cameraComp = entity.GetComponent<CameraComponent>();
+            if (cameraComp == null)
+            {
+                continue;
+            }
 
-        // Draw entities
-        foreach (var entity in state.EntitiesWith<TransformComponent>())
-        {
-            var t = entity.Transform;
-            Raylib.DrawCube(t.Position, 1f, 2f, 1f, Raylib.BLUE);
-        }
+            Raylib.BeginMode3D(cameraComp.Camera);
 
-        Raylib.EndMode3D();
+            // Draw ground
+            Raylib.DrawPlane(Vector3.Zero, new Vector2(50, 50), Raylib.LIGHTGRAY);
+
+            // Draw test cubes
+            foreach (var pos in _testCubes)
+            {
+                Raylib.DrawCube(pos, 1f, 1f, 1f, Raylib.RED);
+                Raylib.DrawCubeWires(pos, 1f, 1f, 1f, Raylib.BLACK);
+            }
+
+            // Draw entities
+            foreach (var entity2 in state.EntitiesWith<TransformComponent>())
+            {
+                var t = entity2.Transform;
+                Raylib.DrawCube(t.Position, 1f, 2f, 1f, Raylib.BLUE);
+            }
+
+            Raylib.EndMode3D();
+        }
 
         // --- 2D overlays ---
         if (time.State == EngineState.Paused)
@@ -67,7 +77,6 @@ public class RenderSystem : IRenderSystem
 
     public void Shutdown()
     {
-        // Free textures, shaders, buffers, etc.
-        // Do NOT close the window here
+        // Free textures, shaders, buffers, etc. if needed
     }
 }

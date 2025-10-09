@@ -40,44 +40,40 @@ namespace Veilborne.Systems.Core
 
             var player = state.Player;
             var transform = player.Transform;
-            var pos = transform.Position;
+            var physics = player.GetComponent<PhysicsComponent>();
 
-            // Get camera for this player
-            var cameraComp = player.GetComponent<CameraComponent>();
-            if (cameraComp == null)
-            {
-                return;
-            }
+            // Get the forward/right vectors from the TransformComponent
+            Vector3 forward = transform.Forward;
+            forward.Y = 0;
+            forward = Vector3.Normalize(forward);
 
-            var cameraForward = Vector3.Normalize(new Vector3(
-                cameraComp.Camera.target.X - cameraComp.Camera.position.X,
-                0, // ignore vertical for horizontal movement
-                cameraComp.Camera.target.Z - cameraComp.Camera.position.Z
-            ));
-            var cameraRight = Vector3.Normalize(Vector3.Cross(cameraForward, Vector3.UnitY));
+            Vector3 right = transform.Right;
+            right.Y = 0;
+            right = Vector3.Normalize(right);
+
+            Vector3 pos = transform.Position;
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_W))
             {
-                pos += cameraForward * MoveSpeed * time.DeltaTime;
+                pos += forward * MoveSpeed * time.DeltaTime;
             }
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_S))
             {
-                pos -= cameraForward * MoveSpeed * time.DeltaTime;
+                pos -= forward * MoveSpeed * time.DeltaTime;
             }
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_A))
             {
-                pos -= cameraRight * MoveSpeed * time.DeltaTime;
+                pos -= right * MoveSpeed * time.DeltaTime;
             }
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_D))
             {
-                pos += cameraRight * MoveSpeed * time.DeltaTime;
+                pos += right * MoveSpeed * time.DeltaTime;
             }
 
             // --- Jump ---
-            var physics = player.GetComponent<PhysicsComponent>();
             if (Raylib.IsKeyDown(KeyboardKey.KEY_SPACE) && physics != null && physics.IsGrounded)
             {
                 physics.Velocity.Y = JumpForce;
