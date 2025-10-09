@@ -17,6 +17,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Items", "Items", "{556906A2
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne", "Veilborne\Veilborne.csproj", "{294CAC83-5B74-4748-8FCE-3C75C1E81F28}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne.Windows", "Veilborne.Windows\Veilborne.Windows.csproj", "{9837C3E4-EDC4-458A-B0A4-3D4A47F721C2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne.Core", "Veilborne.Core\Veilborne.Core.csproj", "{84011EEA-276D-4A95-B5B2-C890B373DA26}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,5 +39,13 @@ Global
 		{294CAC83-5B74-4748-8FCE-3C75C1E81F28}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{294CAC83-5B74-4748-8FCE-3C75C1E81F28}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{294CAC83-5B74-4748-8FCE-3C75C1E81F28}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9837C3E4-EDC4-458A-B0A4-3D4A47F721C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9837C3E4-EDC4-458A-B0A4-3D4A47F721C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9837C3E4-EDC4-458A-B0A4-3D4A47F721C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9837C3E4-EDC4-458A-B0A4-3D4A47F721C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{84011EEA-276D-4A95-B5B2-C890B373DA26}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{84011EEA-276D-4A95-B5B2-C890B373DA26}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{84011EEA-276D-4A95-B5B2-C890B373DA26}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{84011EEA-276D-4A95-B5B2-C890B373DA26}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
