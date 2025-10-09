@@ -28,9 +28,10 @@ public static class ServiceRegistration
 
             var worldSystems = new List<ISystem>
             {
-                new PhysicsSystem(),
-                new RenderSystem(),
-                new CameraSystem(),
+                new InputSystem(),            // Handles WASD/mouse input first
+                new PhysicsSystem(),    // Applies gravity/integration
+                new RenderSystem(),     // Renders scene
+                new CameraSystem(),            // Updates camera based on transform
             };
 
             return new World(state, worldSystems);

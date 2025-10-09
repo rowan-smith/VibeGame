@@ -16,13 +16,6 @@ namespace Veilborne.Systems.Core
         private const float MoveSpeed = 5f;
         private const float JumpForce = 5f;
 
-        private CameraSystem _cameraSystem;
-
-        public InputSystem(CameraSystem cameraSystem)
-        {
-            _cameraSystem = cameraSystem;
-        }
-
         public void Initialize() {}
 
         public void Update(GameTime time, GameState state)
@@ -53,24 +46,32 @@ namespace Veilborne.Systems.Core
 
             Vector3 pos = transform.Position;
 
+            Vector3 move = Vector3.Zero;
+
             if (Raylib.IsKeyDown(KeyboardKey.KEY_W))
             {
-                pos += forward * MoveSpeed * time.DeltaTime;
+                move += forward;
             }
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_S))
             {
-                pos -= forward * MoveSpeed * time.DeltaTime;
+                move -= forward;
             }
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_A))
             {
-                pos -= right * MoveSpeed * time.DeltaTime;
+                move += right;
             }
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_D))
             {
-                pos += right * MoveSpeed * time.DeltaTime;
+                move -= right;
+            }
+
+            // Apply movement
+            if (move != Vector3.Zero)
+            {
+                pos += Vector3.Normalize(move) * MoveSpeed * time.DeltaTime;
             }
 
             // --- Jump ---
