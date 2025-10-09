@@ -4,6 +4,7 @@ using Veilborne.GameWorlds.Active;
 using Veilborne.GameWorlds.Active.Entities;
 using Veilborne.Interfaces;
 using Veilborne.Systems;
+using Veilborne.Systems.Core;
 
 namespace Veilborne;
 
@@ -18,12 +19,21 @@ public static class ServiceRegistration
         services.AddSingleton<SystemManager>();
         services.AddSingleton<GameEngine>();
 
+        services.AddTransient<Func<Player>>(_ => () => new Player());
+
         services.AddTransient<Func<World>>(sp => () =>
         {
-            var systems = sp.GetServices<ISystem>().ToList();
-            var player = sp.GetRequiredService<Player>();
+            var player = sp.GetRequiredService<Func<Player>>()();
             var state = new GameState(player);
-            return new World(state, systems); // now passing both arguments
+
+            var worldSystems = new List<ISystem>
+            {
+                new PhysicsSystem(),
+                new RenderSystem(),
+                new CameraSystem(),
+            };
+
+            return new World(state, worldSystems);
         });
 
         services.RegisterShared();

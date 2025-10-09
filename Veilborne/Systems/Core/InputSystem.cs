@@ -1,10 +1,9 @@
+using System.Numerics;
 using Raylib_CsLo;
 using Veilborne.GameWorlds;
 using Veilborne.GameWorlds.Active.Components;
-using Veilborne.GameWorlds.Active.Entities;
 using Veilborne.Interfaces;
 using Veilborne.Utility;
-using System.Numerics;
 
 namespace Veilborne.Systems.Core
 {
@@ -34,19 +33,27 @@ namespace Veilborne.Systems.Core
                 time.State = time.State == EngineState.Running ? EngineState.Paused : EngineState.Running;
             }
 
-            if (time.State != EngineState.Running) return;
+            if (time.State != EngineState.Running)
+            {
+                return;
+            }
 
             var player = state.Player;
-            var t = player.Transform;
-            var pos = t.Position;
+            var transform = player.Transform;
+            var pos = transform.Position;
 
-            // --- Camera-relative movement ---
+            // Get camera for this player
+            var cameraComp = player.GetComponent<CameraComponent>();
+            if (cameraComp == null)
+            {
+                return;
+            }
+
             var cameraForward = Vector3.Normalize(new Vector3(
-                _cameraSystem.Camera.target.X - _cameraSystem.Camera.position.X,
-                0, // ignore vertical
-                _cameraSystem.Camera.target.Z - _cameraSystem.Camera.position.Z
+                cameraComp.Camera.target.X - cameraComp.Camera.position.X,
+                0, // ignore vertical for horizontal movement
+                cameraComp.Camera.target.Z - cameraComp.Camera.position.Z
             ));
-
             var cameraRight = Vector3.Normalize(Vector3.Cross(cameraForward, Vector3.UnitY));
 
             if (Raylib.IsKeyDown(KeyboardKey.KEY_W))
@@ -70,18 +77,15 @@ namespace Veilborne.Systems.Core
             }
 
             // --- Jump ---
-            if (Raylib.IsKeyDown(KeyboardKey.KEY_SPACE))
+            var physics = player.GetComponent<PhysicsComponent>();
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_SPACE) && physics != null && physics.IsGrounded)
             {
-                var physics = player.GetComponent<PhysicsComponent>();
-                if (physics != null && physics.IsGrounded)
-                {
-                    physics.Velocity.Y = JumpForce;
-                    physics.IsGrounded = false;
-                }
+                physics.Velocity.Y = JumpForce;
+                physics.IsGrounded = false;
             }
 
             // Write back updated position
-            t.Position = pos;
+            transform.Position = pos;
         }
 
         public void Shutdown() {}

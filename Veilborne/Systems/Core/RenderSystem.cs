@@ -2,7 +2,6 @@ using System.Numerics;
 using Raylib_CsLo;
 using Veilborne.GameWorlds;
 using Veilborne.GameWorlds.Active.Components;
-using Veilborne.GameWorlds.Active.Entities;
 using Veilborne.Interfaces;
 using Veilborne.Utility;
 
@@ -10,21 +9,12 @@ namespace Veilborne.Systems.Core;
 
 public class RenderSystem : IRenderSystem
 {
-    private readonly Player _player;
-    private readonly CameraSystem _cameraSystem;
-
     public int Priority => 200; // Render after camera update
     public SystemCategory Category => SystemCategory.Rendering;
     public bool RunsWhenPaused => true;
-    
+
     private List<Vector3> _testCubes;
     private Random _random = new Random();
-
-    public RenderSystem(Player player, CameraSystem cameraSystem)
-    {
-        _player = player;
-        _cameraSystem = cameraSystem;
-    }
 
     public void Initialize()
     {
@@ -46,7 +36,8 @@ public class RenderSystem : IRenderSystem
 
     public void Render(GameTime time, GameState state)
     {
-        Raylib.BeginMode3D(_cameraSystem.Camera);
+        var cameraComponent = state.Player.GetComponent<CameraComponent>();
+        Raylib.BeginMode3D(cameraComponent!.Camera);
 
         // Draw ground
         Raylib.DrawPlane(Vector3.Zero, new Vector2(50, 50), Raylib.LIGHTGRAY);
@@ -66,7 +57,7 @@ public class RenderSystem : IRenderSystem
         }
 
         Raylib.EndMode3D();
-        
+
         // --- 2D overlays ---
         if (time.State == EngineState.Paused)
         {

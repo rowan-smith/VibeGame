@@ -1,6 +1,7 @@
 using System.Numerics;
 using Raylib_CsLo;
 using Veilborne.GameWorlds;
+using Veilborne.GameWorlds.Active.Components;
 using Veilborne.Interfaces;
 using Veilborne.Utility;
 
@@ -8,71 +9,47 @@ namespace Veilborne.Systems.Core;
 
 public class CameraSystem : ISystem
 {
-    private Camera3D _camera;
-
-    // Mouse-look state
-    private float _yaw;    // radians, around Y axis
-    private float _pitch;  // radians, up/down
-    private bool _mouseCaptured = true;
-
-    // Tunables
     private const float Sensitivity = 0.02f;   // radians per pixel
-    private const float TargetHeight = 1.0f;   // player eye height
+    private const float TargetHeight = 1.8f;   // player eye height
 
     public int Priority => 100;
     public SystemCategory Category => SystemCategory.Camera;
-    public bool RunsWhenPaused => true; // camera moves even when paused
-
-    public CameraSystem()
-    {
-        _camera = new Camera3D
-        {
-            position = new Vector3(0, 10, 10),
-            target = Vector3.Zero,
-            up = Vector3.UnitY,
-            fovy = 45,
-            projection_ = CameraProjection.CAMERA_PERSPECTIVE,
-        };
-
-        _yaw = 0f;
-        _pitch = -0.35f; // slightly pitched down
-    }
+    public bool RunsWhenPaused => true;
 
     public void Initialize()
     {
-        Raylib.DisableCursor(); // hide and lock cursor
-        _mouseCaptured = true;
+        Raylib.DisableCursor();
     }
 
     public void Update(GameTime time, GameState state)
     {
-        var playerPos = state.Player.Transform.Position + new Vector3(0, TargetHeight, 0);
-
-        if (_mouseCaptured)
+        foreach (var entity in state.EntitiesWith<CameraComponent, TransformComponent>())
         {
+            var cameraComp = entity.GetComponent<CameraComponent>();
+            var transform = entity.GetComponent<TransformComponent>();
+
+            // Mouse input
+            var rotation = transform.Rotation;
             var delta = Raylib.GetMouseDelta();
-            _yaw -= delta.X * Sensitivity;   // left/right now works
-            _pitch -= delta.Y * Sensitivity; // up/down works
-            _pitch = Math.Clamp(_pitch, -1.553343f, 1.553343f); // ±89°
+
+            rotation.Y -= delta.X * Sensitivity;   // yaw
+            rotation.X -= delta.Y * Sensitivity;   // pitch
+            rotation.X = Math.Clamp(rotation.X, -MathF.PI / 2 + 0.001f, MathF.PI / 2 - 0.001f);
+
+            transform.Rotation = rotation;
+
+            // Update Camera3D
+            var camera = cameraComp.Camera;
+            camera.position = transform.Position + new Vector3(0, TargetHeight, 0);
+            camera.target = camera.position + transform.Forward;
+            camera.up = Vector3.UnitY;
+
+            cameraComp.Camera = camera;
         }
-
-        var forward = new Vector3(
-            MathF.Cos(_pitch) * MathF.Sin(_yaw),
-            MathF.Sin(_pitch),
-            MathF.Cos(_pitch) * MathF.Cos(_yaw)
-        );
-
-        _camera.position = playerPos;
-        _camera.target = playerPos + forward;
-        _camera.up = Vector3.UnitY;
-
-        Raylib.UpdateCamera(ref _camera);
     }
 
     public void Shutdown()
     {
-        Raylib.EnableCursor(); // restore cursor on shutdown
+        Raylib.EnableCursor();
     }
-
-    public Camera3D Camera => _camera;
 }

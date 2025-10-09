@@ -28,4 +28,19 @@ public class GameState
     {
         return Entities.Where(e => e.HasComponent<T>());
     }
+
+    public IEnumerable<Entity> EntitiesWith<T1, T2>()
+        where T1 : Component
+        where T2 : Component
+    {
+        return Entities.Where(e => e.HasComponent<T1>() && e.HasComponent<T2>());
+    }
+
+    public IEnumerable<Entity> EntitiesWith<T1, T2, T3>()
+        where T1 : Component
+        where T2 : Component
+        where T3 : Component
+    {
+        return Entities.Where(e => e.HasComponent<T1>() && e.HasComponent<T2>() && e.HasComponent<T3>());
+    }
 }
