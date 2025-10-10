@@ -8,11 +8,18 @@ namespace VibeGame.Core.Items
         private readonly List<ItemDef> _items = new();
         private readonly Dictionary<string, ItemDef> _byId = new(StringComparer.OrdinalIgnoreCase);
 
+        // Hotbar with 9 slots
+        private readonly ItemDef?[] _hotbarSlots = new ItemDef?[9];
+
         public ItemRegistry()
         {
             try
             {
                 LoadAll();
+
+                // Assign first 3 items to hotbar as a simple example
+                for (int i = 0; i < Math.Min(3, _items.Count); i++)
+                    _hotbarSlots[i] = _items[i];
             }
             catch (Exception ex)
             {
@@ -24,10 +31,27 @@ namespace VibeGame.Core.Items
 
         public bool TryGet(string id, out ItemDef item) => _byId.TryGetValue(id, out item!);
 
+        public Item? GetItemInSlot(int slot)
+        {
+            if (slot < 0 || slot >= _hotbarSlots.Length)
+                return null;
+
+            var def = _hotbarSlots[slot];
+            if (def == null)
+                return null;
+
+            return new Item
+            {
+                Name = def.DisplayName,
+                // Optional: add IconPath/ModelPath or other properties
+            };
+        }
+
         private void LoadAll()
         {
             string baseDir = AppContext.BaseDirectory;
             string itemsDir = Path.Combine(baseDir, "assets", "config", "items");
+
             if (!Directory.Exists(itemsDir))
             {
                 _logger.Warning("Items directory not found: {Dir}", itemsDir);
@@ -43,6 +67,7 @@ namespace VibeGame.Core.Items
                     foreach (var ic in set.Items)
                     {
                         if (string.IsNullOrWhiteSpace(ic.Id)) continue;
+
                         var iconPath = NormalizeAssetPath(ic.Assets?.Icon ?? string.Empty);
                         var modelPath = NormalizeAssetPath(ic.Assets?.Model ?? string.Empty);
 
@@ -76,12 +101,20 @@ namespace VibeGame.Core.Items
         private static string NormalizeAssetPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return string.Empty;
-            // If already rooted, return as is
+
+            // Already rooted
             if (Path.IsPathRooted(path)) return path;
 
-            // Combine with assets/ root
+            // Combine with assets root
             string combined = Path.Combine(AppContext.BaseDirectory, "assets", path.Replace('/', Path.DirectorySeparatorChar));
             return combined;
         }
+    }
+
+    // Simple Item class used by GetItemInSlot
+    public class Item
+    {
+        public string Name;
+        // Could add IconPath, ModelPath, or other runtime properties here
     }
 }

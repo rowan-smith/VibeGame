@@ -1,7 +1,13 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Numerics;
+using System.Threading.Tasks;
 using Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Veilborne.Core.Interfaces;
 using VibeGame.Biomes;
 using VibeGame.Biomes.Environment;
 using VibeGame.Biomes.Spawners;
@@ -23,7 +29,7 @@ internal static class Program
 
         var builder = Host.CreateApplicationBuilder(args);
 
-        // Load biome configurations from individual files under assets\\config\\biomes
+        // Load enabled biome configs
         var biomesDir = Path.Combine(AppContext.BaseDirectory, "assets", "config", "biomes");
         if (!Directory.Exists(biomesDir))
             throw new InvalidOperationException($"Biomes directory not found: {biomesDir}");
@@ -32,21 +38,23 @@ internal static class Program
         if (biomeFiles.Length == 0)
             throw new InvalidOperationException($"No biome configuration files (*.json) found in {biomesDir}");
 
-        var enabledBiomeDtos = new List<UnifiedBiomeDto>();
+        var enabledBiomes = new List<BiomeData>();
         foreach (var file in biomeFiles)
         {
-            var dto = JsonModelLoader.LoadFile<UnifiedBiomeDto>(file);
+            var dto = JsonModelLoader.LoadFile<BiomeData>(file);
             if (dto.Enabled)
-                enabledBiomeDtos.Add(dto);
+                enabledBiomes.Add(dto);
         }
 
-        if (enabledBiomeDtos.Count == 0)
-            throw new InvalidOperationException("No enabled biomes were found. Enable at least one biome config file.");
+        if (enabledBiomes.Count == 0)
+            throw new InvalidOperationException("No enabled biomes found. Enable at least one biome config file.");
 
-        // Add hosted service that will start your application
+        // Entry point
         builder.Services.AddHostedService<Entry>();
 
-        // various services used in Entry.cs
+        // -----------------------------
+        // Core terrain & environment
+        // -----------------------------
         builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
         builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
@@ -55,100 +63,87 @@ internal static class Program
         builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();
         builder.Services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
 
-        // Biomes and providers
-        // Register biomes from unified configuration (no hardcoded classes)
-        foreach (var def in enabledBiomeDtos)
+        // -----------------------------
+        // Biome registration
+        // -----------------------------
+        foreach (var def in enabledBiomes)
         {
-            var captured = def; // avoid modified closure
             builder.Services.AddSingleton<IBiome>(sp =>
             {
                 var sampler = sp.GetRequiredService<IEnvironmentSampler>();
                 var trees = sp.GetRequiredService<ITreesRegistry>();
-
-                // Use config-driven world object spawner (trees) honoring AllowedObjects when provided
-                IWorldObjectSpawner spawner = new ConfigTreeWorldObjectSpawner(
-                    trees,
-                    sampler,
-                    captured.AllowedObjects
-                );
-
-                var data = captured.ToBiomeData();
-                return new ConfigBiome(captured.Id, data, spawner);
+                IWorldObjectSpawner spawner = new ConfigTreeWorldObjectSpawner(trees, sampler, def.AllowedObjects);
+                return new ConfigBiome(def.Id, def, spawner);
             });
         }
 
-        // Multi-noise environment sampling and biome provider
-        // Sampler will use its internal defaults; configuration now driven by biomes.json profiles
-        // Removed appsettings-based overrides and seed wiring as they are no longer required
         builder.Services.AddSingleton<IBiomeProvider>(sp =>
         {
-            var sampler = sp.GetRequiredService<IEnvironmentSampler>();
             var allBiomes = sp.GetServices<IBiome>().ToList();
+            if (allBiomes.Count == 0)
+            {
+                throw new InvalidOperationException("No IBiome instances registered");
+            }
 
-            // Create profiles from the unified enabled DTOs captured above
-            var profiles = enabledBiomeDtos.Select(d => d.ToProfile()).ToList();
-
-            // Validate that all enabled DTO ids are registered as biomes
-            var dtoIds = new HashSet<string>(enabledBiomeDtos.Select(d => d.Id), StringComparer.OrdinalIgnoreCase);
-            var registered = new HashSet<string>(allBiomes.Select(b => b.Id), StringComparer.OrdinalIgnoreCase);
-            var missing = dtoIds.Except(registered, StringComparer.OrdinalIgnoreCase).ToList();
-            if (missing.Count > 0)
-                throw new InvalidOperationException($"Enabled biomes not registered: {string.Join(", ", missing)}");
-
-            return new MultiNoiseBiomeProvider(allBiomes, sampler, profiles);
+            return new SimpleBiomeProvider(allBiomes);
         });
 
-        // Game engine services
-        builder.Services.AddSingleton<ICameraController, FpsCameraController>();
-        builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
-        // Register base heightmap terrain as a concrete service
-        builder.Services.AddSingleton<ReadOnlyTerrainService>();
-        // Hybrid service composes the heightmap and adds local editable voxels
+        // -----------------------------
+        // Terrain services
+        // -----------------------------
+        builder.Services.AddSingleton<ReadOnlyTerrainService>(sp => new ReadOnlyTerrainService(
+            sp.GetRequiredService<IBiomeProvider>(),
+            sp.GetRequiredService<ITerrainRenderer>(),
+            sp.GetRequiredService<ITerrainGenerator>()));
         builder.Services.AddSingleton<EditableTerrainService>();
-        // Far distance low-LOD ring (coarse height mesh)
         builder.Services.AddSingleton<LowLodTerrainService>();
 
-        // Ring configuration (optionally loaded from assets\\config\\world.json)
         var worldCfg = WorldGlobals.Config;
         builder.Services.AddSingleton(new TerrainRingConfig
         {
             EditableRadius = worldCfg?.EditableRadius ?? 3,
             ReadOnlyRadius = worldCfg?.ReadOnlyRadius ?? 6,
             LowLodRadius = worldCfg?.LowLodRadius ?? 12,
-            MaxActiveVoxelChunks = worldCfg?.MaxActiveVoxelChunks ?? 128
         });
 
-        // Terrain manager orchestrates ring services and is used by the engine
-        builder.Services.AddSingleton<IInfiniteTerrain, TerrainManager>();
-        // Expose the same TerrainManager instance via its concrete type
+        // TerrainManager orchestrates all rings
+        builder.Services.AddSingleton<IInfiniteTerrain>(sp =>
+        {
+            var editable = sp.GetRequiredService<EditableTerrainService>();
+            var readOnly = sp.GetRequiredService<ReadOnlyTerrainService>();
+            var lowLod = sp.GetRequiredService<LowLodTerrainService>();
+            var cfg = sp.GetRequiredService<TerrainRingConfig>();
+            var biomeProvider = sp.GetRequiredService<IBiomeProvider>();
+            return new TerrainManager(editable, readOnly, cfg, biomeProvider, lowLod);
+        });
         builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
 
-        // Register higher-level world systems
-        builder.Services.AddSingleton(sp => new BiomeManager(
-            WorldGlobals.Seed,
-            sp.GetRequiredService<IBiomeProvider>(),
-            sp.GetRequiredService<ITerrainGenerator>()));
+        // -----------------------------
+        // Game engine & player
+        // -----------------------------
+        builder.Services.AddSingleton<ICameraController, FpsCameraController>();
+        builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
+        builder.Services.AddSingleton<ITextureDownscaler, ImageSharpTextureDownscaler>();
+        builder.Services.AddSingleton<ITextureManager, TextureManager>();
+        builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
+
         builder.Services.AddSingleton(sp => new ObjectSpawner(
             WorldGlobals.Seed,
             sp.GetRequiredService<ITerrainGenerator>(),
             sp.GetRequiredService<IBiomeProvider>()));
+
         builder.Services.AddSingleton(sp => new Player(new Vector3(0f, 0f, 0f)));
         builder.Services.AddSingleton(sp => new World(
             WorldGlobals.Seed,
             sp.GetRequiredService<Player>(),
             sp.GetRequiredService<TerrainManager>(),
-            sp.GetRequiredService<BiomeManager>(),
+            sp.GetRequiredService<IBiomeProvider>(),
             sp.GetRequiredService<ObjectSpawner>()));
 
-        // Register texture downscaler implementation
-        builder.Services.AddSingleton<ITextureDownscaler, ImageSharpTextureDownscaler>();
-
-        builder.Services.AddSingleton<ITextureManager, TextureManager>();
-        builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
+        // VibeGameEngine
         builder.Services.AddTransient<IGameEngine, VibeGameEngine>();
 
         var host = builder.Build();
-
         await host.StartAsync();
         await host.WaitForShutdownAsync();
     }

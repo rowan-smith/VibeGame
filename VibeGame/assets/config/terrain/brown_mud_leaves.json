@@ -2,15 +2,7 @@
   "Id": "brown_mud_leaves",
   "DisplayName": "Brown Mud Leaves",
   "Textures": {
-    "Albedo": "textures/terrain/brown_mud_leaves/brown_mud_leaves_01_diff_4k.png",
-    "Normal": "textures/terrain/brown_mud_leaves/brown_mud_leaves_01_nor_gl_4k.png",
-    "ARM": "textures/terrain/brown_mud_leaves/brown_mud_leaves_01_arm_4k.png"
+    "Albedo": "textures/terrain/brown_mud_leaves/brown_mud_leaves_01_nor_gl_4k.png"
   },
-  "PackedChannels": {
-    "R": "AmbientOcclusion",
-    "G": "Roughness",
-    "B": "Metallic"
-  },
-  "TileSize": 8.0,
-  "NoiseWeight": 0.7
+  "TileSize": 6.0
 }

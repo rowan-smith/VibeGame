@@ -1,6 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Numerics;
+using Veilborne.Core.GameWorlds.Terrain;
 
 namespace VibeGame.Terrain
 {
@@ -17,7 +16,7 @@ namespace VibeGame.Terrain
         public sealed class MeshData
         {
             public Vector3[] Triangles = Array.Empty<Vector3>(); // 3*N
-            public Vector3[] Normals = Array.Empty<Vector3>();   // N
+            public Vector3[] Normals = Array.Empty<Vector3>(); // N
         }
 
         public static MeshData Build(VoxelChunk chunk, int lodLevel)
@@ -105,11 +104,11 @@ namespace VibeGame.Terrain
 
                             // Clear mask area
                             for (int vv2 = 0; vv2 < height; vv2 += vStep)
-                                for (int uu2 = 0; uu2 < width; uu2 += uStep)
-                                {
-                                    mask[uu + uu2, vv + vv2] = false;
-                                    sign[uu + uu2, vv + vv2] = 0;
-                                }
+                            for (int uu2 = 0; uu2 < width; uu2 += uStep)
+                            {
+                                mask[uu + uu2, vv + vv2] = false;
+                                sign[uu + uu2, vv + vv2] = 0;
+                            }
                         }
                     }
                 }
@@ -121,9 +120,13 @@ namespace VibeGame.Terrain
             foreach (var q in faces)
             {
                 // Triangle winding such that normal points outward
-                tris.Add(q.A); tris.Add(q.B); tris.Add(q.C);
+                tris.Add(q.A);
+                tris.Add(q.B);
+                tris.Add(q.C);
                 norms.Add(q.Normal);
-                tris.Add(q.A); tris.Add(q.C); tris.Add(q.D);
+                tris.Add(q.A);
+                tris.Add(q.C);
+                tris.Add(q.D);
                 norms.Add(q.Normal);
             }
 
@@ -139,9 +142,24 @@ namespace VibeGame.Terrain
             int n = chunk.Size;
             // Map (axis,u,v,a) to (x,y,z)
             int x, y, z;
-            if (axis == 0) { x = a; y = u; z = v; }
-            else if (axis == 1) { x = u; y = a; z = v; }
-            else { x = u; y = v; z = a; }
+            if (axis == 0)
+            {
+                x = a;
+                y = u;
+                z = v;
+            }
+            else if (axis == 1)
+            {
+                x = u;
+                y = a;
+                z = v;
+            }
+            else
+            {
+                x = u;
+                y = v;
+                z = a;
+            }
 
             // Sample region [x..x+step), etc.; if any cell is solid, treat as solid for this stride
             bool solid = false;
@@ -164,7 +182,7 @@ namespace VibeGame.Terrain
                     }
                 }
             }
-        done:
+            done:
             return solid;
         }
 
@@ -172,11 +190,26 @@ namespace VibeGame.Terrain
         {
             // Map (axis,u,v,a) to a world-space corner at the minimal corner of the face
             // We position on voxel grid lines (not centers)
-            Vector3 o = chunk.OriginWorld;
+            Vector3 o = chunk.Origin;
             int x, y, z;
-            if (axis == 0) { x = a; y = u; z = v; }
-            else if (axis == 1) { x = u; y = a; z = v; }
-            else { x = u; y = v; z = a; }
+            if (axis == 0)
+            {
+                x = a;
+                y = u;
+                z = v;
+            }
+            else if (axis == 1)
+            {
+                x = u;
+                y = a;
+                z = v;
+            }
+            else
+            {
+                x = u;
+                y = v;
+                z = a;
+            }
             return new Vector3(o.X + x * vs, o.Y + y * vs, o.Z + z * vs);
         }
 

@@ -78,4 +78,12 @@
       <Folder Include="assets\textures\terrain\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Compile Remove="Biomes\Environment\BiomeConfig.cs" />
+      <Compile Remove="Biomes\Environment\IEnvironmentSampler.cs" />
+      <Compile Remove="Terrain\ITerrainGenerator.cs" />
+      <Compile Remove="Core\WorldObjects\ITreesRegistry.cs" />
+      <Compile Remove="Terrain\IChunkJobScheduler.cs" />
+    </ItemGroup>
+
 </Project>

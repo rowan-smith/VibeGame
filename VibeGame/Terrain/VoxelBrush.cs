@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Veilborne.Core.GameWorlds.Terrain;
 
 namespace VibeGame.Terrain
 {
@@ -10,55 +11,76 @@ namespace VibeGame.Terrain
         {
             if (radius <= 0f) return 0f;
             float t = Math.Clamp(distance / radius, 0f, 1f);
-            switch (falloff)
+            return falloff switch
             {
-                case VoxelFalloff.Linear:
-                    return 1f - t;
-                case VoxelFalloff.Cosine:
-                    // Smooth bell curve
-                    return 0.5f * (1f + MathF.Cos(t * MathF.PI));
-                case VoxelFalloff.Exponential:
-                    // Faster falloff near edges
-                    return MathF.Exp(-4.0f * t * t);
-                default:
-                    return 1f - t;
-            }
+                VoxelFalloff.Linear => 1f - t,
+                VoxelFalloff.Cosine => 0.5f * (1f + MathF.Cos(t * MathF.PI)),
+                VoxelFalloff.Exponential => MathF.Exp(-4f * t * t),
+                _ => 1f - t
+            };
         }
 
-        // Apply subtractive (dig) operation to a density value
-        // density < 0 => empty, density > 0 => solid (convention)
+        // Subtractive (dig) operation
         public static float ApplyDig(float density, float weight, float strength)
         {
-            // Move density toward empty by subtracting
             return density - weight * strength;
         }
 
-        // Helper to apply a spherical brush to a voxel chunk bounds
-        public static void ApplySphereToChunk(VoxelChunk chunk, Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff)
+        // Additive (fill) operation
+        public static float ApplyFill(float density, float weight, float strength)
         {
-            // Iterate voxel centers and modify density
+            return density + weight * strength;
+        }
+
+        // Generic spherical brush operation
+        private static void ApplySphere(VoxelChunk chunk, Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff, bool fill)
+        {
             float voxel = chunk.VoxelSize;
-            var origin = chunk.OriginWorld;
+            var origin = chunk.Origin;
             int n = chunk.Size;
+
+            Vector3 min = new(float.MaxValue, float.MaxValue, float.MaxValue);
+            Vector3 max = new(float.MinValue, float.MinValue, float.MinValue);
+            bool dirty = false;
+
             for (int z = 0; z < n; z++)
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
             {
-                for (int y = 0; y < n; y++)
-                {
-                    for (int x = 0; x < n; x++)
-                    {
-                        float wx = origin.X + (x + 0.5f) * voxel;
-                        float wy = origin.Y + (y + 0.5f) * voxel;
-                        float wz = origin.Z + (z + 0.5f) * voxel;
-                        Vector3 p = new Vector3(wx, wy, wz);
-                        float d = Vector3.Distance(p, worldCenter);
-                        if (d > radius) continue;
-                        float w = Falloff(d, radius, falloff);
-                        float newD = ApplyDig(chunk.GetDensity(x, y, z), w, strength);
-                        chunk.SetDensity(x, y, z, newD);
-                    }
-                }
+                float wx = origin.X + (x + 0.5f) * voxel;
+                float wy = origin.Y + (y + 0.5f) * voxel;
+                float wz = origin.Z + (z + 0.5f) * voxel;
+                Vector3 p = new(wx, wy, wz);
+
+                float d = Vector3.Distance(p, worldCenter);
+                if (d > radius) continue;
+
+                float w = Falloff(d, radius, falloff);
+                float density = chunk.GetDensity(x, y, z);
+                float newDensity = fill ? ApplyFill(density, w, strength) : ApplyDig(density, w, strength);
+
+                chunk.SetDensity(x, y, z, newDensity);
+
+                // Track dirty bounds
+                min = Vector3.Min(min, p);
+                max = Vector3.Max(max, p);
+                dirty = true;
             }
-            chunk.MarkDirty();
+
+            if (dirty)
+                chunk.MarkDirtyRegion(min, max);
+        }
+
+        // Public: Dig a spherical region
+        public static void DigSphereToChunk(VoxelChunk chunk, Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff)
+        {
+            ApplySphere(chunk, worldCenter, radius, strength, falloff, fill: false);
+        }
+
+        // Public: Fill a spherical region
+        public static void FillSphereToChunk(VoxelChunk chunk, Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff)
+        {
+            ApplySphere(chunk, worldCenter, radius, strength, falloff, fill: true);
         }
     }
 }

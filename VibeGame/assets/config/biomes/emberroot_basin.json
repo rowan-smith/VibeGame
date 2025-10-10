@@ -35,11 +35,17 @@
       "TextureId": "brown_mud_leaves",
       "BlendMin": 0.5,
       "BlendMax": 1.0
+    },
+    {
+      "TextureId": "aerial_rocks",
+      "BlendMin": 0.0,
+      "BlendMax": 1.0
     }
   ],
 
   "TextureRules": {
-    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+    "brown_mud_leaves": { "MinAltitude": 0.0, "MaxAltitude": 1.0, "SlopeMax": 35 },
+    "aerial_rocks": { "SlopeMin": 25 }
   },
   "AllowedObjects": [],
   "DominantFlora": ["Firebloom Shrubs", "Ember Trees"],

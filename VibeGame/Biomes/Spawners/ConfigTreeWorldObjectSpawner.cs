@@ -1,18 +1,21 @@
 using System.Numerics;
 using VibeGame.Biomes.Environment;
+using VibeGame.Core;
 using VibeGame.Core.WorldObjects;
 using VibeGame.Objects;
 using VibeGame.Terrain;
 
 namespace VibeGame.Biomes.Spawners
 {
-    // Generic, config-driven spawner for trees as world objects.
-    // Uses TreesRegistry and biome AllowedObjects (if provided) or falls back to SpawnRules.BiomeIds.
+    /// <summary>
+    /// Config-driven spawner for trees as world objects.
+    /// Uses TreesRegistry and biome AllowedObjects (if provided) or falls back to SpawnRules.BiomeIds.
+    /// </summary>
     public sealed class ConfigTreeWorldObjectSpawner : IWorldObjectSpawner
     {
         private readonly ITreesRegistry _trees;
         private readonly IEnvironmentSampler _sampler;
-        private readonly IReadOnlyList<string>? _allowedIds; // may be null/empty
+        private readonly IReadOnlyList<string>? _allowedIds;
 
         public ConfigTreeWorldObjectSpawner(ITreesRegistry trees, IEnvironmentSampler sampler, IReadOnlyList<string>? allowedObjectIds = null)
         {
@@ -24,11 +27,11 @@ namespace VibeGame.Biomes.Spawners
         public List<SpawnedObject> GenerateObjects(string biomeId, ITerrainGenerator terrain, float[,] heights, Vector2 originWorld, int count)
         {
             var results = new List<SpawnedObject>();
-            // Track placed physics areas (XZ plane) to prevent overlaps between objects across types
-            var placedAreas = new List<(Vector2 pos, float radius)>();
+            if (_trees.All.Count == 0) return results;
 
+            int chunkSize = heights.GetLength(0);
             float tile = terrain.TileSize;
-            float chunkWorldSize = (heights.GetLength(0) - 1) * tile;
+            float chunkWorldSize = (chunkSize - 1) * tile;
 
             float margin = MathF.Max(2f * tile, 3f);
             float minX = originWorld.X + margin;
@@ -36,146 +39,129 @@ namespace VibeGame.Biomes.Spawners
             float minZ = originWorld.Y + margin;
             float maxZ = originWorld.Y + chunkWorldSize - margin;
 
-            // Select candidate object ids
+            // Build candidate tree list
             List<TreeObjectConfig> candidateDefs = new();
             if (_allowedIds != null)
             {
                 foreach (var id in _allowedIds)
-                {
                     if (_trees.TryGet(id, out var def)) candidateDefs.Add(def);
-                }
             }
             else
             {
                 foreach (var def in _trees.All)
                 {
-                    // Filter to those whose SpawnRules include this biomeId
                     if (def.SpawnRules?.BiomeIds != null && def.SpawnRules.BiomeIds.Any(b => string.Equals(b, biomeId, StringComparison.OrdinalIgnoreCase)))
-                    {
                         candidateDefs.Add(def);
-                    }
                 }
             }
 
             if (candidateDefs.Count == 0) return results;
 
-            // Distribute count among candidates
             int perType = Math.Max(1, count / candidateDefs.Count);
-            int seedBase = HashCode.Combine(VibeGame.Core.WorldGlobals.Seed, biomeId.GetHashCode(StringComparison.OrdinalIgnoreCase), (int)originWorld.X, (int)originWorld.Y, heights.GetLength(0));
+            int seedBase = HashCode.Combine(WorldGlobals.Seed, biomeId.GetHashCode(StringComparison.OrdinalIgnoreCase),
+                                            (int)originWorld.X, (int)originWorld.Y, chunkSize);
+
+            var placedAreas = new List<(Vector2 pos, float radius)>();
 
             foreach (var def in candidateDefs)
             {
                 var sr = def.SpawnRules ?? new SpawnRulesConfig();
-                float altMin = sr.AltitudeRange != null && sr.AltitudeRange.Length > 0 ? sr.AltitudeRange[0] : 0f;
-                float altMax = sr.AltitudeRange != null && sr.AltitudeRange.Length > 1 ? sr.AltitudeRange[1] : 1f;
-                float tMin = sr.TemperatureRange != null && sr.TemperatureRange.Length > 0 ? sr.TemperatureRange[0] : 0f;
-                float tMax = sr.TemperatureRange != null && sr.TemperatureRange.Length > 1 ? sr.TemperatureRange[1] : 1f;
-                float mMin = sr.MoistureRange != null && sr.MoistureRange.Length > 0 ? sr.MoistureRange[0] : 0f;
-                float mMax = sr.MoistureRange != null && sr.MoistureRange.Length > 1 ? sr.MoistureRange[1] : 1f;
+                float altMin = sr.AltitudeRange?.Length > 0 ? sr.AltitudeRange[0] : 0f;
+                float altMax = sr.AltitudeRange?.Length > 1 ? sr.AltitudeRange[1] : 1f;
+                float tMin = sr.TemperatureRange?.Length > 0 ? sr.TemperatureRange[0] : 0f;
+                float tMax = sr.TemperatureRange?.Length > 1 ? sr.TemperatureRange[1] : 1f;
+                float mMin = sr.MoistureRange?.Length > 0 ? sr.MoistureRange[0] : 0f;
+                float mMax = sr.MoistureRange?.Length > 1 ? sr.MoistureRange[1] : 1f;
 
-                // Precompute weighted model list
+                // Weighted models
                 var models = def.Assets?.Models ?? new List<ModelAsset>();
-                if (models.Count == 0) continue; // nothing to draw
-                float totalW = 0f; foreach (var m in models) totalW += MathF.Max(0.0001f, m.Weight);
+                if (models.Count == 0) continue;
+                float totalW = models.Sum(m => MathF.Max(0.0001f, m.Weight));
 
                 for (int i = 0; i < perType; i++)
                 {
                     int seed = HashCode.Combine(seedBase, def.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), i);
                     float wx = HashToRange(seed * 97 + 5, minX, maxX);
                     float wz = HashToRange(seed * 211 + 23, minZ, maxZ);
-
                     float baseY = terrain.ComputeHeight(wx, wz);
 
-                    // Avoid steep slopes
-                    float s = 1.5f;
-                    float ny1 = terrain.ComputeHeight(wx + s, wz);
-                    float ny2 = terrain.ComputeHeight(wx - s, wz);
-                    float ny3 = terrain.ComputeHeight(wx, wz + s);
-                    float ny4 = terrain.ComputeHeight(wx, wz - s);
-                    float slope = MathF.Max(MathF.Max(MathF.Abs(ny1 - baseY), MathF.Abs(ny2 - baseY)), MathF.Max(MathF.Abs(ny3 - baseY), MathF.Abs(ny4 - baseY)));
-                    if (slope > 2.0f) continue;
+                    if (IsSlopeTooSteep(terrain, wx, wz, baseY)) continue;
 
-                    // Environment filter
                     var env = _sampler.Sample(new Vector2(wx, wz), terrain);
-                    if (env.Elevation < altMin || env.Elevation > altMax) continue;
-                    if (env.Temperature < tMin || env.Temperature > tMax) continue;
-                    if (env.Moisture < mMin || env.Moisture > mMax) continue;
+                    if (!IsEnvValid(env, altMin, altMax, tMin, tMax, mMin, mMax)) continue;
 
-                    // Choose model by weighted random (deterministic)
-                    float t = ((uint)seed % 10000) / 10000f; // [0,1)
+                    // Select weighted model
                     string modelPath = models[0].Path;
+                    float tRand = ((uint)seed % 10000) / 10000f;
                     float accum = 0f;
                     foreach (var m in models)
                     {
                         float w = MathF.Max(0.0001f, m.Weight) / totalW;
                         accum += w;
-                        if (t <= accum) { modelPath = m.Path; break; }
+                        if (tRand <= accum)
+                        {
+                            modelPath = m.Path;
+                            break;
+                        }
                     }
 
-                    // Scale: base scale with variance
-                    Vector3 baseScale = new Vector3(1f, 1f, 1f);
-                    var vis = def.Visual ?? new VisualConfig();
-                    if (vis.BaseScale != null && vis.BaseScale.Length >= 3)
-                    {
-                        baseScale = new Vector3(vis.BaseScale[0], vis.BaseScale[1], vis.BaseScale[2]);
-                    }
-                    float variance = MathF.Abs(vis.ScaleVariance);
+                    // Scale
+                    Vector3 baseScale = def.Visual?.BaseScale?.Length >= 3
+                        ? new Vector3(def.Visual.BaseScale[0], def.Visual.BaseScale[1], def.Visual.BaseScale[2])
+                        : Vector3.One;
+                    float variance = MathF.Abs(def.Visual?.ScaleVariance ?? 0f);
                     float varT = HashToRange(seed * 419 + 101, -variance, variance);
                     Vector3 scale = baseScale * (1.0f + varT);
 
-                    // Rotation: random Y if enabled
+                    // Rotation
                     Quaternion rot = Quaternion.Identity;
-                    if (vis.RandomRotationY)
+                    if (def.Visual?.RandomRotationY == true)
                     {
                         float angle = HashToRange(seed * 887 + 337, 0f, MathF.PI * 2f);
                         rot = Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
                     }
 
-                    // Respect physics area (for spawn spacing) and separate collider radius for player physics
-                    float areaRadius = 0f;
-                    try { areaRadius = def.Physics != null ? MathF.Max(0f, def.Physics.AreaRadius) : 0f; } catch { areaRadius = 0f; }
-                    bool overlaps = false;
-                    var candidateXZ = new Vector2(wx, wz);
-                    if (placedAreas.Count > 0)
-                    {
-                        float rr = areaRadius; // current object's spacing radius
-                        foreach (var (pos, r) in placedAreas)
-                        {
-                            float dx = candidateXZ.X - pos.X;
-                            float dz = candidateXZ.Y - pos.Y;
-                            float minDist = r + rr;
-                            if (minDist <= 0f) continue;
-                            if ((dx * dx + dz * dz) < (minDist * minDist)) { overlaps = true; break; }
-                        }
-                    }
+                    float areaRadius = def.Physics?.AreaRadius ?? 0f;
+                    bool overlaps = placedAreas.Any(pa => Vector2.DistanceSquared(pa.pos, new Vector2(wx, wz)) < (pa.radius + areaRadius) * (pa.radius + areaRadius));
                     if (overlaps) continue;
 
-                    float colliderRadius = 0f;
-                    try
-                    {
-                        if (def.Physics != null)
-                        {
-                            colliderRadius = def.Physics.ColliderRadius > 0f ? def.Physics.ColliderRadius : areaRadius;
-                        }
-                    }
-                    catch { colliderRadius = areaRadius; }
+                    float colliderRadius = def.Physics?.ColliderRadius > 0f ? def.Physics.ColliderRadius : areaRadius;
 
                     results.Add(new SpawnedObject
                     {
                         ObjectId = def.Id,
-                        ModelPath = TreesRegistryPathNormalize(modelPath),
+                        ModelPath = NormalizePath(modelPath),
                         Position = new Vector3(wx, baseY, wz),
                         Rotation = rot,
                         Scale = scale,
                         CollisionRadius = colliderRadius
                     });
 
-                    // Record placed physics area for subsequent objects
-                    placedAreas.Add((candidateXZ, areaRadius));
+                    placedAreas.Add((new Vector2(wx, wz), areaRadius));
                 }
             }
 
             return results;
+        }
+
+        #region Helpers
+        private static bool IsSlopeTooSteep(ITerrainGenerator terrain, float x, float z, float baseY)
+        {
+            float s = 1.5f;
+            float ny1 = terrain.ComputeHeight(x + s, z);
+            float ny2 = terrain.ComputeHeight(x - s, z);
+            float ny3 = terrain.ComputeHeight(x, z + s);
+            float ny4 = terrain.ComputeHeight(x, z - s);
+            float slope = MathF.Max(MathF.Max(MathF.Abs(ny1 - baseY), MathF.Abs(ny2 - baseY)),
+                                    MathF.Max(MathF.Abs(ny3 - baseY), MathF.Abs(ny4 - baseY)));
+            return slope > 2.0f;
+        }
+
+        private static bool IsEnvValid(EnvironmentSample env, float altMin, float altMax, float tMin, float tMax, float mMin, float mMax)
+        {
+            return env.Elevation >= altMin && env.Elevation <= altMax &&
+                   env.Temperature >= tMin && env.Temperature <= tMax &&
+                   env.Moisture >= mMin && env.Moisture <= mMax;
         }
 
         private static float HashToRange(int seed, float min, float max)
@@ -191,11 +177,12 @@ namespace VibeGame.Biomes.Spawners
             }
         }
 
-        private static string TreesRegistryPathNormalize(string path)
+        private static string NormalizePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return string.Empty;
             if (Path.IsPathRooted(path)) return path;
             return Path.Combine(AppContext.BaseDirectory, "assets", path.Replace('/', Path.DirectorySeparatorChar));
         }
+        #endregion
     }
 }

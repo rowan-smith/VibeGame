@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using VibeGame.Biomes;
+using VibeGame.Core;
 using VibeGame.Terrain;
 
 namespace VibeGame.Objects
 {
-    // High-level orchestrator for deterministic world object spawning per chunk.
     public sealed class ObjectSpawner
     {
         private readonly int _seed;
@@ -21,45 +21,52 @@ namespace VibeGame.Objects
         }
 
         public IReadOnlyList<SpawnedObject> GetObjectsForChunk((int cx, int cz) key)
-        {
-            return _cache.TryGetValue(key, out var list) ? list : Array.Empty<SpawnedObject>();
-        }
+            => _cache.TryGetValue(key, out var list) ? list : Array.Empty<SpawnedObject>();
 
-        public void EnsureObjects(Vector3 playerPos, Dictionary<Vector3, Chunk> activeChunks, VibeGame.Core.AsyncTaskQueue async)
+        // Fully compatible EnsureObjects
+        public void EnsureObjects(Vector3 playerPos, Dictionary<Vector3, Chunk> activeChunks, AsyncTaskQueue async)
         {
             var (ccx, ccz) = WorldToChunk(playerPos.X, playerPos.Z);
             int radius = 4;
+
             for (int dz = -radius; dz <= radius; dz++)
             for (int dx = -radius; dx <= radius; dx++)
             {
                 var key = (ccx + dx, ccz + dz);
                 if (_cache.ContainsKey(key)) continue;
+
+                // Enqueue chunk generation
                 async.Enqueue(() => SpawnChunkAsync(key));
             }
         }
 
         private Task SpawnChunkAsync((int cx, int cz) key)
         {
-            // Generate base heights for this chunk
             int chunkSize = _terrain.TerrainSize;
             float tile = _terrain.TileSize;
+
+            // Generate chunk heights
             float[,] heights = _terrain.GenerateHeightsForChunk(key.cx, key.cz, chunkSize);
+
+            // World origin for chunk
             float chunkWorld = (chunkSize - 1) * tile;
             Vector2 origin = new Vector2(key.cx * chunkWorld, key.cz * chunkWorld);
 
-            // Pick biome at chunk origin and use its spawner
+            // Pick biome at chunk origin
             var biome = _biomes.GetBiomeAt(origin, _terrain);
-            int density = 18; // default count, can be tuned by biome
-            var list = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrain, heights, origin, density);
+            int density = 18; // default, can vary by biome
 
-            // Filter to ensure membership in the resolved biome (prevents cross-boundary bleed)
-            var filtered = new List<SpawnedObject>(list.Count);
-            foreach (var obj in list)
+            var spawned = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrain, heights, origin, density);
+
+            // Filter objects strictly within this biome
+            var filtered = new List<SpawnedObject>();
+            foreach (var obj in spawned)
             {
-                var at = _biomes.GetBiomeAt(new Vector2(obj.Position.X, obj.Position.Z), _terrain);
-                if (string.Equals(at.Id, biome.Id, StringComparison.OrdinalIgnoreCase))
+                var objBiome = _biomes.GetBiomeAt(new Vector2(obj.Position.X, obj.Position.Z), _terrain);
+                if (string.Equals(objBiome.Id, biome.Id, StringComparison.OrdinalIgnoreCase))
                     filtered.Add(obj);
             }
+
             _cache[key] = filtered;
             return Task.CompletedTask;
         }
