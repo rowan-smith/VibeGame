@@ -1,9 +1,9 @@
-using Raylib_CsLo;
+using ZeroElectric.Vinculum;
 using Serilog;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using Image = Raylib_CsLo.Image;
+using Image = ZeroElectric.Vinculum.Image;
 
 namespace VibeGame.Core.Downscalers
 {

@@ -1,5 +1,5 @@
 using System.Numerics;
-using Raylib_CsLo;
+using ZeroElectric.Vinculum;
 
 namespace Veilborne.Core.GameWorlds.Terrain
 {
@@ -17,7 +17,7 @@ namespace Veilborne.Core.GameWorlds.Terrain
 
         public void UpdateFromRaylib()
         {
-            Raylib.UpdateCamera(ref RaylibCamera);
+            Raylib.UpdateCamera(ref RaylibCamera, CameraMode.CAMERA_FIRST_PERSON);
         }
     }
 }

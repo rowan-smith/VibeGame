@@ -21,7 +21,7 @@ namespace VibeGame
             logger.Information("Launching Veilborne (Raylib)...");
 
             // Install Raylib -> Serilog log bridge so all Raylib output goes through our logger
-            RaylibLogBridge.Install();
+            // RaylibLogBridge.Install();
             try
             {
                 await _engine.RunAsync();

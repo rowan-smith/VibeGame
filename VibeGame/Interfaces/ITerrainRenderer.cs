@@ -1,5 +1,6 @@
 using System.Numerics;
-using Raylib_CsLo;
+using ZeroElectric.Vinculum;
+using VibeGame.Biomes;
 
 namespace VibeGame.Terrain
 {
@@ -11,9 +12,10 @@ namespace VibeGame.Terrain
         void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, Camera3D camera);
 
         // Apply the biome-specific surface texture set prior to rendering
-        void ApplyBiomeTextures(VibeGame.Biomes.BiomeData biome);
+        void ApplyBiomeTextures(BiomeData biome);
 
         void SetColorTint(Color color);
 
+        void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld);
     }
 }

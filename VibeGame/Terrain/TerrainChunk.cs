@@ -1,32 +1,19 @@
 using System.Numerics;
-using Raylib_CsLo;
+using ZeroElectric.Vinculum;
 
 namespace Veilborne.Core.GameWorlds.Terrain
 {
     public class TerrainChunk
     {
-        public Vector3 Origin { get; }
-        public int Size { get; }
-        public float TileSize { get; }
+        public float[,] Heights;
+        public Vector2 Origin;
+        public bool IsMeshGenerated = false;
 
-        public TerrainChunk(int size, float tileSize)
-        {
-            Size = size;
-            TileSize = tileSize;
-            Origin = Vector3.Zero;
-        }
+        // Change tracking for caching and invalidation
+        public bool Dirty = false;
+        public int Version = 0;
 
-        public void Render(Camera camera, Color color)
-        {
-            // Simple debug visualization — draws a grid square per chunk
-            var chunkWorldSize = (Size - 1) * TileSize;
-            Raylib.DrawCubeWires(
-                new Vector3(Origin.X + chunkWorldSize / 2, 0, Origin.Z + chunkWorldSize / 2),
-                chunkWorldSize,
-                0.1f,
-                chunkWorldSize,
-                color
-            );
-        }
+        // Optional: version of the source data this mesh was last built from
+        public int BuiltFromVersion = -1;
     }
 }

@@ -15,8 +15,10 @@ namespace VibeGame.Terrain
 
         public sealed class MeshData
         {
-            public Vector3[] Triangles = Array.Empty<Vector3>(); // 3*N
-            public Vector3[] Normals = Array.Empty<Vector3>(); // N
+            // Indexed mesh: shared vertices with per-vertex normals
+            public Vector3[] Vertices = Array.Empty<Vector3>();
+            public int[] Indices = Array.Empty<int>();
+            public Vector3[] Normals = Array.Empty<Vector3>();
         }
 
         public static MeshData Build(VoxelChunk chunk, int lodLevel)
@@ -32,7 +34,6 @@ namespace VibeGame.Terrain
             {
                 int u = (axis + 1) % 3;
                 int v = (axis + 2) % 3;
-                int[] dims = new[] { n, n, n };
                 bool[,] mask = new bool[(n - 0), (n - 0)];
                 int[,] sign = new int[n, n];
 
@@ -114,26 +115,45 @@ namespace VibeGame.Terrain
                 }
             }
 
-            // Convert quads to triangles
-            var tris = new List<Vector3>(faces.Count * 6);
-            var norms = new List<Vector3>(faces.Count * 2);
+            // Convert quads to indexed mesh (deduplicate vertices by position+normal)
+            var vertices = new List<Vector3>(faces.Count * 4);
+            var normals = new List<Vector3>(faces.Count * 4);
+            var indices = new List<int>(faces.Count * 6);
+            var map = new Dictionary<(Vector3 pos, Vector3 n), int>(faces.Count * 4);
+
+            int AddVertex(Vector3 p, Vector3 nrm)
+            {
+                if (!map.TryGetValue((p, nrm), out int idx))
+                {
+                    idx = vertices.Count;
+                    vertices.Add(p);
+                    normals.Add(nrm);
+                    map[(p, nrm)] = idx;
+                }
+                return idx;
+            }
+
             foreach (var q in faces)
             {
-                // Triangle winding such that normal points outward
-                tris.Add(q.A);
-                tris.Add(q.B);
-                tris.Add(q.C);
-                norms.Add(q.Normal);
-                tris.Add(q.A);
-                tris.Add(q.C);
-                tris.Add(q.D);
-                norms.Add(q.Normal);
+                int ia = AddVertex(q.A, q.Normal);
+                int ib = AddVertex(q.B, q.Normal);
+                int ic = AddVertex(q.C, q.Normal);
+                int id = AddVertex(q.D, q.Normal);
+
+                // Two triangles per quad, same winding as before (A,B,C) and (A,C,D)
+                indices.Add(ia);
+                indices.Add(ib);
+                indices.Add(ic);
+                indices.Add(ia);
+                indices.Add(ic);
+                indices.Add(id);
             }
 
             return new MeshData
             {
-                Triangles = tris.ToArray(),
-                Normals = norms.ToArray(),
+                Vertices = vertices.ToArray(),
+                Indices = indices.ToArray(),
+                Normals = normals.ToArray(),
             };
         }
 

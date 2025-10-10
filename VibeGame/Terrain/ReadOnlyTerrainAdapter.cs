@@ -31,11 +31,12 @@ namespace VibeGame.Terrain
 
         public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
         {
-            float[,] heights = new float[chunkSize, chunkSize];
+            // Include outer border so adjacent chunks stitch seamlessly
+            float[,] heights = new float[chunkSize + 1, chunkSize + 1];
             float originX = chunkX * chunkSize * TileSize;
             float originZ = chunkZ * chunkSize * TileSize;
-            for (int z = 0; z < chunkSize; z++)
-            for (int x = 0; x < chunkSize; x++)
+            for (int z = 0; z <= chunkSize; z++)
+            for (int x = 0; x <= chunkSize; x++)
                 heights[x, z] = _readOnly.SampleHeight(originX + x * TileSize, originZ + z * TileSize);
             return heights;
         }

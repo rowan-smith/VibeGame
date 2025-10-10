@@ -1,7 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Numerics;
-using Raylib_CsLo;
+using ZeroElectric.Vinculum;
+using Veilborne.Core.GameWorlds.Terrain;
 using VibeGame.Biomes;
 
 namespace VibeGame.Terrain
@@ -13,59 +12,102 @@ namespace VibeGame.Terrain
 
         private readonly IBiomeProvider _biomeProvider;
         private readonly ITerrainRenderer _renderer;
-        private readonly ITerrainGenerator _generator;
-        private readonly HashSet<(int cx, int cz)> _loaded = new();
+        private readonly EditableTerrainService _editable;
 
-        public ReadOnlyTerrainService(IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator generator)
+        // Track loaded chunks and preserve their mesh generation state across frames
+        private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
+
+        public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer)
         {
+            _editable = editable;
             _biomeProvider = biomeProvider;
             _renderer = renderer;
-            _generator = generator;
         }
+
+        public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
 
         public void UpdateAround(Vector3 worldPos, int radiusChunks)
         {
             int centerX = (int)MathF.Floor(worldPos.X / (ChunkSize * TileSize));
             int centerZ = (int)MathF.Floor(worldPos.Z / (ChunkSize * TileSize));
 
-            _loaded.Clear();
+            // Build a set of desired keys within radius
+            var desired = new HashSet<(int cx, int cz)>();
             for (int z = -radiusChunks; z <= radiusChunks; z++)
             for (int x = -radiusChunks; x <= radiusChunks; x++)
-                _loaded.Add((centerX + x, centerZ + z));
+            {
+                var key = (centerX + x, centerZ + z);
+                desired.Add(key);
+                if (!_loadedChunks.ContainsKey(key))
+                {
+                    var origin = new Vector2(key.Item1 * ChunkSize * TileSize, key.Item2 * ChunkSize * TileSize);
+
+                    // Generate heights by sampling from the editable ring (captures runtime edits when available)
+                    float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
+                    for (int zz = 0; zz <= ChunkSize; zz++)
+                    for (int xx = 0; xx <= ChunkSize; xx++)
+                    {
+                        float wx = origin.X + xx * TileSize;
+                        float wz = origin.Y + zz * TileSize;
+                        heights[xx, zz] = _editable.SampleHeight(wx, wz);
+                    }
+
+                    _loadedChunks[key] = new TerrainChunk
+                    {
+                        Heights = heights,
+                        Origin = origin,
+                        IsMeshGenerated = false,
+                        BuiltFromVersion = -1
+                    };
+                }
+            }
+
+            // Remove chunks that are no longer within the desired radius
+            var toRemove = new List<(int cx, int cz)>();
+            foreach (var key in _loadedChunks.Keys)
+                if (!desired.Contains(key)) toRemove.Add(key);
+            foreach (var key in toRemove) _loadedChunks.Remove(key);
         }
 
         public void RenderTiles(Camera3D camera, HashSet<(int cx, int cz)>? exclude = null)
         {
-            foreach (var (cx, cz) in _loaded)
+            foreach (var kvp in _loadedChunks)
             {
-                if (exclude != null && exclude.Contains((cx, cz))) continue;
+                var key = kvp.Key;
+                var chunk = kvp.Value;
 
-                float originX = cx * ChunkSize * TileSize;
-                float originZ = cz * ChunkSize * TileSize;
-                var heights = _generator.GenerateHeightsForChunk(cx, cz, ChunkSize);
-                var biome = _biomeProvider.GetBiomeAt(new Vector2(originX + ChunkSize * 0.5f, originZ + ChunkSize * 0.5f), _generator);
+                if (exclude != null && exclude.Contains(key))
+                    continue;
 
+                // Apply biome texture based on chunk center
+                var biome = _biomeProvider.GetBiomeAt(
+                    new Vector2(chunk.Origin.X + ChunkSize * 0.5f, chunk.Origin.Y + ChunkSize * 0.5f),
+                    null
+                );
                 _renderer.ApplyBiomeTextures(biome.Data);
-                _renderer.RenderAt(heights, TileSize, new Vector2(originX, originZ), camera);
+
+                // Render the chunk (meshes are built centrally by TerrainManager.UpdateAround)
+                _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
             }
         }
 
         public void Render(Camera3D camera) => RenderTiles(camera);
 
-        public void RenderWithExclusions(Camera3D camera, HashSet<(int cx, int cz)> exclusions) => RenderTiles(camera, exclusions);
+        public void RenderWithExclusions(Camera3D camera, HashSet<(int cx, int cz)> exclusions)
+            => RenderTiles(camera, exclusions);
 
         public float SampleHeight(float worldX, float worldZ)
-            => MathF.Sin(worldX * 0.05f) * MathF.Cos(worldZ * 0.05f) * 5f;
+            => _editable.SampleHeight(worldX, worldZ);
 
         public IBiome GetBiomeAt(float worldX, float worldZ)
             => _biomeProvider.GetBiomeAt(new Vector2(worldX, worldZ), null);
 
         public void RenderDebugChunkBounds(Camera3D camera)
         {
-            foreach (var (cx, cz) in _loaded)
+            foreach (var (cx, cz) in _loadedChunks.Keys)
             {
                 Vector3 pos = new(cx * ChunkSize * TileSize, 0, cz * ChunkSize * TileSize);
-                Raylib_CsLo.Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.2f, ChunkSize * TileSize, Raylib_CsLo.Raylib.DARKGREEN);
+                Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.2f, ChunkSize * TileSize, Raylib.DARKGREEN);
             }
         }
 

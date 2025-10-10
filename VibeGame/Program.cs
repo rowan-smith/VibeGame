@@ -91,11 +91,8 @@ internal static class Program
         // -----------------------------
         // Terrain services
         // -----------------------------
-        builder.Services.AddSingleton<ReadOnlyTerrainService>(sp => new ReadOnlyTerrainService(
-            sp.GetRequiredService<IBiomeProvider>(),
-            sp.GetRequiredService<ITerrainRenderer>(),
-            sp.GetRequiredService<ITerrainGenerator>()));
         builder.Services.AddSingleton<EditableTerrainService>();
+        builder.Services.AddSingleton<ReadOnlyTerrainService>();
         builder.Services.AddSingleton<LowLodTerrainService>();
 
         var worldCfg = WorldGlobals.Config;
@@ -114,7 +111,8 @@ internal static class Program
             var lowLod = sp.GetRequiredService<LowLodTerrainService>();
             var cfg = sp.GetRequiredService<TerrainRingConfig>();
             var biomeProvider = sp.GetRequiredService<IBiomeProvider>();
-            return new TerrainManager(editable, readOnly, cfg, biomeProvider, lowLod);
+            var renderer = sp.GetRequiredService<ITerrainRenderer>();
+            return new TerrainManager(editable, readOnly, cfg, biomeProvider, renderer, lowLod);
         });
         builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
 

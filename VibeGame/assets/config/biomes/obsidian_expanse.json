@@ -32,7 +32,7 @@
   },
   "SurfaceTextures": [
     {
-      "TextureId": "brown_mud_leaves",
+      "TextureId": "aerial_rocks",
       "BlendMin": 0.5,
       "BlendMax": 1.0
     }

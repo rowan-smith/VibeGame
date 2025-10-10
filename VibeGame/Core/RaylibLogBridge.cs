@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Raylib_CsLo;
+using ZeroElectric.Vinculum;
 using Serilog;
 
 namespace VibeGame.Core

@@ -44,14 +44,15 @@ namespace VibeGame.Core
         /// </summary>
         public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
         {
-            var heights = new float[chunkSize, chunkSize];
+            // Include border vertices to avoid seams between chunks
+            var heights = new float[chunkSize + 1, chunkSize + 1];
             float chunkWorld = chunkSize * TileSize;
 
             float originX = chunkX * chunkWorld;
             float originZ = chunkZ * chunkWorld;
 
-            for (int z = 0; z < chunkSize; z++)
-            for (int x = 0; x < chunkSize; x++)
+            for (int z = 0; z <= chunkSize; z++)
+            for (int x = 0; x <= chunkSize; x++)
             {
                 float worldX = originX + x * TileSize;
                 float worldZ = originZ + z * TileSize;

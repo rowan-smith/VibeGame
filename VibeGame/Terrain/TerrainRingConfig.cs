@@ -2,8 +2,22 @@ namespace VibeGame.Terrain
 {
     public class TerrainRingConfig
     {
-        public int EditableRadius { get; set; } = 3;
-        public int ReadOnlyRadius { get; set; } = 6;
-        public int LowLodRadius { get; set; } = 10;
+        // Base radii (starting point)
+        public int EditableRadius { get; set; } = 1;
+        public int ReadOnlyRadius { get; set; } = 3;
+        public int LowLodRadius { get; set; } = 8;
+
+        // Min/Max caps for adaptive sizing
+        public int MinEditable { get; set; } = 1;
+        public int MaxEditable { get; set; } = 2;
+        public int MinReadOnly { get; set; } = 2;
+        public int MaxReadOnly { get; set; } = 8;
+        public int MinLowLod { get; set; } = 6;
+        public int MaxLowLod { get; set; } = 24;
+
+        // Tuning multipliers
+        public float SpeedScale { get; set; } = 0.15f;    // chunks per m/s
+        public float DensityPenalty { get; set; } = 1.0f; // reduce chunks under high roughness
+        public float FpsTarget { get; set; } = 60f;       // target framerate for budget heuristic
     }
 }

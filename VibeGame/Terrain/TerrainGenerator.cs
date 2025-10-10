@@ -43,14 +43,22 @@ namespace VibeGame.Terrain
 
         public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
         {
-            float[,] heights = new float[chunkSize, chunkSize];
-            float chunkWorld = (chunkSize - 1) * TileSize;
+            // Include shared boundary vertices so adjacent chunks stitch without gaps.
+            // Size is (chunkSize + 1) so mesh covers exactly chunkSize * TileSize in world units.
+            int size = chunkSize + 1;
+            float[,] heights = new float[size, size];
+
+            float chunkWorld = chunkSize * TileSize;
             float originX = chunkX * chunkWorld;
             float originZ = chunkZ * chunkWorld;
 
-            for (int z = 0; z < chunkSize; z++)
-            for (int x = 0; x < chunkSize; x++)
-                heights[x, z] = ComputeHeight(originX + x * TileSize, originZ + z * TileSize);
+            for (int z = 0; z <= chunkSize; z++)
+            {
+                for (int x = 0; x <= chunkSize; x++)
+                {
+                    heights[x, z] = ComputeHeight(originX + x * TileSize, originZ + z * TileSize);
+                }
+            }
 
             return heights;
         }
