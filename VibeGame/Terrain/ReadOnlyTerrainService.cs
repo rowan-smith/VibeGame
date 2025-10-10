@@ -30,53 +30,42 @@ namespace VibeGame.Terrain
 
             _loaded.Clear();
             for (int z = -radiusChunks; z <= radiusChunks; z++)
-                for (int x = -radiusChunks; x <= radiusChunks; x++)
-                    _loaded.Add((centerX + x, centerZ + z));
+            for (int x = -radiusChunks; x <= radiusChunks; x++)
+                _loaded.Add((centerX + x, centerZ + z));
         }
+
+        public void RenderTiles(Camera3D camera, HashSet<(int cx, int cz)>? exclude = null)
+        {
+            foreach (var (cx, cz) in _loaded)
+            {
+                if (exclude != null && exclude.Contains((cx, cz))) continue;
+
+                float originX = cx * ChunkSize * TileSize;
+                float originZ = cz * ChunkSize * TileSize;
+                var heights = _generator.GenerateHeightsForChunk(cx, cz, ChunkSize);
+                var biome = _biomeProvider.GetBiomeAt(new Vector2(originX + ChunkSize * 0.5f, originZ + ChunkSize * 0.5f), _generator);
+
+                _renderer.ApplyBiomeTextures(biome.Data);
+                _renderer.RenderAt(heights, TileSize, new Vector2(originX, originZ), camera);
+            }
+        }
+
+        public void Render(Camera3D camera) => RenderTiles(camera);
+
+        public void RenderWithExclusions(Camera3D camera, HashSet<(int cx, int cz)> exclusions) => RenderTiles(camera, exclusions);
 
         public float SampleHeight(float worldX, float worldZ)
-        {
-            return MathF.Sin(worldX * 0.05f) * MathF.Cos(worldZ * 0.05f) * 5f;
-        }
+            => MathF.Sin(worldX * 0.05f) * MathF.Cos(worldZ * 0.05f) * 5f;
 
         public IBiome GetBiomeAt(float worldX, float worldZ)
-        {
-            return _biomeProvider.GetBiomeAt(new Vector2(worldX, worldZ), null);
-        }
-
-        public void Render(Camera3D camera, Color baseColor)
-        {
-            foreach (var (cx, cz) in _loaded)
-            {
-                float originX = cx * ChunkSize * TileSize;
-                float originZ = cz * ChunkSize * TileSize;
-                var heights = _generator.GenerateHeightsForChunk(cx, cz, ChunkSize);
-                var biome = _biomeProvider.GetBiomeAt(new Vector2(originX + (ChunkSize - 1) * TileSize * 0.5f, originZ + (ChunkSize - 1) * TileSize * 0.5f), _generator);
-                _renderer.ApplyBiomeTextures(biome.Data);
-                _renderer.RenderAt(heights, _generator.TileSize, new Vector2(originX, originZ), camera, baseColor);
-            }
-        }
-
-        public void RenderWithExclusions(Camera3D camera, Color baseColor, HashSet<(int cx, int cz)> exclusions)
-        {
-            foreach (var (cx, cz) in _loaded)
-            {
-                if (exclusions.Contains((cx, cz))) continue;
-                float originX = cx * ChunkSize * TileSize;
-                float originZ = cz * ChunkSize * TileSize;
-                var heights = _generator.GenerateHeightsForChunk(cx, cz, ChunkSize);
-                var biome = _biomeProvider.GetBiomeAt(new Vector2(originX + (ChunkSize - 1) * TileSize * 0.5f, originZ + (ChunkSize - 1) * TileSize * 0.5f), _generator);
-                _renderer.ApplyBiomeTextures(biome.Data);
-                _renderer.RenderAt(heights, _generator.TileSize, new Vector2(originX, originZ), camera, baseColor);
-            }
-        }
+            => _biomeProvider.GetBiomeAt(new Vector2(worldX, worldZ), null);
 
         public void RenderDebugChunkBounds(Camera3D camera)
         {
             foreach (var (cx, cz) in _loaded)
             {
                 Vector3 pos = new(cx * ChunkSize * TileSize, 0, cz * ChunkSize * TileSize);
-                Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.2f, ChunkSize * TileSize, Raylib.DARKGREEN);
+                Raylib_CsLo.Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.2f, ChunkSize * TileSize, Raylib_CsLo.Raylib.DARKGREEN);
             }
         }
 

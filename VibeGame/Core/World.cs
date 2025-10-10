@@ -57,7 +57,7 @@ namespace VibeGame.Core
         }
 
         // Convenience methods
-        public float SampleHeight(float x, float z) => Terrain.SampleHeight(x, z);
+        public float SampleHeight(float x, float z) => Terrain.SampleHeight(new Vector3(x, 0, z));
 
         public IBiome GetBiomeAt(float x, float z) => Biomes.GetBiomeAt(new Vector2(x, z), TerrainAdapter);
     }

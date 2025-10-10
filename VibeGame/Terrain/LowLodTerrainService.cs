@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Raylib_CsLo;
+using VibeGame.Biomes;
 
 namespace VibeGame.Terrain
 {
@@ -12,6 +13,17 @@ namespace VibeGame.Terrain
         public int InnerExclusionRadiusChunks { get; set; }
 
         private readonly HashSet<(int cx, int cz)> _loaded = new();
+
+        private readonly IBiomeProvider _biomeProvider;
+        private readonly ITerrainRenderer _renderer;
+        private readonly ITerrainGenerator _generator;
+
+        public LowLodTerrainService(IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator generator)
+        {
+            _biomeProvider = biomeProvider;
+            _renderer = renderer;
+            _generator = generator;
+        }
 
         public void UpdateAround(Vector3 worldPos, int radiusChunks)
         {
@@ -28,14 +40,18 @@ namespace VibeGame.Terrain
             }
         }
 
-        public void Render(Camera3D camera, Color baseColor)
+        public void Render(Camera3D camera)
         {
             foreach (var (cx, cz) in _loaded)
             {
-                float worldX = cx * ChunkSize * TileSize;
-                float worldZ = cz * ChunkSize * TileSize;
-                float y = MathF.Sin(worldX * 0.01f) * MathF.Cos(worldZ * 0.01f) * 8f;
-                Raylib.DrawCube(new Vector3(worldX, y, worldZ), ChunkSize, 1f, ChunkSize, Raylib.DARKGRAY);
+                float originX = cx * ChunkSize * TileSize;
+                float originZ = cz * ChunkSize * TileSize;
+
+                var heights = _generator.GenerateHeightsForChunk(cx, cz, ChunkSize);
+                var biome = _biomeProvider.GetBiomeAt(new Vector2(originX + ChunkSize * 0.5f, originZ + ChunkSize * 0.5f), _generator);
+
+                _renderer.ApplyBiomeTextures(biome.Data);
+                _renderer.RenderAt(heights, TileSize, new Vector2(originX, originZ), camera);
             }
         }
 
@@ -44,7 +60,7 @@ namespace VibeGame.Terrain
             foreach (var (cx, cz) in _loaded)
             {
                 Vector3 pos = new(cx * ChunkSize * TileSize, 0, cz * ChunkSize * TileSize);
-                Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.5f, ChunkSize * TileSize, Raylib.GRAY);
+                Raylib_CsLo.Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.5f, ChunkSize * TileSize, Raylib_CsLo.Raylib.GRAY);
             }
         }
     }

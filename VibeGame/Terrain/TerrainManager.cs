@@ -1,14 +1,15 @@
+using System;
+using System.Collections.Generic;
 using System.Numerics;
+using System.Threading.Tasks;
 using Raylib_CsLo;
+using Veilborne.Core.GameWorlds.Terrain;
 using Veilborne.Core.Interfaces;
 using VibeGame.Biomes;
+using VibeGame.Interfaces;
 
 namespace VibeGame.Terrain
 {
-    /// <summary>
-    /// Orchestrates ring-based terrain services (editable near, read-only mid, low LOD far).
-    /// Implements IInfiniteTerrain and IEditableTerrain for compatibility.
-    /// </summary>
     public class TerrainManager : IInfiniteTerrain, IEditableTerrain
     {
         private readonly EditableTerrainService _editableRing;
@@ -29,15 +30,13 @@ namespace VibeGame.Terrain
             _cfg = cfg;
             _lowLodRing = lowLodRing;
             _biomeProvider = biomeProvider;
-
-            _editableRing.RenderBaseHeightmap = false; // read-only ring renders base
         }
 
         public float TileSize => _readOnlyRing.TileSize;
         public int ChunkSize => _readOnlyRing.ChunkSize;
 
         // -----------------------------
-        // Update logic
+        // Update
         // -----------------------------
         public void UpdateAround(Vector3 worldPos, int _)
         {
@@ -53,71 +52,68 @@ namespace VibeGame.Terrain
         }
 
         // -----------------------------
-        // Sample height / biome
+        // Sample Height
         // -----------------------------
-        public float SampleHeight(float worldX, float worldZ)
-            => _editableRing.SampleHeight(worldX, worldZ);
-
         public float SampleHeight(Vector3 worldPos)
-            => SampleHeight(worldPos.X, worldPos.Z);
-
-        public IBiome GetBiomeAt(float worldX, float worldZ)
         {
-            var adapter = new ReadOnlyTerrainAdapter(_readOnlyRing);
-            return _biomeProvider.GetBiomeAt(new Vector2(worldX, worldZ), adapter);
+            return _editableRing.SampleHeight(worldPos.X, worldPos.Z);
         }
 
-        public IEnumerable<(Vector2 center, float radius)> GetNearbyObjectColliders(Vector2 worldPos, float range)
-            => _readOnlyRing.GetNearbyObjectColliders(worldPos, range);
-
         // -----------------------------
-        // Raylib rendering
+        // Render
         // -----------------------------
-        public void Render(Camera3D camera, Color baseColor)
+        public void Render(Camera3D camera)
         {
-            // Far ring first
-            if (_lowLodRing is not null)
-                _lowLodRing.Render(camera, baseColor);
+            // Far
+            _lowLodRing?.Render(camera);
 
-            // Mid ring with exclusion around editable ring
+            // Mid
+            var exclude = new HashSet<(int cx, int cz)>();
             int excludeInner = Math.Max(0, _cfg.EditableRadius - 2);
             if (excludeInner > 0)
             {
-                var exclude = new HashSet<(int cx, int cz)>();
                 float chunkWorld = _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;
                 int ccx = (int)MathF.Floor(camera.position.X / chunkWorld);
                 int ccz = (int)MathF.Floor(camera.position.Z / chunkWorld);
                 for (int dz = -_cfg.ReadOnlyRadius; dz <= _cfg.ReadOnlyRadius; dz++)
+                for (int dx = -_cfg.ReadOnlyRadius; dx <= _cfg.ReadOnlyRadius; dx++)
                 {
-                    for (int dx = -_cfg.ReadOnlyRadius; dx <= _cfg.ReadOnlyRadius; dx++)
-                    {
-                        int ring = Math.Max(Math.Abs(dx), Math.Abs(dz));
-                        if (ring <= excludeInner)
-                            exclude.Add((ccx + dx, ccz + dz));
-                    }
+                    int ring = Math.Max(Math.Abs(dx), Math.Abs(dz));
+                    if (ring <= excludeInner) exclude.Add((ccx + dx, ccz + dz));
                 }
-                _readOnlyRing.RenderWithExclusions(camera, baseColor, exclude);
             }
-            else
-            {
-                _readOnlyRing.Render(camera, baseColor);
-            }
+            _readOnlyRing.RenderTiles(camera, exclude);
 
-            // Near ring last
-            _editableRing.Render(camera, baseColor);
+            // Near
+            _editableRing.Render(camera);
         }
 
-        public void RenderDebugChunkBounds(Camera3D camera)
+        // -----------------------------
+        // Interface explicit implementations
+        // -----------------------------
+        void IInfiniteTerrain.RenderWithExclusions(Veilborne.Core.GameWorlds.Terrain.Camera camera, HashSet<(int cx, int cz)> exclude)
         {
-            _readOnlyRing.RenderDebugChunkBounds(camera);
-            _lowLodRing?.RenderDebugChunkBounds(camera);
-            _editableRing.RenderDebugChunkBounds(camera);
+            _readOnlyRing.RenderTiles(camera.RaylibCamera, exclude);
         }
 
-        public void RenderWithExclusions(Veilborne.Core.GameWorlds.Terrain.Camera camera, Color color, HashSet<(int cx, int cz)> exclude)
+        void IDebugTerrain.RenderDebugChunkBounds(Veilborne.Core.GameWorlds.Terrain.Camera camera)
         {
-            _readOnlyRing.RenderWithExclusions(camera.RaylibCamera, color, exclude);
+            _lowLodRing?.RenderDebugChunkBounds(camera.RaylibCamera);
+            _readOnlyRing.RenderDebugChunkBounds(camera.RaylibCamera);
+            _editableRing.RenderDebugChunkBounds(camera.RaylibCamera);
         }
+
+        void IInfiniteTerrain.UpdateCenter(Vector3 cameraPosition) => UpdateAround(cameraPosition, 0);
+
+        void IInfiniteTerrain.Update()
+        {
+            /* no-op */
+        }
+
+        void IInfiniteTerrain.Render(Veilborne.Core.GameWorlds.Terrain.Camera camera)
+            => Render(camera.RaylibCamera);
+
+        float IInfiniteTerrain.SampleHeight(Vector3 worldPos) => SampleHeight(worldPos);
 
         // -----------------------------
         // Editable terrain API
@@ -125,52 +121,24 @@ namespace VibeGame.Terrain
         public Task DigSphereAsync(Vector3 worldCenter, float radius, float strength = 1.0f, VoxelFalloff falloff = VoxelFalloff.Cosine)
             => _editableRing.DigSphereAsync(worldCenter, radius, strength, falloff);
 
-        // PlaceSphereAsync: delegate to the editable ring
         public Task PlaceSphereAsync(Vector3 position, float radius, float strength, VoxelFalloff falloff)
-        {
-            return _editableRing.PlaceSphereAsync(position, radius, strength, falloff);
-        }
+            => _editableRing.PlaceSphereAsync(position, radius, strength, falloff);
 
-        // RenderDebugChunkBounds: call debug render on all rings
-        public void RenderDebugChunkBounds(Veilborne.Core.GameWorlds.Terrain.Camera camera)
-        {
-            _lowLodRing?.RenderDebugChunkBounds(camera.RaylibCamera);
-            _readOnlyRing.RenderDebugChunkBounds(camera.RaylibCamera);
-            _editableRing.RenderDebugChunkBounds(camera.RaylibCamera);
-        }
-
-        // Provide debug information about current chunk/biome
         public TerrainDebugInfo GetDebugInfo(Vector3 worldPos)
         {
             float chunkWorld = ChunkSize * TileSize;
             int cx = (int)MathF.Floor(worldPos.X / chunkWorld);
             int cz = (int)MathF.Floor(worldPos.Z / chunkWorld);
-
-            // Local coordinates within chunk in tile units
-            float modX = worldPos.X - MathF.Floor(worldPos.X / chunkWorld) * chunkWorld;
-            float modZ = worldPos.Z - MathF.Floor(worldPos.Z / chunkWorld) * chunkWorld;
+            float modX = worldPos.X - cx * chunkWorld;
+            float modZ = worldPos.Z - cz * chunkWorld;
             int localX = (int)MathF.Floor(modX / TileSize);
             int localZ = (int)MathF.Floor(modZ / TileSize);
-
-            var biome = GetBiomeAt(worldPos.X, worldPos.Z);
+            var adapter = new ReadOnlyTerrainAdapter(_readOnlyRing);
+            var biome = _biomeProvider.GetBiomeAt(new Vector2(worldPos.X, worldPos.Z), adapter);
             string biomeId = biome?.Data.DisplayName ?? "Unknown";
             return new TerrainDebugInfo(cx, cz, localX, localZ, ChunkSize, TileSize, biomeId, worldPos);
         }
 
         public Task PumpAsyncJobs() => _editableRing.PumpAsyncJobs();
-
-        // -----------------------------
-        // IInfiniteTerrain interface
-        // -----------------------------
-        void IInfiniteTerrain.UpdateCenter(Vector3 cameraPosition) => UpdateAround(cameraPosition, 0);
-
-        float IInfiniteTerrain.SampleHeight(Vector3 worldPos) => SampleHeight(worldPos);
-
-        void IInfiniteTerrain.Update() { /* no-op */ }
-
-        void IInfiniteTerrain.Render(Veilborne.Core.GameWorlds.Terrain.Camera camera, Color color) => Render(camera.RaylibCamera, color);
-
-        void IInfiniteTerrain.RenderWithExclusions(Veilborne.Core.GameWorlds.Terrain.Camera camera, Color color, HashSet<(int cx, int cz)> exclude)
-            => RenderWithExclusions(camera, color, exclude);
     }
 }

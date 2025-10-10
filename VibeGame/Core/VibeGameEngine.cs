@@ -63,7 +63,7 @@ namespace VibeGame.Core
 
                 // 3D world rendering
                 Raylib.BeginMode3D(_camera.RaylibCamera);
-                _terrain.Render(_camera, Raylib.GREEN);
+                _terrain.Render(_camera);
 
                 if (_showDebugChunkBounds)
                 {

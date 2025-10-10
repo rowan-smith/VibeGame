@@ -20,7 +20,8 @@ namespace VibeGame.Core
 
         public float ComputeHeight(float worldX, float worldZ)
         {
-            return _terrain.SampleHeight(worldX, worldZ);
+            // TerrainManager expects a Vector3
+            return _terrain.SampleHeight(new Vector3(worldX, 0, worldZ));
         }
 
         public float[,] GenerateHeights()
@@ -33,21 +34,29 @@ namespace VibeGame.Core
             {
                 float wx = x * TileSize;
                 float wz = z * TileSize;
-                heights[x, z] = _terrain.SampleHeight(wx, wz);
+                heights[x, z] = _terrain.SampleHeight(new Vector3(wx, 0, wz));
             }
             return heights;
         }
 
+        /// <summary>
+        /// Generate heights for a specific chunk at chunk coordinates.
+        /// </summary>
         public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
         {
-            float[,] heights = new float[chunkSize, chunkSize];
-            float chunkWorld = (chunkSize - 1) * TileSize;
+            var heights = new float[chunkSize, chunkSize];
+            float chunkWorld = chunkSize * TileSize;
+
             float originX = chunkX * chunkWorld;
             float originZ = chunkZ * chunkWorld;
 
             for (int z = 0; z < chunkSize; z++)
             for (int x = 0; x < chunkSize; x++)
-                heights[x, z] = _terrain.SampleHeight(originX + x * TileSize, originZ + z * TileSize);
+            {
+                float worldX = originX + x * TileSize;
+                float worldZ = originZ + z * TileSize;
+                heights[x, z] = ComputeHeight(worldX, worldZ);
+            }
 
             return heights;
         }

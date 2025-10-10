@@ -1,4 +1,5 @@
 using System.Numerics;
+using Serilog;
 using VibeGame.Terrain;
 
 namespace VibeGame.Biomes
@@ -10,11 +11,15 @@ namespace VibeGame.Biomes
     {
         private readonly List<IBiome> _biomes;
         private readonly int _seed;
+        
+        private readonly ILogger _logger = Log.ForContext<SimpleBiomeProvider>();
 
         public SimpleBiomeProvider(IEnumerable<IBiome> biomes, int seed = 1337)
         {
             _biomes = new List<IBiome>(biomes);
             _seed = seed;
+
+            _logger.Debug("Registered {BiomeCount} biomes", _biomes.Count);
         }
 
         public IBiome GetBiomeAt(Vector2 worldPos, ITerrainGenerator terrain)

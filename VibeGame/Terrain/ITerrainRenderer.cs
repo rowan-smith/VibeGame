@@ -8,9 +8,12 @@ namespace VibeGame.Terrain
         void Render(float[,] heights, float tileSize, Camera3D camera, Color baseColor);
 
         // Render a heightmap positioned with its (0,0) corner at originWorld (bottom-left), no centering
-        void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, Camera3D camera, Color baseColor);
+        void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, Camera3D camera);
 
         // Apply the biome-specific surface texture set prior to rendering
         void ApplyBiomeTextures(VibeGame.Biomes.BiomeData biome);
+
+        void SetColorTint(Color color);
+
     }
 }

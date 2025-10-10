@@ -13,8 +13,8 @@ namespace Veilborne.Core.Interfaces
 
         void Update();
 
-        void Render(Camera camera, Color color);
+        void Render(Camera camera);
 
-        void RenderWithExclusions(Camera camera, Color color, HashSet<(int cx, int cz)> exclude);
+        void RenderWithExclusions(Camera camera, HashSet<(int cx, int cz)> exclude);
     }
 }
