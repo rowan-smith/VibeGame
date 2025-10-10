@@ -20,6 +20,8 @@ namespace VibeGame.Terrain
         public string? Normal { get; set; }
         // Common packed map (Ambient Occlusion, Roughness, Metallic)
         public string? ARM { get; set; }
+        // Separate roughness map (fallback when ARM not provided)
+        public string? Rough { get; set; }
     }
 
     public sealed class LodOptions
@@ -34,6 +36,9 @@ namespace VibeGame.Terrain
     {
         TerrainTextureDef? Get(string id);
         string? GetResolvedAlbedoPath(string id);
+        string? GetResolvedNormalPath(string id);
+        string? GetResolvedArmPath(string id);
+        string? GetResolvedRoughPath(string id);
         float GetTileSizeOrDefault(string id, float fallback = 6f);
         IEnumerable<TerrainTextureDef> GetAll();
     }
@@ -111,6 +116,27 @@ namespace VibeGame.Terrain
             }
 
             return NormalizeToAssets(rel!);
+        }
+
+        public string? GetResolvedNormalPath(string id)
+        {
+            var d = Get(id);
+            var rel = d?.Textures?.Normal;
+            return string.IsNullOrWhiteSpace(rel) ? null : NormalizeToAssets(rel!);
+        }
+
+        public string? GetResolvedArmPath(string id)
+        {
+            var d = Get(id);
+            var rel = d?.Textures?.ARM;
+            return string.IsNullOrWhiteSpace(rel) ? null : NormalizeToAssets(rel!);
+        }
+
+        public string? GetResolvedRoughPath(string id)
+        {
+            var d = Get(id);
+            var rel = d?.Textures?.Rough;
+            return string.IsNullOrWhiteSpace(rel) ? null : NormalizeToAssets(rel!);
         }
 
         private string NormalizeToAssets(string rel)

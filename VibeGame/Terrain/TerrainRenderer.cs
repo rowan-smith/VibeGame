@@ -1,41 +1,48 @@
 using System.Numerics;
 using Raylib_CsLo;
 using Serilog;
-using Serilog.Core;
+using VibeGame.Biomes;
 using VibeGame.Core;
 
 namespace VibeGame.Terrain
 {
-    using VibeGame.Biomes;
     // Renderer that draws a simple heightmap mesh and applies basic lighting and biome-like color layers.
     // Now supports sampling a diffuse terrain texture to color triangles.
     public class TerrainRenderer : ITerrainRenderer
     {
-
         private bool _lowAvailable;
         private bool _highAvailable;
 
         // GPU textures for proper per-pixel sampling during rendering
         private Texture _lowTex;
+
         private Texture _highTex;
+
+        // Optional supporting maps per layer
+        private Texture _lowNormalTex;
+        private Texture _highNormalTex;
+        private Texture _lowArmTex;
+        private Texture _highArmTex;
+        private Texture _lowRoughTex;
+        private Texture _highRoughTex;
 
         // World UV tiling controls how many texture repeats per world unit.
         // Smaller value = larger texels. Example 1 repeat every 2 world units => 0.5f
-        private float _lowTiling = 1f / 6f;   // mud/leaves: larger features
-        private float _highTiling = 1f / 8f;  // rocks: a bit larger to avoid noise
-        private readonly float _textureBlend = 0.62f;  // how strongly textures influence final color
+        private float _lowTiling = 1f / 6f; // mud/leaves: larger features
+        private float _highTiling = 1f / 8f; // rocks: a bit larger to avoid noise
+        private readonly float _textureBlend = 0.62f; // how strongly textures influence final color
         private readonly float _biomeTintStrength = 0.22f; // 0=no tint, 1=full biome color over texture
 
         private bool _texturesInitialized;
-        
+
         private readonly ILogger logger = Log.ForContext<TerrainRenderer>();
         private readonly ITextureManager _textureManager;
         private readonly ITerrainTextureRegistry _terrainTextures;
         private string? _lastBiomeIdApplied;
-        private Dictionary<string, VibeGame.Biomes.TextureRule>? _currentRules;
+        private Dictionary<string, TextureRule>? _currentRules;
         private string? _lowTextureId;
         private string? _highTextureId;
-        
+
         public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures)
         {
             _textureManager = textureManager;
@@ -143,11 +150,14 @@ namespace VibeGame.Terrain
                             RlGl.rlSetTexture(_highTex.id);
                             RlGl.rlBegin(RlGl.RL_TRIANGLES);
                             RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a00);
-                            RlGl.rlTexCoord2f(uv00H.X, 1f - uv00H.Y); RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
+                            RlGl.rlTexCoord2f(uv00H.X, 1f - uv00H.Y);
+                            RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
                             RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a01);
-                            RlGl.rlTexCoord2f(uv01H.X, 1f - uv01H.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                            RlGl.rlTexCoord2f(uv01H.X, 1f - uv01H.Y);
+                            RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
                             RlGl.rlColor4ub((byte)(255 * diff1), (byte)(255 * diff1), (byte)(255 * diff1), a10);
-                            RlGl.rlTexCoord2f(uv10H.X, 1f - uv10H.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                            RlGl.rlTexCoord2f(uv10H.X, 1f - uv10H.Y);
+                            RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
                             RlGl.rlEnd();
                             RlGl.rlSetTexture(0);
                             Raylib.EndBlendMode();
@@ -187,11 +197,14 @@ namespace VibeGame.Terrain
                             RlGl.rlSetTexture(_highTex.id);
                             RlGl.rlBegin(RlGl.RL_TRIANGLES);
                             RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a01b);
-                            RlGl.rlTexCoord2f(uv01H2.X, 1f - uv01H2.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                            RlGl.rlTexCoord2f(uv01H2.X, 1f - uv01H2.Y);
+                            RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
                             RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a11b);
-                            RlGl.rlTexCoord2f(uv11H.X, 1f - uv11H.Y); RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
+                            RlGl.rlTexCoord2f(uv11H.X, 1f - uv11H.Y);
+                            RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
                             RlGl.rlColor4ub((byte)(255 * diff2), (byte)(255 * diff2), (byte)(255 * diff2), a10b);
-                            RlGl.rlTexCoord2f(uv10H2.X, 1f - uv10H2.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                            RlGl.rlTexCoord2f(uv10H2.X, 1f - uv10H2.Y);
+                            RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
                             RlGl.rlEnd();
                             RlGl.rlSetTexture(0);
                             Raylib.EndBlendMode();
@@ -243,7 +256,7 @@ namespace VibeGame.Terrain
             float chunkX1 = originWorld.X + (sizeX - 1) * tileSize;
             float clampedCamX = Math.Clamp(camPos.X, chunkX0, chunkX1);
 
-            for (int z = zStart; z <= zEnd; )
+            for (int z = zStart; z <= zEnd;)
             {
                 // Determine a row step based on distance from camera to this row
                 float wz0Row = originWorld.Y + z * tileSize;
@@ -256,7 +269,7 @@ namespace VibeGame.Terrain
                 int rowStep = d2Row > far2 ? 4 : (d2Row > mid2 ? 2 : 1);
                 if (rowStep < 1) rowStep = 1;
 
-                for (int x = xStart; x <= xEnd; )
+                for (int x = xStart; x <= xEnd;)
                 {
                     int step = rowStep;
                     int x2i = Math.Min(x + step, sizeX - 1);
@@ -303,9 +316,12 @@ namespace VibeGame.Terrain
                     Vector2 uv10 = new Vector2(wx1 * tiling, wz0 * tiling);
 
                     RlGl.rlColor4ub(r1, g1, b1, 255);
-                    RlGl.rlTexCoord2f(uv00.X, 1f - uv00.Y); RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
-                    RlGl.rlTexCoord2f(uv01.X, 1f - uv01.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
-                    RlGl.rlTexCoord2f(uv10.X, 1f - uv10.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                    RlGl.rlTexCoord2f(uv00.X, 1f - uv00.Y);
+                    RlGl.rlVertex3f(p00.X, p00.Y, p00.Z);
+                    RlGl.rlTexCoord2f(uv01.X, 1f - uv01.Y);
+                    RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                    RlGl.rlTexCoord2f(uv10.X, 1f - uv10.Y);
+                    RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
 
                     // Triangle 2
                     Vector3 n2 = Vector3.Normalize(Vector3.Cross(p11 - p01, p10 - p01));
@@ -318,9 +334,12 @@ namespace VibeGame.Terrain
                     Vector2 uv11 = new Vector2(wx1 * tiling, wz1 * tiling);
 
                     RlGl.rlColor4ub(r2, g2, b2, 255);
-                    RlGl.rlTexCoord2f(uv01.X, 1f - uv01.Y); RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
-                    RlGl.rlTexCoord2f(uv11.X, 1f - uv11.Y); RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
-                    RlGl.rlTexCoord2f(uv10.X, 1f - uv10.Y); RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
+                    RlGl.rlTexCoord2f(uv01.X, 1f - uv01.Y);
+                    RlGl.rlVertex3f(p01.X, p01.Y, p01.Z);
+                    RlGl.rlTexCoord2f(uv11.X, 1f - uv11.Y);
+                    RlGl.rlVertex3f(p11.X, p11.Y, p11.Z);
+                    RlGl.rlTexCoord2f(uv10.X, 1f - uv10.Y);
+                    RlGl.rlVertex3f(p10.X, p10.Y, p10.Z);
 
                     x = Math.Max(x + 1, x2i);
                 }
@@ -344,8 +363,15 @@ namespace VibeGame.Terrain
         }
 
 
-        private static void DrawTexturedTriangle(Texture tex, Vector3 a, Vector3 b, Vector3 c,
-            Vector2 uva, Vector2 uvb, Vector2 uvc, Color color)
+        private static void DrawTexturedTriangle(
+            Texture tex,
+            Vector3 a,
+            Vector3 b,
+            Vector3 c,
+            Vector2 uva,
+            Vector2 uvb,
+            Vector2 uvc,
+            Color color)
         {
             if (tex.id == 0) return;
             float vA = 1f - uva.Y;
@@ -356,9 +382,12 @@ namespace VibeGame.Terrain
             RlGl.rlDisableBackfaceCulling();
             RlGl.rlBegin(RlGl.RL_TRIANGLES);
             RlGl.rlColor4ub(color.r, color.g, color.b, color.a);
-            RlGl.rlTexCoord2f(uva.X, vA); RlGl.rlVertex3f(a.X, a.Y, a.Z);
-            RlGl.rlTexCoord2f(uvb.X, vB); RlGl.rlVertex3f(b.X, b.Y, b.Z);
-            RlGl.rlTexCoord2f(uvc.X, vC); RlGl.rlVertex3f(c.X, c.Y, c.Z);
+            RlGl.rlTexCoord2f(uva.X, vA);
+            RlGl.rlVertex3f(a.X, a.Y, a.Z);
+            RlGl.rlTexCoord2f(uvb.X, vB);
+            RlGl.rlVertex3f(b.X, b.Y, b.Z);
+            RlGl.rlTexCoord2f(uvc.X, vC);
+            RlGl.rlVertex3f(c.X, c.Y, c.Z);
             RlGl.rlEnd();
             RlGl.rlEnableBackfaceCulling();
             RlGl.rlSetTexture(0);
@@ -380,10 +409,6 @@ namespace VibeGame.Terrain
             ht = Math.Clamp(ht + rockBoost * 0.5f, 0f, 1f);
             return ht;
         }
-
-
-
-
 
 
         // Gate the high/overlay texture based on biome TextureRules for the high texture id
@@ -459,6 +484,28 @@ namespace VibeGame.Terrain
                         lowOk = true;
                         lt = 1f / MathF.Max(0.001f, _terrainTextures.GetTileSizeOrDefault(id0, 6f));
                     }
+
+                    // Attempt to load supporting maps for low layer
+                    _lowNormalTex = default;
+                    _lowArmTex = default;
+                    _lowRoughTex = default;
+                    var n0 = _terrainTextures.GetResolvedNormalPath(id0);
+                    if (!string.IsNullOrWhiteSpace(n0))
+                    {
+                        _textureManager.TryGetOrLoadByPath(n0!, out _lowNormalTex);
+                    }
+
+                    var a0 = _terrainTextures.GetResolvedArmPath(id0);
+                    if (!string.IsNullOrWhiteSpace(a0))
+                    {
+                        _textureManager.TryGetOrLoadByPath(a0!, out _lowArmTex);
+                    }
+
+                    var r0 = _terrainTextures.GetResolvedRoughPath(id0);
+                    if (!string.IsNullOrWhiteSpace(r0))
+                    {
+                        _textureManager.TryGetOrLoadByPath(r0!, out _lowRoughTex);
+                    }
                 }
                 if (layers.Count > 1)
                 {
@@ -469,6 +516,28 @@ namespace VibeGame.Terrain
                     {
                         highOk = true;
                         ht = 1f / MathF.Max(0.001f, _terrainTextures.GetTileSizeOrDefault(id1, 8f));
+                    }
+
+                    // Attempt to load supporting maps for high layer
+                    _highNormalTex = default;
+                    _highArmTex = default;
+                    _highRoughTex = default;
+                    var n1 = _terrainTextures.GetResolvedNormalPath(id1);
+                    if (!string.IsNullOrWhiteSpace(n1))
+                    {
+                        _textureManager.TryGetOrLoadByPath(n1!, out _highNormalTex);
+                    }
+
+                    var a1 = _terrainTextures.GetResolvedArmPath(id1);
+                    if (!string.IsNullOrWhiteSpace(a1))
+                    {
+                        _textureManager.TryGetOrLoadByPath(a1!, out _highArmTex);
+                    }
+
+                    var r1 = _terrainTextures.GetResolvedRoughPath(id1);
+                    if (!string.IsNullOrWhiteSpace(r1))
+                    {
+                        _textureManager.TryGetOrLoadByPath(r1!, out _highRoughTex);
                     }
                 }
 
@@ -490,7 +559,7 @@ namespace VibeGame.Terrain
                 }
 
                 // Cache rules map for gating of high layer
-                _currentRules = biome.TextureRules != null && biome.TextureRules.Count > 0 ? new Dictionary<string, VibeGame.Biomes.TextureRule>(biome.TextureRules, StringComparer.OrdinalIgnoreCase) : null;
+                _currentRules = biome.TextureRules != null && biome.TextureRules.Count > 0 ? new Dictionary<string, TextureRule>(biome.TextureRules, StringComparer.OrdinalIgnoreCase) : null;
 
                 _lastBiomeIdApplied = biome.Id;
                 logger.Verbose("[Terrain] Applied biome textures for {BiomeId}: lowOk={Low} highOk={High}", biome.Id, lowOk, highOk);
@@ -500,6 +569,5 @@ namespace VibeGame.Terrain
                 logger.Error(ex, "Failed to apply biome textures for {BiomeId}", biome.Id);
             }
         }
-
     }
 }
