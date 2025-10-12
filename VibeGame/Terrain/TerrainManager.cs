@@ -142,11 +142,77 @@ namespace VibeGame.Terrain
                 float maxX = minX + _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;
                 float maxZ = minZ + _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;
                 int srcVer = _editableRing.GetMaxVersionForBounds(minX, minZ, maxX, maxZ);
-                if (!chunk.IsMeshGenerated || chunk.BuiltFromVersion != srcVer)
+                if (!chunk.IsMeshGenerated)
                 {
                     _renderer.BuildChunks(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
                     chunk.IsMeshGenerated = true;
                     chunk.BuiltFromVersion = srcVer;
+                }
+                else if (chunk.BuiltFromVersion != srcVer)
+                {
+                    // Patch only dirty regions overlapping this RO chunk
+                    var eChunks = _editableRing.GetLoadedChunks();
+                    float eChunkWorld = _editableRing.ChunkSize * _editableRing.TileSize;
+                    int minEcx = (int)MathF.Floor(minX / eChunkWorld);
+                    int maxEcx = (int)MathF.Floor((maxX - 1e-3f) / eChunkWorld);
+                    int minEcz = (int)MathF.Floor(minZ / eChunkWorld);
+                    int maxEcz = (int)MathF.Floor((maxZ - 1e-3f) / eChunkWorld);
+
+                    bool anyPatched = false;
+                    int aggX0 = int.MaxValue, aggZ0 = int.MaxValue, aggX1 = int.MinValue, aggZ1 = int.MinValue;
+
+                    for (int cz = minEcz; cz <= maxEcz; cz++)
+                    for (int cx = minEcx; cx <= maxEcx; cx++)
+                    {
+                        if (!eChunks.TryGetValue((cx, cz), out var ech) || !ech.Dirty) continue;
+                        if (!ech.TryGetDirtyRect(out int dx0, out int dz0, out int dx1, out int dz1)) continue;
+
+                        // Convert editable local rect to world
+                        float rwMinX = ech.Origin.X + dx0 * _editableRing.TileSize;
+                        float rwMaxX = ech.Origin.X + dx1 * _editableRing.TileSize;
+                        float rwMinZ = ech.Origin.Y + dz0 * _editableRing.TileSize;
+                        float rwMaxZ = ech.Origin.Y + dz1 * _editableRing.TileSize;
+
+                        // Intersect with this RO chunk bounds in world
+                        float iwMinX = MathF.Max(rwMinX, minX);
+                        float iwMaxX = MathF.Min(rwMaxX, maxX);
+                        float iwMinZ = MathF.Max(rwMinZ, minZ);
+                        float iwMaxZ = MathF.Min(rwMaxZ, maxZ);
+                        if (iwMinX > iwMaxX || iwMinZ > iwMaxZ) continue;
+
+                        // Convert world intersection to RO local grid indices
+                        int rx0 = Math.Clamp((int)MathF.Floor((iwMinX - minX) / _readOnlyRing.TileSize), 0, _readOnlyRing.ChunkSize);
+                        int rz0 = Math.Clamp((int)MathF.Floor((iwMinZ - minZ) / _readOnlyRing.TileSize), 0, _readOnlyRing.ChunkSize);
+                        int rx1 = Math.Clamp((int)MathF.Ceiling((iwMaxX - minX) / _readOnlyRing.TileSize), 0, _readOnlyRing.ChunkSize);
+                        int rz1 = Math.Clamp((int)MathF.Ceiling((iwMaxZ - minZ) / _readOnlyRing.TileSize), 0, _readOnlyRing.ChunkSize);
+
+                        for (int z = rz0; z <= rz1; z++)
+                        for (int x = rx0; x <= rx1; x++)
+                        {
+                            float wx = minX + x * _readOnlyRing.TileSize;
+                            float wz = minZ + z * _readOnlyRing.TileSize;
+                            chunk.Heights[x, z] = _editableRing.SampleHeight(wx, wz);
+                        }
+
+                        anyPatched = true;
+                        aggX0 = Math.Min(aggX0, rx0);
+                        aggZ0 = Math.Min(aggZ0, rz0);
+                        aggX1 = Math.Max(aggX1, rx1);
+                        aggZ1 = Math.Max(aggZ1, rz1);
+                    }
+
+                    if (anyPatched)
+                    {
+                        _renderer.PatchRegion(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin, aggX0, aggZ0, aggX1, aggZ1);
+                        chunk.BuiltFromVersion = srcVer;
+                    }
+                    else
+                    {
+                        // Fallback to full rebuild if we couldn't compute any patch rects
+                        _renderer.BuildChunks(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
+                        chunk.IsMeshGenerated = true;
+                        chunk.BuiltFromVersion = srcVer;
+                    }
                 }
             }
 
@@ -171,11 +237,77 @@ namespace VibeGame.Terrain
                     float maxX = minX + _lowLodRing.ChunkSize * _lowLodRing.TileSize;
                     float maxZ = minZ + _lowLodRing.ChunkSize * _lowLodRing.TileSize;
                     int srcVer = _editableRing.GetMaxVersionForBounds(minX, minZ, maxX, maxZ);
-                    if (!chunk.IsMeshGenerated || chunk.BuiltFromVersion != srcVer)
+                    if (!chunk.IsMeshGenerated)
                     {
                         _renderer.BuildChunks(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
                         chunk.IsMeshGenerated = true;
                         chunk.BuiltFromVersion = srcVer;
+                    }
+                    else if (chunk.BuiltFromVersion != srcVer)
+                    {
+                        // Patch only dirty regions overlapping this LOD chunk
+                        var eChunks = _editableRing.GetLoadedChunks();
+                        float eChunkWorld = _editableRing.ChunkSize * _editableRing.TileSize;
+                        int minEcx = (int)MathF.Floor(minX / eChunkWorld);
+                        int maxEcx = (int)MathF.Floor((maxX - 1e-3f) / eChunkWorld);
+                        int minEcz = (int)MathF.Floor(minZ / eChunkWorld);
+                        int maxEcz = (int)MathF.Floor((maxZ - 1e-3f) / eChunkWorld);
+
+                        bool anyPatched = false;
+                        int aggX0 = int.MaxValue, aggZ0 = int.MaxValue, aggX1 = int.MinValue, aggZ1 = int.MinValue;
+
+                        for (int cz = minEcz; cz <= maxEcz; cz++)
+                        for (int cx = minEcx; cx <= maxEcx; cx++)
+                        {
+                            if (!eChunks.TryGetValue((cx, cz), out var ech) || !ech.Dirty) continue;
+                            if (!ech.TryGetDirtyRect(out int dx0, out int dz0, out int dx1, out int dz1)) continue;
+
+                            // Convert editable local rect to world
+                            float rwMinX = ech.Origin.X + dx0 * _editableRing.TileSize;
+                            float rwMaxX = ech.Origin.X + dx1 * _editableRing.TileSize;
+                            float rwMinZ = ech.Origin.Y + dz0 * _editableRing.TileSize;
+                            float rwMaxZ = ech.Origin.Y + dz1 * _editableRing.TileSize;
+
+                            // Intersect with this LOD chunk bounds in world
+                            float iwMinX = MathF.Max(rwMinX, minX);
+                            float iwMaxX = MathF.Min(rwMaxX, maxX);
+                            float iwMinZ = MathF.Max(rwMinZ, minZ);
+                            float iwMaxZ = MathF.Min(rwMaxZ, maxZ);
+                            if (iwMinX > iwMaxX || iwMinZ > iwMaxZ) continue;
+
+                            // Convert world intersection to LOD local grid indices
+                            int rx0 = Math.Clamp((int)MathF.Floor((iwMinX - minX) / _lowLodRing.TileSize), 0, _lowLodRing.ChunkSize);
+                            int rz0 = Math.Clamp((int)MathF.Floor((iwMinZ - minZ) / _lowLodRing.TileSize), 0, _lowLodRing.ChunkSize);
+                            int rx1 = Math.Clamp((int)MathF.Ceiling((iwMaxX - minX) / _lowLodRing.TileSize), 0, _lowLodRing.ChunkSize);
+                            int rz1 = Math.Clamp((int)MathF.Ceiling((iwMaxZ - minZ) / _lowLodRing.TileSize), 0, _lowLodRing.ChunkSize);
+
+                            for (int z = rz0; z <= rz1; z++)
+                            for (int x = rx0; x <= rx1; x++)
+                            {
+                                float wx = minX + x * _lowLodRing.TileSize;
+                                float wz = minZ + z * _lowLodRing.TileSize;
+                                chunk.Heights[x, z] = _editableRing.SampleHeight(wx, wz);
+                            }
+
+                            anyPatched = true;
+                            aggX0 = Math.Min(aggX0, rx0);
+                            aggZ0 = Math.Min(aggZ0, rz0);
+                            aggX1 = Math.Max(aggX1, rx1);
+                            aggZ1 = Math.Max(aggZ1, rz1);
+                        }
+
+                        if (anyPatched)
+                        {
+                            _renderer.PatchRegion(chunk.Heights, _lowLodRing.TileSize, chunk.Origin, aggX0, aggZ0, aggX1, aggZ1);
+                            chunk.BuiltFromVersion = srcVer;
+                        }
+                        else
+                        {
+                            // Fallback to full rebuild
+                            _renderer.BuildChunks(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
+                            chunk.IsMeshGenerated = true;
+                            chunk.BuiltFromVersion = srcVer;
+                        }
                     }
                 }
             }

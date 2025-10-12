@@ -196,8 +196,16 @@ namespace VibeGame.Terrain
                         chunk.Heights[ix, iz] -= delta; // dig lowers terrain
                     }
 
-                    chunk.Dirty = true;
+                    // Mark dirty subregion (+1 padding for normal continuity)
+                    int pd = 1;
+                    chunk.MarkDirtyRect(
+                        Math.Clamp(x0 - pd, 0, ChunkSize),
+                        Math.Clamp(z0 - pd, 0, ChunkSize),
+                        Math.Clamp(x1 + pd, 0, ChunkSize),
+                        Math.Clamp(z1 + pd, 0, ChunkSize));
+
                     chunk.IsMeshGenerated = false;
+                    chunk.Dirty = true;
                     chunk.Version++;
                 }
             }
@@ -244,8 +252,16 @@ namespace VibeGame.Terrain
                         chunk.Heights[ix, iz] += delta; // place raises terrain
                     }
 
-                    chunk.Dirty = true;
+                    // Mark dirty subregion (+1 padding for normal continuity)
+                    int pd = 1;
+                    chunk.MarkDirtyRect(
+                        Math.Clamp(x0 - pd, 0, ChunkSize),
+                        Math.Clamp(z0 - pd, 0, ChunkSize),
+                        Math.Clamp(x1 + pd, 0, ChunkSize),
+                        Math.Clamp(z1 + pd, 0, ChunkSize));
+
                     chunk.IsMeshGenerated = false;
+                    chunk.Dirty = true;
                     chunk.Version++;
                 }
             }

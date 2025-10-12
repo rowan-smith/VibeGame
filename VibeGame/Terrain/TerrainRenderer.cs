@@ -134,6 +134,57 @@ namespace VibeGame.Terrain
             }
         }
 
+        public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1)
+        {
+            if (!_chunksByOrigin.TryGetValue(originWorld, out var list) || list == null || list.Count == 0)
+                return;
+
+            var chunk = list[0];
+            int w = heights.GetLength(0);
+            int h = heights.GetLength(1);
+
+            // Clamp bounds to heightmap extents and expand by 1 to keep normals consistent at the border
+            int sx0 = Math.Clamp(Math.Min(x0, x1) - 1, 0, w - 1);
+            int sz0 = Math.Clamp(Math.Min(z0, z1) - 1, 0, h - 1);
+            int sx1 = Math.Clamp(Math.Max(x0, x1) + 1, 0, w - 1);
+            int sz1 = Math.Clamp(Math.Max(z0, z1) + 1, 0, h - 1);
+
+            for (int z = sz0; z <= sz1; z++)
+            for (int x = sx0; x <= sx1; x++)
+            {
+                int idx = x + z * w;
+                float wx = originWorld.X + x * tileSize;
+                float wz = originWorld.Y + z * tileSize;
+                float y = heights[x, z];
+
+                chunk.Vertices[idx] = new Vector3(wx, y, wz);
+                chunk.Normals[idx] = ComputeNormal(heights, x, z, w, h, tileSize);
+                // UVs/Colors unchanged
+            }
+
+            // Fallback: re-upload the full mesh. Some bindings might not expose partial buffer updates.
+            unsafe
+            {
+                fixed (Vector3* vPtr = chunk.Vertices)
+                fixed (Vector2* uvPtr = chunk.UVs)
+                fixed (Vector3* nPtr = chunk.Normals)
+                fixed (Color* cPtr = chunk.Colors)
+                fixed (ushort* iPtr = chunk.Indices)
+                {
+                    var mesh = chunk.Mesh;
+                    mesh.vertices = (float*)vPtr;
+                    mesh.texcoords = (float*)uvPtr;
+                    mesh.normals = (float*)nPtr;
+                    mesh.colors = (byte*)cPtr;
+                    mesh.indices = (ushort*)iPtr;
+                    mesh.vertexCount = chunk.Vertices.Length;
+                    mesh.triangleCount = chunk.Indices.Length / 3;
+                    Raylib.UploadMesh(&mesh, false);
+                    chunk.Mesh = mesh;
+                }
+            }
+        }
+
         public void ApplyBiomeTextures(BiomeData biome)
         {
             if (biome == null) return;
