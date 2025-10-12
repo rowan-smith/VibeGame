@@ -19,6 +19,11 @@ namespace VibeGame.Core
         private int _selectedHotbarSlot = 0;
         private Veilborne.Core.GameWorlds.Terrain.Camera _camera;
 
+        // Window state for borderless toggle
+        private bool _isBorderless = false;
+        private int _windowedWidth = 1280;
+        private int _windowedHeight = 720;
+
         public VibeGameEngine(ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain terrain, IItemRegistry items)
         {
             _cameraController = cameraController;
@@ -94,6 +99,52 @@ namespace VibeGame.Core
             if (Raylib.IsKeyPressed(KeyboardKey.KEY_F2))
             {
                 _showDebugChunkBounds = !_showDebugChunkBounds;
+            }
+
+            // Toggle borderless fullscreen on F12 key press
+            if (Raylib.IsKeyPressed(KeyboardKey.KEY_F12))
+            {
+                if (!_isBorderless)
+                {
+                    // Save current windowed size
+                    _windowedWidth = Raylib.GetScreenWidth();
+                    _windowedHeight = Raylib.GetScreenHeight();
+
+                    // Ensure we're not in exclusive fullscreen
+                    Raylib.ClearWindowState(ConfigFlags.FLAG_FULLSCREEN_MODE);
+
+                    // Set window to borderless and resize to current monitor
+                    Raylib.SetWindowState(ConfigFlags.FLAG_WINDOW_UNDECORATED);
+
+                    int monitor = Raylib.GetCurrentMonitor();
+                    int monWidth = Raylib.GetMonitorWidth(monitor);
+                    int monHeight = Raylib.GetMonitorHeight(monitor);
+                    Vector2 monPos = Raylib.GetMonitorPosition(monitor);
+
+                    Raylib.SetWindowSize(monWidth, monHeight);
+                    Raylib.SetWindowPosition((int)monPos.X, (int)monPos.Y);
+
+                    _isBorderless = true;
+                }
+                else
+                {
+                    // Restore window decorations and size
+                    Raylib.ClearWindowState(ConfigFlags.FLAG_WINDOW_UNDECORATED);
+
+                    Raylib.SetWindowSize(_windowedWidth, _windowedHeight);
+
+                    // Center window on current monitor
+                    int monitor = Raylib.GetCurrentMonitor();
+                    int monWidth = Raylib.GetMonitorWidth(monitor);
+                    int monHeight = Raylib.GetMonitorHeight(monitor);
+                    Vector2 monPos = Raylib.GetMonitorPosition(monitor);
+
+                    int x = (int)monPos.X + (monWidth - _windowedWidth) / 2;
+                    int y = (int)monPos.Y + (monHeight - _windowedHeight) / 2;
+                    Raylib.SetWindowPosition(x, y);
+
+                    _isBorderless = false;
+                }
             }
 
             // Mouse wheel hotbar scroll (only when not paused)
