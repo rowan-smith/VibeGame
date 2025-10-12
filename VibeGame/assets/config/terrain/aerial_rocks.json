@@ -4,7 +4,8 @@
   "Textures": {
     "Albedo": "textures/terrain/aerial_rocks/aerial_rocks_04_diff_4k.png",
     "Normal": "textures/terrain/aerial_rocks/aerial_rocks_04_nor_gl_4k.png",
-    "Rough": "textures/terrain/aerial_rocks/aerial_rocks_04_rough_4k.png"
+    "Rough": "textures/terrain/aerial_rocks/aerial_rocks_04_rough_4k.png",
+    "Displacement": "textures/terrain/aerial_rocks/aerial_rocks_04_disp_4k.png"
   },
   "TileSize": 8.0
 }

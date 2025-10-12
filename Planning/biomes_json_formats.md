@@ -7,10 +7,10 @@ Case A:
     "Normal": "textures/terrain/foo/foo_nor_gl.png",
     // Packed AO/Rough/Metal texture
     // R = AO, G = Roughness, B = Metalness
-    "ARM": "textures/terrain/foo/foo_arm.png"
+    "ARM": "textures/terrain/foo/foo_arm.png",
     // Optional height/displacement map for parallax or tessellation
     "Displacement": "textures/terrain/foo/foo_disp.png"
-}
+},
 ```
 
 Case B:
@@ -24,10 +24,10 @@ Case B:
 "AO": "textures/terrain/foo/foo_ao.png",
 "Rough": "textures/terrain/foo/foo_rough.png",
 // Optional if your material is fully non-metallic
-"Metal": "textures/terrain/foo/foo_metal.png"
+"Metal": "textures/terrain/foo/foo_metal.png",
 // Optional height/displacement map for parallax or tessellation
 "Displacement": "textures/terrain/foo/foo_disp.png"
-}
+},
 ```
 
 Case C:
@@ -41,8 +41,8 @@ Case C:
 // R = AO, G = Roughness
 "AOR": "textures/terrain/foo/foo_ao.png",
 // Metal (Optional)
-"Metal": "textures/terrain/foo/foo_metal.png"
+"Metal": "textures/terrain/foo/foo_metal.png",
 // Optional height/displacement map for parallax or tessellation
 "Displacement": "textures/terrain/foo/foo_disp.png"
-}
+},
 ```

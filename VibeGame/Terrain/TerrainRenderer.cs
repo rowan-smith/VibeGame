@@ -323,16 +323,76 @@ namespace VibeGame.Terrain
                 var layers = biome.SurfaceTextures ?? new List<SurfaceTextureLayer>();
                 if (layers.Count > 0)
                 {
-                    var path = _terrainTextures.GetResolvedAlbedoPath(layers[0].TextureId);
-                    if (!string.IsNullOrWhiteSpace(path) && _textureManager.TryGetOrLoadByPath(path!, out var tex))
+                    var texId = layers[0].TextureId;
+
+                    var albedo = _terrainTextures.GetResolvedAlbedoPath(texId);
+                    var normal = _terrainTextures.GetResolvedNormalPath(texId);
+                    var arm = _terrainTextures.GetResolvedArmPath(texId);
+                    var aor = _terrainTextures.GetResolvedAorPath(texId);
+                    var ao = _terrainTextures.GetResolvedAoPath(texId);
+                    var rough = _terrainTextures.GetResolvedRoughPath(texId);
+                    var metal = _terrainTextures.GetResolvedMetalPath(texId);
+                    var disp = _terrainTextures.GetResolvedDisplacementPath(texId);
+
+                    unsafe
                     {
-                        unsafe
+                        var m = Raylib.LoadMaterialDefault();
+                        Material* matPtr = &m;
+
+                        // Always bind albedo if available
+                        if (!string.IsNullOrWhiteSpace(albedo) && _textureManager.TryGetOrLoadByPath(albedo!, out var tAlb))
                         {
-                            var m = Raylib.LoadMaterialDefault();
-                            Material* matPtr = &m;
-                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ALBEDO, tex);
-                            mat = m;
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ALBEDO, tAlb);
                         }
+
+                        // Optional normal map
+                        if (!string.IsNullOrWhiteSpace(normal) && _textureManager.TryGetOrLoadByPath(normal!, out var tNor))
+                        {
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_NORMAL, tNor);
+                        }
+
+                        // AO/Rough/Metal combinations
+                        if (!string.IsNullOrWhiteSpace(arm) && _textureManager.TryGetOrLoadByPath(arm!, out var tArm))
+                        {
+                            // Bind packed ARM texture to all three PBR slots; shader may select channels as needed
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tArm); // R = AO
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tArm); // G = Roughness
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tArm); // B = Metalness
+                        }
+                        else if (!string.IsNullOrWhiteSpace(aor) && _textureManager.TryGetOrLoadByPath(aor!, out var tAor))
+                        {
+                            // Bind AO/Rough packed to respective slots; metal may be separate or absent
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tAor); // R = AO
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tAor); // G = Roughness
+
+                            if (!string.IsNullOrWhiteSpace(metal) && _textureManager.TryGetOrLoadByPath(metal!, out var tMet))
+                            {
+                                Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tMet);
+                            }
+                        }
+                        else
+                        {
+                            if (!string.IsNullOrWhiteSpace(ao) && _textureManager.TryGetOrLoadByPath(ao!, out var tAo))
+                            {
+                                Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tAo);
+                            }
+                            if (!string.IsNullOrWhiteSpace(rough) && _textureManager.TryGetOrLoadByPath(rough!, out var tRgh))
+                            {
+                                Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tRgh);
+                            }
+                            if (!string.IsNullOrWhiteSpace(metal) && _textureManager.TryGetOrLoadByPath(metal!, out var tMet2))
+                            {
+                                Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tMet2);
+                            }
+                        }
+
+                        // Optional displacement/height map
+                        if (!string.IsNullOrWhiteSpace(disp) && _textureManager.TryGetOrLoadByPath(disp!, out var tDisp))
+                        {
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_HEIGHT, tDisp);
+                        }
+
+                        mat = m;
                     }
                 }
                 _materialCache[biomeId] = mat;

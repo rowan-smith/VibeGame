@@ -13,6 +13,7 @@ namespace VibeGame.Core
         private readonly IPhysicsController _physics;
         private readonly IInfiniteTerrain _terrain;
         private readonly IItemRegistry _items;
+        private readonly ITextureManager _textureManager;
 
         private bool _showDebugOverlay = false;
         private bool _showDebugChunkBounds = false;
@@ -24,12 +25,13 @@ namespace VibeGame.Core
         private int _windowedWidth = 1280;
         private int _windowedHeight = 720;
 
-        public VibeGameEngine(ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain terrain, IItemRegistry items)
+        public VibeGameEngine(ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain terrain, IItemRegistry items, ITextureManager textureManager)
         {
             _cameraController = cameraController;
             _physics = physics;
             _terrain = terrain;
             _items = items;
+            _textureManager = textureManager;
 
             _camera = new Veilborne.Core.GameWorlds.Terrain.Camera(new Vector3(0, 5, -10), Vector3.Zero, Vector3.UnitY);
         }
@@ -41,6 +43,9 @@ namespace VibeGame.Core
 
             // Hide and lock cursor for gameplay
             Raylib.DisableCursor();
+
+            // Preload textures after GL context is available
+            await _textureManager.PreloadAsync();
 
             // Pre-warm terrain around initial camera position
             _terrain.UpdateCenter(_camera.Position);

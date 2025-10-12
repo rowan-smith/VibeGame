@@ -32,14 +32,14 @@
   },
   "SurfaceTextures": [
     {
-      "TextureId": "brown_mud_leaves",
+      "TextureId": "lichen_rock",
       "BlendMin": 0.5,
       "BlendMax": 1.0
     }
   ],
 
   "TextureRules": {
-    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+    "lichen_rock": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
   "AllowedObjects": [],
   "DominantFlora": [],
