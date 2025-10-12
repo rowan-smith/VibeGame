@@ -244,6 +244,7 @@ namespace VibeGame.Terrain
                     else
                     {
                         // Fallback to full rebuild if we couldn't compute any patch rects
+                        _renderer.MarkOriginDirty(chunk.Origin);
                         _renderer.EnqueueBuild(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
                         chunk.IsMeshGenerated = true;
                         chunk.BuiltFromVersion = srcVer;
@@ -256,6 +257,7 @@ namespace VibeGame.Terrain
                 int srcVer = chunk.Version;
                 if (!chunk.IsMeshGenerated || chunk.BuiltFromVersion != srcVer)
                 {
+                    _renderer.MarkOriginDirty(chunk.Origin);
                     _renderer.EnqueueBuild(chunk.Heights, _editableRing.TileSize, chunk.Origin);
                     chunk.IsMeshGenerated = true;
                     chunk.BuiltFromVersion = srcVer;
@@ -339,6 +341,7 @@ namespace VibeGame.Terrain
                         else
                         {
                             // Fallback to full rebuild
+                            _renderer.MarkOriginDirty(chunk.Origin);
                             _renderer.EnqueueBuild(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
                             chunk.IsMeshGenerated = true;
                             chunk.BuiltFromVersion = srcVer;

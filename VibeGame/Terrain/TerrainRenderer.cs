@@ -42,6 +42,7 @@ namespace VibeGame.Terrain
         private readonly ConcurrentQueue<MeshBuildJob> _pendingUploads = new();
         private readonly object _queueLock = new();
         private readonly HashSet<Vector2> _pendingOrigins = new();
+        private readonly HashSet<Vector2> _dirtyOrigins = new();
 
         public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider)
         {
@@ -52,11 +53,12 @@ namespace VibeGame.Terrain
 
         public void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld)
         {
-            // If we've already built and cached this origin's mesh, avoid re-uploading to the GPU
+            // If we've already built and cached this origin's mesh and it's not marked dirty, avoid re-uploading
             if (_chunksByOrigin.TryGetValue(originWorld, out var existing) && existing is { Count: > 0 })
             {
-                // Assume cached mesh is still valid for this origin; skip rebuild
-                if (!existing[0].Mesh.Equals(default(Mesh)) && existing[0].Mesh.vertexCount > 0)
+                bool isDirty;
+                lock (_queueLock) { isDirty = _dirtyOrigins.Contains(originWorld); }
+                if (!isDirty && !existing[0].Mesh.Equals(default(Mesh)) && existing[0].Mesh.vertexCount > 0)
                     return;
             }
 
@@ -130,14 +132,21 @@ namespace VibeGame.Terrain
             }
 
             _chunksByOrigin[originWorld] = new List<Chunk> { chunk };
+            lock (_queueLock)
+            {
+                _dirtyOrigins.Remove(originWorld);
+                _pendingOrigins.Remove(originWorld);
+            }
         }
 
         public void EnqueueBuild(float[,] heights, float tileSize, Vector2 originWorld)
         {
-            // Skip if already built and cached
+            // Skip if already built and cached, unless explicitly marked dirty
             if (_chunksByOrigin.TryGetValue(originWorld, out var existing) && existing is { Count: > 0 })
             {
-                if (!existing[0].Mesh.Equals(default(Mesh)) && existing[0].Mesh.vertexCount > 0)
+                bool isDirty;
+                lock (_queueLock) { isDirty = _dirtyOrigins.Contains(originWorld); }
+                if (!isDirty && !existing[0].Mesh.Equals(default(Mesh)) && existing[0].Mesh.vertexCount > 0)
                     return;
             }
 
@@ -236,6 +245,7 @@ namespace VibeGame.Terrain
                 lock (_queueLock)
                 {
                     _pendingOrigins.Remove(job.Origin);
+                    _dirtyOrigins.Remove(job.Origin);
                 }
                 processed++;
             }
@@ -254,10 +264,15 @@ namespace VibeGame.Terrain
             foreach (var chunk in list)
             {
                 Matrix4x4 transform = Matrix4x4.Identity;
-                unsafe
-                {
-                    Raylib.DrawMesh(chunk.Mesh, _activeMaterial, transform);
-                }
+                Raylib.DrawMesh(chunk.Mesh, _activeMaterial, transform);
+            }
+        }
+
+        public void MarkOriginDirty(Vector2 originWorld)
+        {
+            lock (_queueLock)
+            {
+                _dirtyOrigins.Add(originWorld);
             }
         }
 

@@ -25,6 +25,9 @@ namespace VibeGame.Terrain
         // Upload up to maxPerFrame prepared meshes to GPU; should be called from main thread each frame
         void ProcessBuildQueue(int maxPerFrame);
 
+        // Mark a cached origin as dirty so the next EnqueueBuild/BuildChunks will rebuild it
+        void MarkOriginDirty(Vector2 originWorld);
+
         // Partially update an already built chunk at originWorld by patching a sub-rectangle [x0..x1], [z0..z1]
         // Coordinates are in local grid indices within the provided heights array.
         void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1);
