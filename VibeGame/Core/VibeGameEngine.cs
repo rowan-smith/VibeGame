@@ -14,7 +14,6 @@ namespace VibeGame.Core
         private readonly IInfiniteTerrain _terrain;
         private readonly IItemRegistry _items;
 
-        private bool _paused = false;
         private bool _showDebugOverlay = false;
         private bool _showDebugChunkBounds = false;
         private int _selectedHotbarSlot = 0;
@@ -47,15 +46,12 @@ namespace VibeGame.Core
 
                 HandleInput();
 
-                if (!_paused)
-                {
-                    // Camera and physics update
-                    Vector3 horizMove = _cameraController.UpdateAndGetHorizontalMove(ref _camera.RaylibCamera, dt);
-                    _physics.Integrate(ref _camera.RaylibCamera, dt, horizMove, (x, z) => _terrain.SampleHeight(new Vector3(x, 0, z)));
+                // Camera and physics update
+                Vector3 horizMove = _cameraController.UpdateAndGetHorizontalMove(ref _camera.RaylibCamera, dt);
+                _physics.Integrate(ref _camera.RaylibCamera, dt, horizMove, (x, z) => _terrain.SampleHeight(new Vector3(x, 0, z)));
 
-                    // Update terrain around camera
-                    _terrain.UpdateCenter(_camera.Position);
-                }
+                // Update terrain around camera
+                _terrain.UpdateCenter(_camera.Position);
 
                 // Rendering
                 Raylib.BeginDrawing();
@@ -80,12 +76,6 @@ namespace VibeGame.Core
 
                 DrawHotbar();
 
-                // Pause overlay
-                if (_paused)
-                {
-                    DrawPauseMenu();
-                }
-
                 Raylib.EndDrawing();
             }
 
@@ -94,16 +84,6 @@ namespace VibeGame.Core
 
         private void HandleInput()
         {
-            if (Raylib.IsKeyPressed(KeyboardKey.KEY_ESCAPE))
-            {
-                _paused = !_paused;
-                // Toggle cursor visibility/lock based on pause state
-                if (_paused)
-                    Raylib.EnableCursor();
-                else
-                    Raylib.DisableCursor();
-            }
-
             // Toggle debug overlay on F1 key press
             if (Raylib.IsKeyPressed(KeyboardKey.KEY_F1))
             {
@@ -117,15 +97,13 @@ namespace VibeGame.Core
             }
 
             // Mouse wheel hotbar scroll (only when not paused)
-            if (!_paused)
+            float wheel = Raylib.GetMouseWheelMove();
+            if (wheel != 0)
             {
-                float wheel = Raylib.GetMouseWheelMove();
-                if (wheel != 0)
-                {
-                    int delta = wheel > 0 ? -1 : 1; // typical games: wheel up moves left
-                    _selectedHotbarSlot = ((_selectedHotbarSlot + delta) % 9 + 9) % 9; // wrap 0..8
-                }
+                int delta = wheel > 0 ? -1 : 1; // typical games: wheel up moves left
+                _selectedHotbarSlot = ((_selectedHotbarSlot + delta) % 9 + 9) % 9; // wrap 0..8
             }
+            
 
             // Hotbar selection 1-9
             for (int i = 0; i < 9; i++)
@@ -135,7 +113,7 @@ namespace VibeGame.Core
             }
 
             // Example dig action
-            if (Raylib.IsMouseButtonDown(MouseButton.MOUSE_BUTTON_LEFT) && !_paused)
+            if (Raylib.IsMouseButtonDown(MouseButton.MOUSE_BUTTON_LEFT))
             {
                 if (_terrain is IEditableTerrain editable)
                 {
@@ -195,18 +173,6 @@ namespace VibeGame.Core
                     // Draw item texture in slot
                 }
             }
-        }
-
-        private void DrawPauseMenu()
-        {
-            int width = 300;
-            int height = 200;
-            int x = Raylib.GetScreenWidth() / 2 - width / 2;
-            int y = Raylib.GetScreenHeight() / 2 - height / 2;
-
-            Raylib.DrawRectangle(x, y, width, height, Raylib.BLACK);
-            Raylib.DrawText("PAUSED", x + 100, y + 20, 40, Raylib.WHITE);
-            Raylib.DrawText("Press ESC to resume", x + 30, y + 100, 20, Raylib.GRAY);
         }
     }
 }

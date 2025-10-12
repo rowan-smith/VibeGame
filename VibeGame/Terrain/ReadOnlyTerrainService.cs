@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 using ZeroElectric.Vinculum;
 using Veilborne.Core.GameWorlds.Terrain;
@@ -16,6 +17,10 @@ namespace VibeGame.Terrain
 
         // Track loaded chunks and preserve their mesh generation state across frames
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
+
+        // Async generation state
+        private readonly HashSet<(int cx, int cz)> _generating = new();
+        private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin)> _completed = new();
 
         public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer)
         {
@@ -38,27 +43,24 @@ namespace VibeGame.Terrain
             {
                 var key = (centerX + x, centerZ + z);
                 desired.Add(key);
-                if (!_loadedChunks.ContainsKey(key))
+                if (!_loadedChunks.ContainsKey(key) && !_generating.Contains(key))
                 {
                     var origin = new Vector2(key.Item1 * ChunkSize * TileSize, key.Item2 * ChunkSize * TileSize);
 
-                    // Generate heights by sampling from the editable ring (captures runtime edits when available)
-                    float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
-                    for (int zz = 0; zz <= ChunkSize; zz++)
-                    for (int xx = 0; xx <= ChunkSize; xx++)
+                    // Off-thread height sampling from editable ring
+                    _generating.Add(key);
+                    _ = Task.Run(() =>
                     {
-                        float wx = origin.X + xx * TileSize;
-                        float wz = origin.Y + zz * TileSize;
-                        heights[xx, zz] = _editable.SampleHeight(wx, wz);
-                    }
-
-                    _loadedChunks[key] = new TerrainChunk
-                    {
-                        Heights = heights,
-                        Origin = origin,
-                        IsMeshGenerated = false,
-                        BuiltFromVersion = -1
-                    };
+                        float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
+                        for (int zz = 0; zz <= ChunkSize; zz++)
+                        for (int xx = 0; xx <= ChunkSize; xx++)
+                        {
+                            float wx = origin.X + xx * TileSize;
+                            float wz = origin.Y + zz * TileSize;
+                            heights[xx, zz] = _editable.SampleHeight(wx, wz);
+                        }
+                        _completed.Enqueue((key, heights, origin));
+                    });
                 }
             }
 
@@ -67,6 +69,23 @@ namespace VibeGame.Terrain
             foreach (var key in _loadedChunks.Keys)
                 if (!desired.Contains(key)) toRemove.Add(key);
             foreach (var key in toRemove) _loadedChunks.Remove(key);
+        }
+
+        public async Task PumpAsyncJobs()
+        {
+            while (_completed.TryDequeue(out var item))
+            {
+                _generating.Remove(item.key);
+                // Install generated heightmap; mesh build remains coordinated by TerrainManager
+                _loadedChunks[item.key] = new TerrainChunk
+                {
+                    Heights = item.heights,
+                    Origin = item.origin,
+                    IsMeshGenerated = false,
+                    BuiltFromVersion = -1
+                };
+                await Task.Yield();
+            }
         }
 
         public void RenderTiles(Camera3D camera, HashSet<(int cx, int cz)>? exclude = null)

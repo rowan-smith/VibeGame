@@ -24,6 +24,7 @@ namespace VibeGame.Terrain
         private bool _hasLast;
         private float _avgDt;
         private float _speedMps;
+        private Vector3 _lastMoveDirXZ; // normalized last horizontal movement direction
 
         // Current radii after adaptation (debug/inspection)
         private int _curEditable;
@@ -69,6 +70,15 @@ namespace VibeGame.Terrain
                 float d = Vector3.Distance(worldPos, _lastCameraPos);
                 float instSpeed = d / MathF.Max(dt, 1e-4f);
                 _speedMps = Lerp(_speedMps, instSpeed, 0.2f);
+
+                // Track last horizontal movement direction (XZ)
+                Vector3 delta = worldPos - _lastCameraPos;
+                delta.Y = 0f;
+                float len = delta.Length();
+                if (len > 1e-3f)
+                {
+                    _lastMoveDirXZ = delta / len;
+                }
             }
             _lastCameraPos = worldPos;
             _hasLast = true;
@@ -124,14 +134,23 @@ namespace VibeGame.Terrain
             _lastLowLodRadius = lod;
             _curEditable = e; _curReadOnly = ro; _curLowLod = lod;
 
+            // --- Predict forward position for preloading ---
+            Vector3 predictedPos = worldPos;
+            if (_lastMoveDirXZ != Vector3.Zero)
+            {
+                float lookAheadMeters = _speedMps * 1.0f; // 1 second lookahead
+                predictedPos += _lastMoveDirXZ * lookAheadMeters;
+            }
+
             // --- Update rings with computed radii ---
-            _readOnlyRing.UpdateAround(worldPos, ro);
+            // Preload mid/far rings ahead of motion to reduce pop-in
+            _readOnlyRing.UpdateAround(predictedPos, ro);
             _editableRing.UpdateAround(worldPos, e);
 
             if (_lowLodRing is not null)
             {
                 _lowLodRing.InnerExclusionRadiusChunks = Math.Max(0, ro);
-                _lowLodRing.UpdateAround(worldPos, lod);
+                _lowLodRing.UpdateAround(predictedPos, lod);
             }
 
             // --- Mesh generation ---
@@ -410,6 +429,15 @@ namespace VibeGame.Terrain
             return new TerrainDebugInfo(cx, cz, localX, localZ, ChunkSize, TileSize, biomeId, worldPos);
         }
 
-        public Task PumpAsyncJobs() => _editableRing.PumpAsyncJobs();
+        public async Task PumpAsyncJobs()
+        {
+            // Pump async edit jobs (editable ring)
+            await _editableRing.PumpAsyncJobs();
+            // Pump RO/LOD background height sampling jobs so chunks appear when ready
+            if (_readOnlyRing is not null && _readOnlyRing is ReadOnlyTerrainService ro)
+                await ro.PumpAsyncJobs();
+            if (_lowLodRing is not null)
+                await _lowLodRing.PumpAsyncJobs();
+        }
     }
 }
