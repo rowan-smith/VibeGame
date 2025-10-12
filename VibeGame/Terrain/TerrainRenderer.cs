@@ -1,6 +1,8 @@
 using System;
 using System.Numerics;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using ZeroElectric.Vinculum;
 using Serilog;
 using VibeGame.Biomes;
@@ -10,6 +12,17 @@ namespace VibeGame.Terrain
 {
     public class TerrainRenderer : ITerrainRenderer
     {
+        // Prepared mesh data built off-thread; uploaded on main thread
+        private class MeshBuildJob
+        {
+            public Vector2 Origin;
+            public Vector3[] Vertices;
+            public Vector3[] Normals;
+            public Vector2[] UVs;
+            public Color[] Colors;
+            public ushort[] Indices;
+        }
+
         private readonly ILogger logger = Log.ForContext<TerrainRenderer>();
         private readonly ITextureManager _textureManager;
         private readonly ITerrainTextureRegistry _terrainTextures;
@@ -24,6 +37,11 @@ namespace VibeGame.Terrain
 
         private readonly Dictionary<string, Material> _materialCache = new();
         private Material _activeMaterial;
+
+        // Async mesh generation queue
+        private readonly ConcurrentQueue<MeshBuildJob> _pendingUploads = new();
+        private readonly object _queueLock = new();
+        private readonly HashSet<Vector2> _pendingOrigins = new();
 
         public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider)
         {
@@ -112,6 +130,115 @@ namespace VibeGame.Terrain
             }
 
             _chunksByOrigin[originWorld] = new List<Chunk> { chunk };
+        }
+
+        public void EnqueueBuild(float[,] heights, float tileSize, Vector2 originWorld)
+        {
+            // Skip if already built and cached
+            if (_chunksByOrigin.TryGetValue(originWorld, out var existing) && existing is { Count: > 0 })
+            {
+                if (!existing[0].Mesh.Equals(default(Mesh)) && existing[0].Mesh.vertexCount > 0)
+                    return;
+            }
+
+            lock (_queueLock)
+            {
+                if (_pendingOrigins.Contains(originWorld))
+                    return;
+                _pendingOrigins.Add(originWorld);
+            }
+
+            int w = heights.GetLength(0);
+            int h = heights.GetLength(1);
+
+            _ = Task.Run(() =>
+            {
+                var job = new MeshBuildJob
+                {
+                    Origin = originWorld,
+                    Vertices = new Vector3[w * h],
+                    Normals = new Vector3[w * h],
+                    UVs = new Vector2[w * h],
+                    Colors = new Color[w * h],
+                    Indices = new ushort[(w - 1) * (h - 1) * 6]
+                };
+
+                for (int z = 0; z < h; z++)
+                for (int x = 0; x < w; x++)
+                {
+                    int idx = x + z * w;
+                    float wx = originWorld.X + x * tileSize;
+                    float wz = originWorld.Y + z * tileSize;
+                    float y = heights[x, z];
+
+                    job.Vertices[idx] = new Vector3(wx, y, wz);
+                    job.Normals[idx] = ComputeNormal(heights, x, z, w, h, tileSize);
+                    job.UVs[idx] = new Vector2(w > 1 ? (float)x / (w - 1) : 0f, h > 1 ? (float)z / (h - 1) : 0f);
+                    job.Colors[idx] = Raylib.WHITE;
+                }
+
+                int tri = 0;
+                for (int z = 0; z < h - 1; z++)
+                for (int x = 0; x < w - 1; x++)
+                {
+                    int idx = x + z * w;
+                    job.Indices[tri++] = (ushort)idx;
+                    job.Indices[tri++] = (ushort)(idx + w);
+                    job.Indices[tri++] = (ushort)(idx + 1);
+
+                    job.Indices[tri++] = (ushort)(idx + 1);
+                    job.Indices[tri++] = (ushort)(idx + w);
+                    job.Indices[tri++] = (ushort)(idx + w + 1);
+                }
+
+                _pendingUploads.Enqueue(job);
+            });
+        }
+
+        public void ProcessBuildQueue(int maxPerFrame)
+        {
+            int processed = 0;
+            while (processed < maxPerFrame && _pendingUploads.TryDequeue(out var job))
+            {
+                var chunk = new Chunk
+                {
+                    Vertices = job.Vertices,
+                    Normals = job.Normals,
+                    UVs = job.UVs,
+                    Colors = job.Colors,
+                    Indices = job.Indices
+                };
+
+                unsafe
+                {
+                    fixed (Vector3* vPtr = chunk.Vertices)
+                    fixed (Vector2* uvPtr = chunk.UVs)
+                    fixed (Vector3* nPtr = chunk.Normals)
+                    fixed (Color* cPtr = chunk.Colors)
+                    fixed (ushort* iPtr = chunk.Indices)
+                    {
+                        Mesh mesh = new Mesh
+                        {
+                            vertices = (float*)vPtr,
+                            texcoords = (float*)uvPtr,
+                            normals = (float*)nPtr,
+                            colors = (byte*)cPtr,
+                            indices = (ushort*)iPtr,
+                            vertexCount = chunk.Vertices.Length,
+                            triangleCount = chunk.Indices.Length / 3
+                        };
+                        Raylib.UploadMesh(&mesh, false);
+                        chunk.Mesh = mesh;
+                    }
+                }
+
+                _chunksByOrigin[job.Origin] = new List<Chunk> { chunk };
+                lock (_queueLock)
+                {
+                    _pendingOrigins.Remove(job.Origin);
+                }
+                processed++;
+            }
         }
 
         public void Render(float[,] heights, float tileSize, Camera3D camera, Color baseColor)

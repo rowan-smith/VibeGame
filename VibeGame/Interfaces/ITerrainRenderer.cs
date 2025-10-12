@@ -16,7 +16,14 @@ namespace VibeGame.Terrain
 
         void SetColorTint(Color color);
 
+        // Synchronous build (CPU + GPU upload) — kept for compatibility
         void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld);
+
+        // Queue a CPU-side mesh data build to run off the main thread; GPU upload occurs later on ProcessBuildQueue
+        void EnqueueBuild(float[,] heights, float tileSize, Vector2 originWorld);
+
+        // Upload up to maxPerFrame prepared meshes to GPU; should be called from main thread each frame
+        void ProcessBuildQueue(int maxPerFrame);
 
         // Partially update an already built chunk at originWorld by patching a sub-rectangle [x0..x1], [z0..z1]
         // Coordinates are in local grid indices within the provided heights array.

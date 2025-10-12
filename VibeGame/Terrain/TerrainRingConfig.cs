@@ -23,5 +23,8 @@ namespace VibeGame.Terrain
         public float SpeedScale { get; set; } = 0.15f;    // chunks per m/s
         public float DensityPenalty { get; set; } = 1.0f; // reduce chunks under high roughness
         public float FpsTarget { get; set; } = 60f;       // target framerate for budget heuristic
+
+        // Mesh build throttling
+        public int MaxMeshBuildsPerFrame { get; set; } = 3;
     }
 }

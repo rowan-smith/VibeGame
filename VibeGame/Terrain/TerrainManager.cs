@@ -179,7 +179,7 @@ namespace VibeGame.Terrain
                 int srcVer = _editableRing.GetMaxVersionForBounds(minX, minZ, maxX, maxZ);
                 if (!chunk.IsMeshGenerated)
                 {
-                    _renderer.BuildChunks(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
+                    _renderer.EnqueueBuild(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
                     chunk.IsMeshGenerated = true;
                     chunk.BuiltFromVersion = srcVer;
                 }
@@ -244,7 +244,7 @@ namespace VibeGame.Terrain
                     else
                     {
                         // Fallback to full rebuild if we couldn't compute any patch rects
-                        _renderer.BuildChunks(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
+                        _renderer.EnqueueBuild(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
                         chunk.IsMeshGenerated = true;
                         chunk.BuiltFromVersion = srcVer;
                     }
@@ -256,7 +256,7 @@ namespace VibeGame.Terrain
                 int srcVer = chunk.Version;
                 if (!chunk.IsMeshGenerated || chunk.BuiltFromVersion != srcVer)
                 {
-                    _renderer.BuildChunks(chunk.Heights, _editableRing.TileSize, chunk.Origin);
+                    _renderer.EnqueueBuild(chunk.Heights, _editableRing.TileSize, chunk.Origin);
                     chunk.IsMeshGenerated = true;
                     chunk.BuiltFromVersion = srcVer;
                     chunk.Dirty = false;
@@ -274,7 +274,7 @@ namespace VibeGame.Terrain
                     int srcVer = _editableRing.GetMaxVersionForBounds(minX, minZ, maxX, maxZ);
                     if (!chunk.IsMeshGenerated)
                     {
-                        _renderer.BuildChunks(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
+                        _renderer.EnqueueBuild(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
                         chunk.IsMeshGenerated = true;
                         chunk.BuiltFromVersion = srcVer;
                     }
@@ -339,13 +339,16 @@ namespace VibeGame.Terrain
                         else
                         {
                             // Fallback to full rebuild
-                            _renderer.BuildChunks(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
+                            _renderer.EnqueueBuild(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
                             chunk.IsMeshGenerated = true;
                             chunk.BuiltFromVersion = srcVer;
                         }
                     }
                 }
             }
+
+            // Upload a limited number of prepared meshes this frame
+            _renderer.ProcessBuildQueue(_cfg.MaxMeshBuildsPerFrame);
         }
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
