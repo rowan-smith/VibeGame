@@ -15,12 +15,14 @@ namespace VibeGame.Biomes.Spawners
     {
         private readonly ITreesRegistry _trees;
         private readonly IEnvironmentSampler _sampler;
+        private readonly ITerrainGenerator _envTerrain;
         private readonly IReadOnlyList<string>? _allowedIds;
 
-        public ConfigTreeWorldObjectSpawner(ITreesRegistry trees, IEnvironmentSampler sampler, IReadOnlyList<string>? allowedObjectIds = null)
+        public ConfigTreeWorldObjectSpawner(ITreesRegistry trees, IEnvironmentSampler sampler, ITerrainGenerator envTerrain, IReadOnlyList<string>? allowedObjectIds = null)
         {
             _trees = trees;
             _sampler = sampler;
+            _envTerrain = envTerrain;
             _allowedIds = allowedObjectIds;
         }
 
@@ -83,11 +85,11 @@ namespace VibeGame.Biomes.Spawners
                     int seed = HashCode.Combine(seedBase, def.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), i);
                     float wx = HashToRange(seed * 97 + 5, minX, maxX);
                     float wz = HashToRange(seed * 211 + 23, minZ, maxZ);
-                    float baseY = terrain.ComputeHeight(wx, wz);
+                    float baseY = SampleMeshHeight(heights, originWorld, terrain.TileSize, wx, wz);
 
                     if (IsSlopeTooSteep(terrain, wx, wz, baseY)) continue;
 
-                    var env = _sampler.Sample(new Vector2(wx, wz), terrain);
+                    var env = _sampler.Sample(new Vector2(wx, wz), _envTerrain);
                     if (!IsEnvValid(env, altMin, altMax, tMin, tMax, mMin, mMax)) continue;
 
                     // Select weighted model
@@ -145,6 +147,40 @@ namespace VibeGame.Biomes.Spawners
         }
 
         #region Helpers
+        private static float SampleMeshHeight(float[,] heights, Vector2 originWorld, float tile, float wx, float wz)
+        {
+            int w = heights.GetLength(0);
+            int h = heights.GetLength(1);
+            if (w < 2 || h < 2) return 0f;
+
+            float lx = (wx - originWorld.X) / tile;
+            float lz = (wz - originWorld.Y) / tile;
+
+            int x0 = Math.Clamp((int)MathF.Floor(lx), 0, w - 2);
+            int z0 = Math.Clamp((int)MathF.Floor(lz), 0, h - 2);
+            int x1 = x0 + 1;
+            int z1 = z0 + 1;
+
+            float tx = Math.Clamp(lx - x0, 0f, 1f);
+            float tz = Math.Clamp(lz - z0, 0f, 1f);
+
+            float h00 = heights[x0, z0];
+            float h10 = heights[x1, z0];
+            float h01 = heights[x0, z1];
+            float h11 = heights[x1, z1];
+
+            // Match TerrainRenderer triangle split:
+            // Tri1: (x0,z0)->(x0,z1)->(x1,z0) covers tx+tz <= 1
+            // Tri2: (x1,z0)->(x0,z1)->(x1,z1) covers tx+tz > 1
+            if (tx + tz <= 1f)
+            {
+                return h00 + (h10 - h00) * tx + (h01 - h00) * tz;
+            }
+            else
+            {
+                return h11 + (h10 - h11) * (1f - tz) + (h01 - h11) * (1f - tx);
+            }
+        }
         private static bool IsSlopeTooSteep(ITerrainGenerator terrain, float x, float z, float baseY)
         {
             float s = 1.5f;

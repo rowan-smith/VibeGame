@@ -23,10 +23,10 @@ namespace VibeGame.Objects
             // Convert to axis-angle for Raylib.DrawModelEx
             ToAxisAngle(qFinal, out Vector3 axis, out float angleDegrees);
 
-            // Align model base using its bounding box. With +90deg X, Y maps to -Z, so the
-            // lowest point in Y corresponds to -max.Z; to lift base to ground, offset by +max.Z
+            // Align the model's base to the terrain based on the model's Z axis (assets are Z-up before correction).
+            // After applying the +90deg X correction, model Z maps to world Y; lift by -min.Z so the lowest point touches ground.
             var bbox = Raylib.GetModelBoundingBox(model.Value);
-            float baseOffset = bbox.max.Z * obj.Scale.Y; // using Y scale as height scale
+            float baseOffset = ComputeBaseLift(bbox, obj.Scale, qCorrection);
             Vector3 modelPos = new Vector3(obj.Position.X, obj.Position.Y + baseOffset, obj.Position.Z);
 
             Raylib.DrawModelEx(model.Value, modelPos, axis, angleDegrees, obj.Scale, Raylib.WHITE);
@@ -61,6 +61,38 @@ namespace VibeGame.Objects
                 axis = new Vector3(q.X / s, q.Y / s, q.Z / s);
             }
             angleDegrees = angle * (180f / MathF.PI);
+        }
+
+        private static float ComputeBaseLift(BoundingBox bbox, Vector3 scale, Quaternion qCorrection)
+        {
+            // Compute the lowest Y after applying scale and the fixed asset-up correction.
+            // Yaw around world Y is ignored here because it does not affect vertical extents.
+            Vector3 min = bbox.min;
+            Vector3 max = bbox.max;
+            Span<Vector3> corners = stackalloc Vector3[8]
+            {
+                new Vector3(min.X, min.Y, min.Z),
+                new Vector3(max.X, min.Y, min.Z),
+                new Vector3(min.X, max.Y, min.Z),
+                new Vector3(max.X, max.Y, min.Z),
+                new Vector3(min.X, min.Y, max.Z),
+                new Vector3(max.X, min.Y, max.Z),
+                new Vector3(min.X, max.Y, max.Z),
+                new Vector3(max.X, max.Y, max.Z)
+            };
+
+            float minY = float.PositiveInfinity;
+            for (int i = 0; i < corners.Length; i++)
+            {
+                Vector3 c = corners[i];
+                // Apply per-axis scale first (as DrawModelEx does), then the axis correction rotation
+                Vector3 scaled = new Vector3(c.X * scale.X, c.Y * scale.Y, c.Z * scale.Z);
+                Vector3 rotated = Vector3.Transform(scaled, qCorrection);
+                if (rotated.Y < minY) minY = rotated.Y;
+            }
+
+            if (float.IsInfinity(minY) || float.IsNaN(minY)) minY = 0f;
+            return -minY; // lift so the lowest point sits at ground level
         }
 
         public void Dispose()

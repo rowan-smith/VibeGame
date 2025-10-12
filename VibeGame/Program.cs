@@ -72,7 +72,8 @@ internal static class Program
             {
                 var sampler = sp.GetRequiredService<IEnvironmentSampler>();
                 var trees = sp.GetRequiredService<ITreesRegistry>();
-                IWorldObjectSpawner spawner = new ConfigTreeWorldObjectSpawner(trees, sampler, def.AllowedObjects);
+                var envTerrain = sp.GetRequiredService<ITerrainGenerator>();
+                IWorldObjectSpawner spawner = new ConfigTreeWorldObjectSpawner(trees, sampler, envTerrain, def.AllowedObjects);
                 return new ConfigBiome(def.Id, def, spawner);
             });
         }

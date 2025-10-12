@@ -3,6 +3,7 @@ using System.Numerics;
 using ZeroElectric.Vinculum;
 using Veilborne.Core.GameWorlds.Terrain;
 using VibeGame.Biomes;
+using VibeGame.Objects;
 
 namespace VibeGame.Terrain
 {
@@ -14,19 +15,24 @@ namespace VibeGame.Terrain
         private readonly IBiomeProvider _biomeProvider;
         private readonly ITerrainRenderer _renderer;
         private readonly EditableTerrainService _editable;
+        private readonly ITerrainGenerator _terrainGen;
+        private readonly IWorldObjectRenderer _worldObjectRenderer;
 
         // Track loaded chunks and preserve their mesh generation state across frames
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
+        private readonly Dictionary<(int cx, int cz), List<SpawnedObject>> _objectsByChunk = new();
 
         // Async generation state
         private readonly HashSet<(int cx, int cz)> _generating = new();
-        private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin)> _completed = new();
+        private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin, List<SpawnedObject> objects)> _completed = new();
 
-        public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer)
+        public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer)
         {
             _editable = editable;
             _biomeProvider = biomeProvider;
             _renderer = renderer;
+            _terrainGen = terrainGen;
+            _worldObjectRenderer = worldObjectRenderer;
         }
 
         public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
@@ -51,15 +57,28 @@ namespace VibeGame.Terrain
                     _generating.Add(key);
                     _ = Task.Run(() =>
                     {
+                        // Build heights from editable surface so RO ring reflects nearby edits
                         float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
                         for (int zz = 0; zz <= ChunkSize; zz++)
                         for (int xx = 0; xx <= ChunkSize; xx++)
                         {
                             float wx = origin.X + xx * TileSize;
                             float wz = origin.Y + zz * TileSize;
-                            heights[xx, zz] = _editable.SampleHeight(wx, wz);
+                            heights[xx, zz] = _terrainGen.ComputeHeight(wx, wz);
                         }
-                        _completed.Enqueue((key, heights, origin));
+
+                        // Spawn world objects for this chunk using biome spawner
+                        var biome = _biomeProvider.GetBiomeAt(origin, _terrainGen);
+                        var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
+                        var filtered = new List<SpawnedObject>(raw.Count);
+                        foreach (var obj in raw)
+                        {
+                            var at = _biomeProvider.GetBiomeAt(new Vector2(obj.Position.X, obj.Position.Z), _terrainGen);
+                            if (string.Equals(at.Id, biome.Id, StringComparison.OrdinalIgnoreCase))
+                                filtered.Add(obj);
+                        }
+
+                        _completed.Enqueue((key, heights, origin, filtered));
                     });
                 }
             }
@@ -68,7 +87,11 @@ namespace VibeGame.Terrain
             var toRemove = new List<(int cx, int cz)>();
             foreach (var key in _loadedChunks.Keys)
                 if (!desired.Contains(key)) toRemove.Add(key);
-            foreach (var key in toRemove) _loadedChunks.Remove(key);
+            foreach (var key in toRemove)
+            {
+                _loadedChunks.Remove(key);
+                _objectsByChunk.Remove(key);
+            }
         }
 
         public async Task PumpAsyncJobs()
@@ -84,6 +107,8 @@ namespace VibeGame.Terrain
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
                 };
+                // Store objects for this chunk
+                _objectsByChunk[item.key] = item.objects ?? new List<SpawnedObject>();
                 await Task.Yield();
             }
         }
@@ -107,6 +132,15 @@ namespace VibeGame.Terrain
 
                 // Render the chunk (meshes are built centrally by TerrainManager.UpdateAround)
                 _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
+
+                // Draw any spawned world objects (e.g., trees) for this chunk
+                if (_objectsByChunk.TryGetValue(key, out var objs) && objs is { Count: > 0 })
+                {
+                    foreach (var obj in objs)
+                    {
+                        _worldObjectRenderer.DrawWorldObject(obj);
+                    }
+                }
             }
         }
 

@@ -5,26 +5,78 @@ using System.Threading.Tasks;
 using ZeroElectric.Vinculum;
 using Veilborne.Core.GameWorlds.Terrain;
 using VibeGame.Biomes;
+using VibeGame.Objects;
 
 namespace VibeGame.Terrain
 {
     public class EditableTerrainService
     {
         public bool RenderBaseHeightmap { get; set; } = true;
+
+        // Local adapter so spawners sample the exact same height field as the visible editable mesh
+        private sealed class EditableTerrainAdapter : ITerrainGenerator
+        {
+            private readonly EditableTerrainService _owner;
+            public EditableTerrainAdapter(EditableTerrainService owner) { _owner = owner; }
+            public int TerrainSize => _owner.ChunkSize;
+            public float TileSize => _owner.TileSize;
+            public float[,] GenerateHeights()
+            {
+                int size = TerrainSize;
+                float[,] h = new float[size, size];
+                for (int z = 0; z < size; z++)
+                for (int x = 0; x < size; x++)
+                {
+                    float wx = x * TileSize;
+                    float wz = z * TileSize;
+                    h[x, z] = _owner.SampleHeight(wx, wz);
+                }
+                return h;
+            }
+            public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
+            {
+                float[,] h = new float[chunkSize + 1, chunkSize + 1];
+                float originX = chunkX * chunkSize * TileSize;
+                float originZ = chunkZ * chunkSize * TileSize;
+                for (int z = 0; z <= chunkSize; z++)
+                for (int x = 0; x <= chunkSize; x++)
+                {
+                    float wx = originX + x * TileSize;
+                    float wz = originZ + z * TileSize;
+                    h[x, z] = _owner.SampleHeight(wx, wz);
+                }
+                return h;
+            }
+            public float SampleHeight(float[,] heights, float worldX, float worldZ)
+            {
+                int size = heights.GetLength(0);
+                float gx = worldX / TileSize;
+                float gz = worldZ / TileSize;
+                int x0 = Math.Clamp((int)MathF.Floor(gx), 0, size - 1);
+                int z0 = Math.Clamp((int)MathF.Floor(gz), 0, size - 1);
+                return heights[x0, z0];
+            }
+            public float ComputeHeight(float worldX, float worldZ) => _owner.SampleHeight(worldX, worldZ);
+        }
         public float TileSize { get; } = 1.0f;
         public int ChunkSize { get; } = 32;
 
         private readonly IBiomeProvider _biomeProvider;
         private readonly ITerrainRenderer _renderer;
+        private readonly ITerrainGenerator _terrainGen;
+        private readonly IWorldObjectRenderer _worldObjectRenderer;
 
         // Cache loaded chunks with their heightmaps; meshes are built by TerrainManager
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
+        private readonly Dictionary<(int cx, int cz), List<SpawnedObject>> _objectsByChunk = new();
         private readonly object _lock = new();
 
-        public EditableTerrainService(IBiomeProvider biomeProvider, ITerrainRenderer renderer)
+        public EditableTerrainService(IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer)
         {
             _biomeProvider = biomeProvider;
             _renderer = renderer;
+            _terrainGen = terrainGen;
+            _worldObjectRenderer = worldObjectRenderer;
         }
 
         public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
@@ -83,6 +135,20 @@ namespace VibeGame.Terrain
                             Version = 0,
                             BuiltFromVersion = -1
                         };
+
+                        // Spawn world objects for this editable chunk
+                        var origin = new Vector2(originX, originZ);
+                        var biome = _biomeProvider.GetBiomeAt(origin, _terrainGen);
+                        var adapter = new EditableTerrainAdapter(this);
+                        var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, adapter, heights, origin, 18);
+                        var filtered = new List<SpawnedObject>(raw.Count);
+                        foreach (var obj in raw)
+                        {
+                            var at = _biomeProvider.GetBiomeAt(new Vector2(obj.Position.X, obj.Position.Z), _terrainGen);
+                            if (string.Equals(at.Id, biome.Id, StringComparison.OrdinalIgnoreCase))
+                                filtered.Add(obj);
+                        }
+                        _objectsByChunk[key] = filtered;
                     }
                 }
 
@@ -90,26 +156,55 @@ namespace VibeGame.Terrain
                 var toRemove = new List<(int cx, int cz)>();
                 foreach (var key in _loadedChunks.Keys)
                     if (!desired.Contains(key)) toRemove.Add(key);
-                foreach (var key in toRemove) _loadedChunks.Remove(key);
+                foreach (var key in toRemove)
+                {
+                    _loadedChunks.Remove(key);
+                    _objectsByChunk.Remove(key);
+                }
             }
         }
 
         public float SampleHeight(float worldX, float worldZ)
         {
-            // If this position is in a loaded editable chunk, sample from its heightmap (includes edits)
+            // If this position is in a loaded editable chunk, bilinearly sample from its heightmap (includes edits)
             var key = WorldToChunkKey(worldX, worldZ);
             lock (_lock)
             {
                 if (_loadedChunks.TryGetValue(key, out var chunk))
                 {
-                    if (TryGetLocalIndex(key, worldX, worldZ, out int ix, out int iz))
-                        return chunk.Heights[ix, iz];
+                    return SampleFromChunk(chunk, worldX, worldZ);
                 }
             }
 
             // Fallback to base procedural if not loaded
             return MathF.Sin(worldX * 0.1f) * MathF.Cos(worldZ * 0.1f) * 2f;
         }
+
+        private float SampleFromChunk(TerrainChunk chunk, float worldX, float worldZ)
+        {
+            // Bilinear interpolation of the chunk heightmap at arbitrary world coordinates
+            float localX = (worldX - chunk.Origin.X) / TileSize;
+            float localZ = (worldZ - chunk.Origin.Y) / TileSize;
+
+            int x0 = Math.Clamp((int)MathF.Floor(localX), 0, ChunkSize);
+            int z0 = Math.Clamp((int)MathF.Floor(localZ), 0, ChunkSize);
+            int x1 = Math.Clamp(x0 + 1, 0, ChunkSize);
+            int z1 = Math.Clamp(z0 + 1, 0, ChunkSize);
+
+            float tx = Math.Clamp(localX - x0, 0f, 1f);
+            float tz = Math.Clamp(localZ - z0, 0f, 1f);
+
+            float h00 = chunk.Heights[x0, z0];
+            float h10 = chunk.Heights[x1, z0];
+            float h01 = chunk.Heights[x0, z1];
+            float h11 = chunk.Heights[x1, z1];
+
+            float hx0 = Lerp(h00, h10, tx);
+            float hx1 = Lerp(h01, h11, tx);
+            return Lerp(hx0, hx1, tz);
+        }
+
+        private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
         public void Render(Camera3D camera)
         {
@@ -119,6 +214,7 @@ namespace VibeGame.Terrain
             {
                 foreach (var kvp in _loadedChunks)
                 {
+                    var key = kvp.Key;
                     var chunk = kvp.Value;
 
                     // Apply biome textures based on center of chunk
@@ -127,6 +223,15 @@ namespace VibeGame.Terrain
 
                     _renderer.ApplyBiomeTextures(biome.Data);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
+
+                    // Draw spawned world objects for this editable chunk
+                    if (_objectsByChunk.TryGetValue(key, out var objs) && objs is { Count: > 0 })
+                    {
+                        foreach (var obj in objs)
+                        {
+                            _worldObjectRenderer.DrawWorldObject(obj);
+                        }
+                    }
                 }
             }
         }
