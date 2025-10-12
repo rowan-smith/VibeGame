@@ -15,6 +15,10 @@ namespace VibeGame.Terrain
         public int MinLowLod { get; set; } = 6;
         public int MaxLowLod { get; set; } = 24;
 
+        // Update pacing (in frames)
+        // ReadOnly ring updates every N frames; LowLod updates every N*2 frames.
+        public int ReadOnlyUpdateInterval { get; set; } = 2;
+
         // Tuning multipliers
         public float SpeedScale { get; set; } = 0.15f;    // chunks per m/s
         public float DensityPenalty { get; set; } = 1.0f; // reduce chunks under high roughness

@@ -26,6 +26,9 @@ namespace VibeGame.Terrain
         private float _speedMps;
         private Vector3 _lastMoveDirXZ; // normalized last horizontal movement direction
 
+        // Frame pacing
+        private int _frameCounter;
+
         // Current radii after adaptation (debug/inspection)
         private int _curEditable;
         private int _curReadOnly;
@@ -147,10 +150,23 @@ namespace VibeGame.Terrain
             _readOnlyRing.UpdateAround(predictedPos, ro);
             _editableRing.UpdateAround(worldPos, e);
 
+            // Stagger ReadOnly and LowLod updates to distribute workload
+            _frameCounter++;
+            int roInterval = Math.Max(1, _cfg.ReadOnlyUpdateInterval);
+            int lodInterval = Math.Max(1, roInterval * 2);
+
+            if (_frameCounter % roInterval == 0)
+            {
+                _readOnlyRing.UpdateAround(worldPos, ro);
+            }
+
             if (_lowLodRing is not null)
             {
                 _lowLodRing.InnerExclusionRadiusChunks = Math.Max(0, ro);
-                _lowLodRing.UpdateAround(predictedPos, lod);
+                if (_frameCounter % lodInterval == 0)
+                {
+                    _lowLodRing.UpdateAround(predictedPos, lod);
+                }
             }
 
             // --- Mesh generation ---
