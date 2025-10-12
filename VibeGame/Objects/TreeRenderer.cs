@@ -1,24 +1,20 @@
+using System;
+using System.Collections.Generic;
 using System.Numerics;
+using VibeGame.Core;
+using VibeGame.Core.WorldObjects;
 using ZeroElectric.Vinculum;
 using VibeGame.Terrain;
-using VibeGame.Core.WorldObjects;
 
 namespace VibeGame.Objects
 {
     public class TreeRenderer : ITreeRenderer, IDisposable
     {
-        private readonly List<Model> _models = new();
-        private bool _modelsLoaded;
-
         private readonly ITreesRegistry _treesRegistry;
-        // Cache of loaded models per tree id with configured weights
         private readonly Dictionary<string, List<(Model model, float weight)>> _modelsById = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _loadAttempted = new(StringComparer.OrdinalIgnoreCase);
 
-        public TreeRenderer(ITreesRegistry treesRegistry)
-        {
-            _treesRegistry = treesRegistry;
-        }
+        public TreeRenderer(ITreesRegistry treesRegistry) => _treesRegistry = treesRegistry;
 
         public List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)> GenerateTrees(
             ITerrainGenerator terrain,
@@ -26,162 +22,153 @@ namespace VibeGame.Objects
             Vector2 originWorld,
             int count)
         {
-            var list = new List<(Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)>();
-
-            // Chunk world size in meters (covers (size-1) tiles)
+            var list = new List<(Vector3, float, float, float)>();
             int size = heights.GetLength(0);
-            float chunkWorldSize = (size - 1) * terrain.TileSize;
-
-            // Keep a small margin from chunk edges
+            float chunkWorld = (size - 1) * terrain.TileSize;
             float margin = MathF.Max(2f * terrain.TileSize, 3f);
-            float minX = originWorld.X + margin;
-            float maxX = originWorld.X + chunkWorldSize - margin;
-            float minZ = originWorld.Y + margin;
-            float maxZ = originWorld.Y + chunkWorldSize - margin;
 
             for (int i = 0; i < count; i++)
             {
-                float wx = HashToRange(i * 13 + 1, minX, maxX);
-                float wz = HashToRange(i * 29 + 3, minZ, maxZ);
-
-                // Base height from infinite terrain function in world coordinates
+                float wx = HashToRange(i * 13 + 1, originWorld.X + margin, originWorld.X + chunkWorld - margin);
+                float wz = HashToRange(i * 29 + 3, originWorld.Y + margin, originWorld.Y + chunkWorld - margin);
                 float baseY = terrain.ComputeHeight(wx, wz);
 
-                // Skip very steep areas by sampling nearby world positions
                 float s = 1.5f;
-                float ny1 = terrain.ComputeHeight(wx + s, wz);
-                float ny2 = terrain.ComputeHeight(wx - s, wz);
-                float ny3 = terrain.ComputeHeight(wx, wz + s);
-                float ny4 = terrain.ComputeHeight(wx, wz - s);
-                float slope = MathF.Max(MathF.Max(MathF.Abs(ny1 - baseY), MathF.Abs(ny2 - baseY)), MathF.Max(MathF.Abs(ny3 - baseY), MathF.Abs(ny4 - baseY)));
-                if (slope > 1.8f) continue; // avoid extreme slopes
+                float slope = MathF.Max(
+                    MathF.Abs(terrain.ComputeHeight(wx + s, wz) - baseY),
+                    MathF.Abs(terrain.ComputeHeight(wx - s, wz) - baseY));
+                slope = MathF.Max(slope, MathF.Max(
+                    MathF.Abs(terrain.ComputeHeight(wx, wz + s) - baseY),
+                    MathF.Abs(terrain.ComputeHeight(wx, wz - s) - baseY)));
+                if (slope > 1.8f) continue;
 
                 float trunkHeight = 2.0f + HashToRange(i * 17 + 7, 0.5f, 3.5f);
                 float trunkRadius = 0.25f + HashToRange(i * 31 + 9, -0.05f, 0.15f);
                 float canopyRadius = trunkHeight * HashToRange(i * 47 + 13, 0.45f, 0.65f);
                 list.Add((new Vector3(wx, baseY, wz), trunkHeight, trunkRadius, canopyRadius));
             }
+
             return list;
         }
 
         public void DrawTree(string treeId, Vector3 pos, float trunkHeight, float trunkRadius, float canopyRadius)
         {
             if (string.IsNullOrWhiteSpace(treeId)) return;
-
-            // Ensure models for this id are loaded from TreesRegistry
             EnsureModelsForIdLoaded(treeId);
-            if (!_modelsById.TryGetValue(treeId, out var entries) || entries.Count == 0)
-            {
-                // No models configured for this id; respect config by drawing nothing
-                return;
-            }
 
-            // Deterministically select a model based on position and treeId using weights
+            if (!_modelsById.TryGetValue(treeId, out var entries) || entries.Count == 0) return;
+
             int seed = HashCode.Combine(treeId.GetHashCode(StringComparison.OrdinalIgnoreCase), (int)pos.X, (int)pos.Z);
-            if (seed < 0) seed = -seed;
-            float t = ((uint)seed % 10000) / 10000f; // [0,1)
+            seed = Math.Abs(seed);
+            float t = (seed % 10000) / 10000f;
 
             float totalW = 0f;
-            for (int i = 0; i < entries.Count; i++) totalW += MathF.Max(0.0001f, entries[i].weight);
+            foreach (var e in entries) totalW += MathF.Max(0.0001f, e.weight);
+
             float accum = 0f;
             Model model = entries[0].model;
-            for (int i = 0; i < entries.Count; i++)
+            float rotationDeg = 0f;
+            bool randomY = false;
+
+            foreach (var e in entries)
             {
-                float w = MathF.Max(0.0001f, entries[i].weight) / totalW;
-                accum += w;
+                accum += MathF.Max(0.0001f, e.weight) / totalW;
                 if (t <= accum)
                 {
-                    model = entries[i].model;
+                    model = e.model;
+                    // If we stored rotation and randomY with model metadata, read them here
+                    // For now, backward compatible defaults:
+                    rotationDeg = 0f;
+                    randomY = true;
                     break;
                 }
             }
 
-            // Scale based on desired trunk height; models come at varying unit scales
             float scale = MathF.Max(24.0f, trunkHeight * 16.0f);
-
-            // Align model base to the ground; many assets are Z-up, rotate -90deg around X
             var bbox = Raylib.GetModelBoundingBox(model);
-            float baseOffset = -bbox.min.Z * scale;
-            Vector3 modelPos = new Vector3(pos.X, pos.Y + baseOffset, pos.Z);
 
-            Raylib.DrawModelEx(model, modelPos, new Vector3(1, 0, 0), -90f, new Vector3(scale, scale, scale), Raylib.WHITE);
+            // GLB correction (Z-up)
+            bool isGlb = true; // always apply correction for GLB
+            Quaternion qCorrection = isGlb
+                ? Quaternion.CreateFromAxisAngle(new Vector3(1, 0, 0), -MathF.PI / 2f)
+                : Quaternion.Identity;
+
+            // Apply user rotation from JSON
+            Quaternion qRotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, rotationDeg * (MathF.PI / 180f));
+
+            // Apply random Y rotation if enabled
+            if (randomY)
+            {
+                float rndDeg = HashToRange(seed * 7 + 5, 0f, 360f);
+                Quaternion qRandomY = Quaternion.CreateFromAxisAngle(Vector3.UnitY, rndDeg * (MathF.PI / 180f));
+                qRotation = Quaternion.Concatenate(qRotation, qRandomY);
+            }
+
+            // Compute up-axis rotation
+            Quaternion qUp = ChooseUpAxisByExtents(bbox, new Vector3(scale), preferYUp: true);
+
+            // Combine rotations: user rotation -> GLB correction -> auto up
+            Quaternion qFinal = Quaternion.Normalize(Quaternion.Concatenate(qUp, Quaternion.Concatenate(qCorrection, qRotation)));
+
+            // Convert to axis-angle
+            ToAxisAngle(qFinal, out Vector3 axis, out float angleDegrees);
+
+            float baseOffset = -EvalYExtent(bbox, new Vector3(scale), qFinal, out float minY);
+
+            Vector3 modelPos = new(pos.X, pos.Y + baseOffset, pos.Z);
+            Raylib.DrawModelEx(model, modelPos, axis, angleDegrees, new Vector3(scale), Raylib.WHITE);
         }
+
 
         private void EnsureModelsForIdLoaded(string treeId)
         {
-            if (string.IsNullOrWhiteSpace(treeId)) return;
             if (_loadAttempted.Contains(treeId)) return;
             _loadAttempted.Add(treeId);
 
             if (!_treesRegistry.TryGet(treeId, out var def)) return;
-            var list = new List<(Model model, float weight)>();
+
+            var list = new List<(Model, float)>();
             try
             {
-                if (def.Assets != null && def.Assets.Models != null)
+                if (def.Assets?.Models != null)
                 {
                     foreach (var m in def.Assets.Models)
                     {
                         if (string.IsNullOrWhiteSpace(m.Path)) continue;
                         try
                         {
-                            // Use AssimpNet loader for GLB/GLTF to support multi-mesh assets
                             string ext = System.IO.Path.GetExtension(m.Path);
-                            if (!string.IsNullOrEmpty(ext) && (ext.Equals(".glb", StringComparison.OrdinalIgnoreCase) || ext.Equals(".gltf", StringComparison.OrdinalIgnoreCase)))
+                            if (ext.Equals(".glb", StringComparison.OrdinalIgnoreCase) ||
+                                ext.Equals(".gltf", StringComparison.OrdinalIgnoreCase))
                             {
-                                var loaded = VibeGame.Core.RaylibGLBLoader.LoadGLB(m.Path);
-                                if (loaded != null && loaded.Count > 0)
-                                {
-                                    float baseW = m.Weight <= 0f ? 1f : m.Weight;
-                                    float per = baseW / loaded.Count;
-                                    foreach (var mdl in loaded)
-                                    {
-                                        list.Add((mdl, per));
-                                    }
-                                    continue; // handled
-                                }
+                                var loaded = RaylibGLBLoader.LoadGLB(m.Path);
+                                float per = (m.Weight <= 0f ? 1f : m.Weight) / loaded.Count;
+                                foreach (var mdl in loaded) list.Add((mdl, per));
+                                continue;
                             }
-
-                            // Fallback: default raylib loader for other formats or if Assimp failed
-                            var model = Raylib.LoadModel(m.Path);
-                            float w = m.Weight <= 0f ? 1f : m.Weight;
-                            list.Add((model, w));
+                            list.Add((Raylib.LoadModel(m.Path), m.Weight <= 0f ? 1f : m.Weight));
                         }
                         catch
                         {
-                            // skip this asset
+                            /* skip */
                         }
                     }
                 }
             }
             catch
             {
-                // ignore load errors; we will simply not render this id
+                /* ignore */
             }
 
-            if (list.Count > 0)
-            {
-                _modelsById[treeId] = list;
-            }
+            if (list.Count > 0) _modelsById[treeId] = list;
         }
 
         public void Dispose()
         {
-            // Unload generic models if any were loaded
-            foreach (var m in _models)
-            {
-                try { Raylib.UnloadModel(m); } catch { /* ignore */ }
-            }
-            _models.Clear();
-
-            // Unload per-id models
             foreach (var kv in _modelsById)
-            {
-                var list = kv.Value;
-                foreach (var (model, _) in list)
-                {
-                    try { Raylib.UnloadModel(model); } catch { /* ignore */ }
-                }
-            }
+            foreach (var (model, _) in kv.Value)
+                try { Raylib.UnloadModel(model); }
+                catch {}
             _modelsById.Clear();
             _loadAttempted.Clear();
         }
@@ -194,9 +181,54 @@ namespace VibeGame.Objects
                 x ^= x << 13;
                 x ^= x >> 17;
                 x ^= x << 5;
-                float t = (x % 10000) / 10000f;
-                return min + (max - min) * t;
+                return min + (max - min) * ((x % 10000) / 10000f);
             }
+        }
+
+        private static void ToAxisAngle(Quaternion q, out Vector3 axis, out float angleDegrees)
+        {
+            q = Quaternion.Normalize(q);
+            float angle = 2.0f * MathF.Acos(Math.Clamp(q.W, -1f, 1f));
+            float s = MathF.Sqrt(1f - q.W * q.W);
+            axis = s < 0.001f ? new Vector3(1, 0, 0) : new Vector3(q.X / s, q.Y / s, q.Z / s);
+            angleDegrees = angle * (180f / MathF.PI);
+        }
+
+        private static Quaternion ChooseUpAxisByExtents(BoundingBox bbox, Vector3 scale, bool preferYUp)
+        {
+            var qY = Quaternion.Identity;
+            var qZ = Quaternion.CreateFromAxisAngle(new Vector3(1f, 0f, 0f), -MathF.PI / 2f);
+
+            float eY = EvalYExtent(bbox, scale, qY, out _);
+            float eZ = EvalYExtent(bbox, scale, qZ, out _);
+
+            const float bias = 1.1f;
+            if (eZ > eY * bias) return qZ;
+            if (eY > eZ * bias) return qY;
+            return preferYUp ? qY : qZ;
+        }
+
+        private static float EvalYExtent(BoundingBox bbox, Vector3 scale, Quaternion q, out float minY)
+        {
+            Vector3 min = bbox.min, max = bbox.max;
+            Span<Vector3> corners = stackalloc Vector3[8]
+            {
+                new(min.X, min.Y, min.Z), new(max.X, min.Y, min.Z),
+                new(min.X, max.Y, min.Z), new(max.X, max.Y, min.Z),
+                new(min.X, min.Y, max.Z), new(max.X, min.Y, max.Z),
+                new(min.X, max.Y, max.Z), new(max.X, max.Y, max.Z)
+            };
+
+            float minVal = float.PositiveInfinity, maxVal = float.NegativeInfinity;
+            foreach (var c in corners)
+            {
+                Vector3 r = Vector3.Transform(new Vector3(c.X * scale.X, c.Y * scale.Y, c.Z * scale.Z), q);
+                minVal = MathF.Min(minVal, r.Y);
+                maxVal = MathF.Max(maxVal, r.Y);
+            }
+
+            minY = float.IsFinite(minVal) ? minVal : 0f;
+            return float.IsFinite(maxVal) ? maxVal - minY : 0f;
         }
     }
 }

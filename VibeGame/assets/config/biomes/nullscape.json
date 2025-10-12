@@ -41,7 +41,7 @@
   "TextureRules": {
     "lichen_rock": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
-  "AllowedObjects": [],
+  "AllowedObjects": ["dead_trees"],
   "DominantFlora": [],
   "DominantFauna": [],
   "SurfaceMaterial": "None",

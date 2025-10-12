@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Numerics;
+using System.Threading.Tasks;
 using VibeGame.Biomes;
 using VibeGame.Core;
 using VibeGame.Terrain;
@@ -23,7 +26,6 @@ namespace VibeGame.Objects
         public IReadOnlyList<SpawnedObject> GetObjectsForChunk((int cx, int cz) key)
             => _cache.TryGetValue(key, out var list) ? list : Array.Empty<SpawnedObject>();
 
-        // Fully compatible EnsureObjects
         public void EnsureObjects(Vector3 playerPos, Dictionary<Vector3, Chunk> activeChunks, AsyncTaskQueue async)
         {
             var (ccx, ccz) = WorldToChunk(playerPos.X, playerPos.Z);
@@ -34,31 +36,23 @@ namespace VibeGame.Objects
             {
                 var key = (ccx + dx, ccz + dz);
                 if (_cache.ContainsKey(key)) continue;
-
-                // Enqueue chunk generation
                 async.Enqueue(() => SpawnChunkAsync(key));
             }
         }
 
         private Task SpawnChunkAsync((int cx, int cz) key)
         {
-            int chunkSize = _terrain.TerrainSize;
+            int size = _terrain.TerrainSize;
             float tile = _terrain.TileSize;
+            float[,] heights = _terrain.GenerateHeightsForChunk(key.cx, key.cz, size);
 
-            // Generate chunk heights
-            float[,] heights = _terrain.GenerateHeightsForChunk(key.cx, key.cz, chunkSize);
-
-            // World origin for chunk
-            float chunkWorld = (chunkSize - 1) * tile;
+            float chunkWorld = (size - 1) * tile;
             Vector2 origin = new Vector2(key.cx * chunkWorld, key.cz * chunkWorld);
 
-            // Pick biome at chunk origin
             var biome = _biomes.GetBiomeAt(origin, _terrain);
-            int density = 18; // default, can vary by biome
-
+            int density = 18;
             var spawned = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrain, heights, origin, density);
 
-            // Filter objects strictly within this biome
             var filtered = new List<SpawnedObject>();
             foreach (var obj in spawned)
             {
@@ -74,9 +68,7 @@ namespace VibeGame.Objects
         private (int cx, int cz) WorldToChunk(float x, float z)
         {
             float chunkWorld = (_terrain.TerrainSize - 1) * _terrain.TileSize;
-            int cx = (int)MathF.Floor(x / chunkWorld);
-            int cz = (int)MathF.Floor(z / chunkWorld);
-            return (cx, cz);
+            return ((int)MathF.Floor(x / chunkWorld), (int)MathF.Floor(z / chunkWorld));
         }
     }
 }

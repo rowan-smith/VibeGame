@@ -10,6 +10,7 @@ namespace VibeGame.Biomes.Spawners
     /// <summary>
     /// Config-driven spawner for trees as world objects.
     /// Uses TreesRegistry and biome AllowedObjects (if provided) or falls back to SpawnRules.BiomeIds.
+    /// Supports per-model rotation.
     /// </summary>
     public sealed class ConfigTreeWorldObjectSpawner : IWorldObjectSpawner
     {
@@ -93,7 +94,7 @@ namespace VibeGame.Biomes.Spawners
                     if (!IsEnvValid(env, altMin, altMax, tMin, tMax, mMin, mMax)) continue;
 
                     // Select weighted model
-                    string modelPath = models[0].Path;
+                    ModelAsset selectedModel = models[0];
                     float tRand = ((uint)seed % 10000) / 10000f;
                     float accum = 0f;
                     foreach (var m in models)
@@ -102,10 +103,13 @@ namespace VibeGame.Biomes.Spawners
                         accum += w;
                         if (tRand <= accum)
                         {
-                            modelPath = m.Path;
+                            selectedModel = m;
                             break;
                         }
                     }
+
+                    string modelPath = selectedModel.Path;
+                    float? modelRotation = selectedModel.Rotation; // degrees; nullable means: if present, use and skip random
 
                     // Scale
                     Vector3 baseScale = def.Visual?.BaseScale?.Length >= 3
@@ -115,12 +119,13 @@ namespace VibeGame.Biomes.Spawners
                     float varT = HashToRange(seed * 419 + 101, -variance, variance);
                     Vector3 scale = baseScale * (1.0f + varT);
 
-                    // Rotation
+                    // Rotation: use explicit model Rotation if provided; otherwise keep identity (no auto/random rotation)
                     Quaternion rot = Quaternion.Identity;
-                    if (def.Visual?.RandomRotationY == true)
+
+                    if (modelRotation.HasValue)
                     {
-                        float angle = HashToRange(seed * 887 + 337, 0f, MathF.PI * 2f);
-                        rot = Quaternion.CreateFromAxisAngle(Vector3.UnitY, angle);
+                        // Apply explicit Y-rotation in degrees from config and ignore any random rotation
+                        rot = Quaternion.CreateFromAxisAngle(Vector3.UnitY, modelRotation.Value * (MathF.PI / 180f));
                     }
 
                     float areaRadius = def.Physics?.AreaRadius ?? 0f;
@@ -136,7 +141,8 @@ namespace VibeGame.Biomes.Spawners
                         Position = new Vector3(wx, baseY, wz),
                         Rotation = rot,
                         Scale = scale,
-                        CollisionRadius = colliderRadius
+                        CollisionRadius = colliderRadius,
+                        ConfigRotationDegrees = modelRotation
                     });
 
                     placedAreas.Add((new Vector2(wx, wz), areaRadius));
@@ -169,18 +175,12 @@ namespace VibeGame.Biomes.Spawners
             float h01 = heights[x0, z1];
             float h11 = heights[x1, z1];
 
-            // Match TerrainRenderer triangle split:
-            // Tri1: (x0,z0)->(x0,z1)->(x1,z0) covers tx+tz <= 1
-            // Tri2: (x1,z0)->(x0,z1)->(x1,z1) covers tx+tz > 1
             if (tx + tz <= 1f)
-            {
                 return h00 + (h10 - h00) * tx + (h01 - h00) * tz;
-            }
             else
-            {
                 return h11 + (h10 - h11) * (1f - tz) + (h01 - h11) * (1f - tx);
-            }
         }
+
         private static bool IsSlopeTooSteep(ITerrainGenerator terrain, float x, float z, float baseY)
         {
             float s = 1.5f;

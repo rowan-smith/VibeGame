@@ -88,6 +88,7 @@ namespace VibeGame.Core.WorldObjects
     {
         public string Path { get; set; } = string.Empty;         // Path to GLB/GLTF model
         public float Weight { get; set; } = 1.0f;               // Weight for random selection
+        public float? Rotation { get; set; }                     // Optional explicit Y rotation in degrees; if present, disables random rotation
     }
 
     // Visual / render properties

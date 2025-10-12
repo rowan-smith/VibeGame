@@ -136,8 +136,13 @@ namespace VibeGame.Terrain
                 // Draw any spawned world objects (e.g., trees) for this chunk
                 if (_objectsByChunk.TryGetValue(key, out var objs) && objs is { Count: > 0 })
                 {
+                    // Simple distance culling to avoid drawing distant objects
+                    Vector3 camPos = new Vector3(camera.position.X, camera.position.Y, camera.position.Z);
+                    const float maxDist = 180f;
+                    float maxDist2 = maxDist * maxDist;
                     foreach (var obj in objs)
                     {
+                        if (Vector3.DistanceSquared(camPos, obj.Position) > maxDist2) continue;
                         _worldObjectRenderer.DrawWorldObject(obj);
                     }
                 }
