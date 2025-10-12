@@ -1,0 +1,11 @@
+{
+  "Id": "snow",
+  "DisplayName": "Snow",
+  "Textures": {
+    "Albedo": "textures/terrain/snow/snow_02_diff_4k.png",
+    "Normal": "textures/terrain/snow/snow_02_nor_gl_4k.png",
+    "ARM": "textures/terrain/snow/snow_02_arm_4k.png",
+    "Displacement": "textures/terrain/snow/snow_02_disp_4k.png"
+  },
+  "TileSize": 8.0
+}

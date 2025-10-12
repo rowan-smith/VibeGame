@@ -32,14 +32,14 @@
   },
   "SurfaceTextures": [
     {
-      "TextureId": "aerial_rocks",
+      "TextureId": "snow",
       "BlendMin": 0.5,
       "BlendMax": 1.0
     }
   ],
 
   "TextureRules": {
-    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+    "snow": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
   "AllowedObjects": [],
   "DominantFlora": ["Frozen Shrubs", "Lichen"],

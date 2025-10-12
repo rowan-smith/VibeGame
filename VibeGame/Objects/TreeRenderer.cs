@@ -124,6 +124,24 @@ namespace VibeGame.Objects
                         if (string.IsNullOrWhiteSpace(m.Path)) continue;
                         try
                         {
+                            // Use AssimpNet loader for GLB/GLTF to support multi-mesh assets
+                            string ext = System.IO.Path.GetExtension(m.Path);
+                            if (!string.IsNullOrEmpty(ext) && (ext.Equals(".glb", StringComparison.OrdinalIgnoreCase) || ext.Equals(".gltf", StringComparison.OrdinalIgnoreCase)))
+                            {
+                                var loaded = VibeGame.Core.RaylibGLBLoader.LoadGLB(m.Path);
+                                if (loaded != null && loaded.Count > 0)
+                                {
+                                    float baseW = m.Weight <= 0f ? 1f : m.Weight;
+                                    float per = baseW / loaded.Count;
+                                    foreach (var mdl in loaded)
+                                    {
+                                        list.Add((mdl, per));
+                                    }
+                                    continue; // handled
+                                }
+                            }
+
+                            // Fallback: default raylib loader for other formats or if Assimp failed
                             var model = Raylib.LoadModel(m.Path);
                             float w = m.Weight <= 0f ? 1f : m.Weight;
                             list.Add((model, w));

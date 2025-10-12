@@ -22,7 +22,7 @@
       },
       "Assets": {
         "Models": [
-          { "Path": "models/world/trees/maple_tree.glb", "Weight": 0.6 }
+          { "Path": "models/world/trees/Trees.glb", "Weight": 0.6 }
         ]
       },
       "Visual": {
