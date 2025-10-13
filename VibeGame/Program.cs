@@ -91,7 +91,19 @@ internal static class Program
                 throw new InvalidOperationException("No IBiome instances registered");
             }
 
-            return new SimpleBiomeProvider(allBiomes);
+            var config = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+            var bp = new BiomeProviderConfig();
+            var section = config.GetSection("Biomes:Provider");
+            // Read configured values if present; fall back to defaults otherwise
+            float avgSize = bp.AverageCellSize;
+            float jitter = bp.Jitter;
+            int seedVal = VibeGame.Core.WorldGlobals.Seed;
+
+            var avgStr = section["AverageCellSize"]; if (!string.IsNullOrWhiteSpace(avgStr) && float.TryParse(avgStr, out var avgParsed)) avgSize = avgParsed;
+            var jitStr = section["Jitter"]; if (!string.IsNullOrWhiteSpace(jitStr) && float.TryParse(jitStr, out var jitParsed)) jitter = jitParsed;
+            var seedStr = section["Seed"]; if (!string.IsNullOrWhiteSpace(seedStr) && int.TryParse(seedStr, out var seedParsed)) seedVal = seedParsed;
+
+            return new SimpleBiomeProvider(allBiomes, avgSize, seedVal, jitter);
         });
 
         // -----------------------------

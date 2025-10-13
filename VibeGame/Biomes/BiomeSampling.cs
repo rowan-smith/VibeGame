@@ -14,6 +14,8 @@ namespace VibeGame.Biomes
         /// <summary>
         /// Samples a grid of points over the chunk area and returns the most frequent biome.
         /// Optionally applies extra weight to the center sample to stabilize near boundaries.
+        /// You can optionally expand the sampled area by a margin in world units to make
+        /// the result more stable across adjacent chunks.
         /// </summary>
         /// <param name="provider">Biome provider</param>
         /// <param name="terrain">Terrain generator (can be null if provider ignores it)</param>
@@ -22,6 +24,7 @@ namespace VibeGame.Biomes
         /// <param name="tileSize">Tile size in world units</param>
         /// <param name="samplesPerAxis">Grid resolution (e.g., 9 for 9x9). Minimum 3.</param>
         /// <param name="centerExtraWeight">Additional weight for center sample (e.g., 2.0 adds two extra votes)</param>
+        /// <param name="expandWorldMargin">Margin (in world units) to expand the sampled square area on all sides.</param>
         public static IBiome GetDominantBiomeForArea(
             IBiomeProvider provider,
             ITerrainGenerator? terrain,
@@ -29,12 +32,18 @@ namespace VibeGame.Biomes
             int chunkSize,
             float tileSize,
             int samplesPerAxis = 9,
-            float centerExtraWeight = 2f)
+            float centerExtraWeight = 2f,
+            float expandWorldMargin = 0f)
         {
-            var (primary, _) = GetDominantAndSecondaryBiomeForArea(provider, terrain, chunkOriginWorld, chunkSize, tileSize, samplesPerAxis, centerExtraWeight);
+            var (primary, _) = GetDominantAndSecondaryBiomeForArea(provider, terrain, chunkOriginWorld, chunkSize, tileSize, samplesPerAxis, centerExtraWeight, expandWorldMargin);
             return primary;
         }
 
+        /// <summary>
+        /// Same as GetDominantBiomeForArea, but also returns the second most frequent biome.
+        /// An optional expandWorldMargin makes the result more stable between neighboring chunks
+        /// by sampling a slightly larger region.
+        /// </summary>
         public static (IBiome primary, IBiome? secondary) GetDominantAndSecondaryBiomeForArea(
             IBiomeProvider provider,
             ITerrainGenerator? terrain,
@@ -42,13 +51,18 @@ namespace VibeGame.Biomes
             int chunkSize,
             float tileSize,
             int samplesPerAxis = 9,
-            float centerExtraWeight = 2f)
+            float centerExtraWeight = 2f,
+            float expandWorldMargin = 0f)
         {
             samplesPerAxis = Math.Max(3, samplesPerAxis);
             var counts = new Dictionary<string, (IBiome biome, float weight)>(StringComparer.OrdinalIgnoreCase);
 
             float areaWorldSize = chunkSize * tileSize;
-            float step = areaWorldSize / (samplesPerAxis + 1);
+            // Expand the area by the requested margin on all sides
+            Vector2 origin = new Vector2(chunkOriginWorld.X - expandWorldMargin, chunkOriginWorld.Y - expandWorldMargin);
+            float size = areaWorldSize + expandWorldMargin * 2f;
+
+            float step = size / (samplesPerAxis + 1);
 
             int centerIdx = (samplesPerAxis + 1) / 2; // integer center index in 1..samplesPerAxis
 
@@ -56,8 +70,8 @@ namespace VibeGame.Biomes
             {
                 for (int i = 1; i <= samplesPerAxis; i++)
                 {
-                    float wx = chunkOriginWorld.X + i * step;
-                    float wz = chunkOriginWorld.Y + j * step;
+                    float wx = origin.X + i * step;
+                    float wz = origin.Y + j * step;
                     var b = provider.GetBiomeAt(new Vector2(wx, wz), terrain!);
 
                     // Weight samples toward the center to stabilize selection
@@ -75,8 +89,8 @@ namespace VibeGame.Biomes
             if (counts.Count == 0)
             {
                 // Fallback to center
-                float cx = chunkOriginWorld.X + areaWorldSize * 0.5f;
-                float cz = chunkOriginWorld.Y + areaWorldSize * 0.5f;
+                float cx = origin.X + size * 0.5f;
+                float cz = origin.Y + size * 0.5f;
                 var c = provider.GetBiomeAt(new Vector2(cx, cz), terrain!);
                 return (c, null);
             }

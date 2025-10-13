@@ -87,7 +87,8 @@ namespace VibeGame.Terrain
 
             // Determine primary biome for this chunk area
             int chunkSize = Math.Max(1, w - 1);
-            var (primary, _) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSize, tileSize, 9, 2f);
+            float expand = chunkSize * tileSize * 3.0f;
+            var (primary, _) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSize, tileSize, 13, 2f, expand);
             string primaryId = primary.Id;
 
             for (int z = 0; z < h; z++)
@@ -100,7 +101,9 @@ namespace VibeGame.Terrain
 
                 chunk.Vertices[idx] = new Vector3(wx, y, wz);
                 chunk.Normals[idx] = ComputeNormal(heights, x, z, sizeX, sizeZ, tileSize);
-                chunk.UVs[idx] = new Vector2(w > 1 ? (float)x / (w - 1) : 0f, h > 1 ? (float)z / (h - 1) : 0f);
+                // Use world-space continuous UVs scaled so each chunk roughly spans 1 repeat
+                                float uvScale = 1f / MathF.Max(0.001f, ((w - 1) * tileSize));
+                                chunk.UVs[idx] = new Vector2(wx, wz) * uvScale;
                 float wAlpha = ComputeBlendWeight(new Vector2(wx, wz), primaryId, tileSize);
                 byte a = (byte)(Clamp01(wAlpha) * 255f);
                 chunk.Colors[idx] = new Color((byte)255, (byte)255, (byte)255, a);
@@ -178,7 +181,8 @@ namespace VibeGame.Terrain
             {
                 // Determine primary biome for this chunk area
                 int chunkSizeLocal = Math.Max(1, w - 1);
-                var (primary, _) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSizeLocal, tileSize, 9, 2f);
+                float expand = chunkSizeLocal * tileSize * 3.0f;
+                var (primary, _) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSizeLocal, tileSize, 13, 2f, expand);
                 string primaryId = primary.Id;
 
                 var job = new MeshBuildJob
@@ -201,7 +205,9 @@ namespace VibeGame.Terrain
 
                     job.Vertices[idx] = new Vector3(wx, y, wz);
                     job.Normals[idx] = ComputeNormal(heights, x, z, w, h, tileSize);
-                    job.UVs[idx] = new Vector2(w > 1 ? (float)x / (w - 1) : 0f, h > 1 ? (float)z / (h - 1) : 0f);
+                    // Use world-space continuous UVs scaled so each chunk roughly spans 1 repeat
+                                        float uvScale = 1f / MathF.Max(0.001f, ((w - 1) * tileSize));
+                                        job.UVs[idx] = new Vector2(wx, wz) * uvScale;
                     // Compute alpha based on proximity to non-primary biome
                     float wAlpha = ComputeBlendWeight(new Vector2(wx, wz), primaryId, tileSize);
                     byte a = (byte)(Clamp01(wAlpha) * 255f);
@@ -283,7 +289,9 @@ namespace VibeGame.Terrain
             // Decide material per origin using dominant and secondary biome
             int w = heights.GetLength(0);
             int chunkSize = Math.Max(1, w - 1);
-            var (primary, secondary) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSize, tileSize, 9, 2f);
+            // Expand sampling by ~3 chunk widths and use higher sample count for stability across borders
+            float expand = chunkSize * tileSize * 3.0f;
+            var (primary, secondary) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSize, tileSize, 13, 2f, expand);
             ApplyBlendMaterial(primary.Data, secondary?.Data);
 
             if (_activeMaterial.Equals(default(Material))) return;
@@ -513,22 +521,30 @@ namespace VibeGame.Terrain
 
         private float ComputeBlendWeight(Vector2 worldPos, string primaryId, float tileSize)
         {
-            // Sample 8 neighboring points at a small radius; weight is fraction that are NOT the primary biome
-            Vector2[] dirs = new Vector2[]
+            // Sample many directions at two radii; weight is average fraction that are NOT the primary biome
+            const int samples = 16; // directions around the circle
+            float r1 = MathF.Max(tileSize * 3.0f, 0.001f);
+            float r2 = r1 * 2.2f;
+            int other1 = 0, other2 = 0;
+
+            for (int i = 0; i < samples; i++)
             {
-                new Vector2(1,0), new Vector2(-1,0), new Vector2(0,1), new Vector2(0,-1),
-                Vector2.Normalize(new Vector2(1,1)), Vector2.Normalize(new Vector2(-1,1)), Vector2.Normalize(new Vector2(1,-1)), Vector2.Normalize(new Vector2(-1,-1))
-            };
-            float r = MathF.Max(tileSize * 1.5f, 0.001f);
-            int other = 0;
-            for (int i = 0; i < dirs.Length; i++)
-            {
-                var p = worldPos + dirs[i] * r;
-                var b = _biomeProvider.GetBiomeAt(p, null);
-                if (!string.Equals(b.Id, primaryId, StringComparison.OrdinalIgnoreCase)) other++;
+                float a = (MathF.PI * 2f) * (i / (float)samples);
+                Vector2 dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                var p1 = worldPos + dir * r1;
+                var b1 = _biomeProvider.GetBiomeAt(p1, null);
+                if (!string.Equals(b1.Id, primaryId, StringComparison.OrdinalIgnoreCase)) other1++;
+
+                var p2 = worldPos + dir * r2;
+                var b2 = _biomeProvider.GetBiomeAt(p2, null);
+                if (!string.Equals(b2.Id, primaryId, StringComparison.OrdinalIgnoreCase)) other2++;
             }
-            float frac = other / (float)dirs.Length;
-            return Smoothstep(0.25f, 0.75f, frac);
+
+            float frac1 = other1 / (float)samples;
+            float frac2 = other2 / (float)samples;
+            float frac = (frac1 * 0.6f) + (frac2 * 0.4f);
+            // Softer thresholds for a wider transition band
+            return Smoothstep(0.15f, 0.70f, frac);
         }
 
         public static Color ToRaylibColor(System.Drawing.Color c) => new Color(c.R, c.G, c.B, c.A);
