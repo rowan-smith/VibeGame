@@ -41,7 +41,7 @@
   "TextureRules": {
     "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
-  "AllowedObjects": ["maple_tree"],
+  "AllowedObjects": ["pine_trees", "forest_trees"],
   "DominantFlora": ["Cliff Moss", "Frost Fern"],
   "DominantFauna": [],
   "SurfaceMaterial": "Shale/Stone",

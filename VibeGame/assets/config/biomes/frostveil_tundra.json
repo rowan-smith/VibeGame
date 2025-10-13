@@ -41,7 +41,7 @@
   "TextureRules": {
     "snow": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
-  "AllowedObjects": [],
+  "AllowedObjects": ["pine_trees"],
   "DominantFlora": ["Frozen Shrubs", "Lichen"],
   "DominantFauna": [],
   "SurfaceMaterial": "Snow/Ice",

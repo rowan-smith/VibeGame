@@ -63,16 +63,28 @@ namespace VibeGame.Objects
 
         private static Quaternion ChooseUpAxisByExtents(BoundingBox bbox, Vector3 scale, bool preferYUp)
         {
+            // Candidates:
+            // qY: identity (already Y-up)
+            // qZUp: -90° around X to convert Z-up → Y-up (common for GLB)
+            // qXUp: +90° around Z to convert X-up → Y-up (some exporters)
             var qY = Quaternion.Identity;
-            var qZ = Quaternion.CreateFromAxisAngle(new Vector3(1f, 0f, 0f), -MathF.PI / 2);
+            var qZUp = Quaternion.CreateFromAxisAngle(new Vector3(1f, 0f, 0f), -MathF.PI / 2f);
+            var qXUp = Quaternion.CreateFromAxisAngle(new Vector3(0f, 0f, 1f), +MathF.PI / 2f);
 
             float eY = EvalYExtent(bbox, scale, qY, out _);
-            float eZ = EvalYExtent(bbox, scale, qZ, out _);
+            float eZ = EvalYExtent(bbox, scale, qZUp, out _);
+            float eX = EvalYExtent(bbox, scale, qXUp, out _);
 
+            // Pick the orientation that yields the largest Y extent, with a slight bias
             const float bias = 1.1f;
-            if (eZ > eY * bias) return qZ;
-            if (eY > eZ * bias) return qY;
-            return preferYUp ? qY : qZ;
+            float best = eY; var qBest = qY;
+            if (eZ > best * (qBest == qY ? bias : 1f)) { best = eZ; qBest = qZUp; }
+            if (eX > best * (qBest == qY ? bias : 1f)) { best = eX; qBest = qXUp; }
+
+            // If ambiguous, prefer Y-up if requested; otherwise favor Z-up correction by default
+            if (qBest == qY && MathF.Abs(eZ - eY) < 1e-3f && MathF.Abs(eX - eY) < 1e-3f)
+                return preferYUp ? qY : qZUp;
+            return qBest;
         }
 
         private static float EvalYExtent(BoundingBox bbox, Vector3 scale, Quaternion q, out float minY)

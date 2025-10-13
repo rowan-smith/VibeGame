@@ -41,7 +41,7 @@
   "TextureRules": {
     "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
-  "AllowedObjects": [],
+  "AllowedObjects": ["palm_trees"],
   "DominantFlora": [],
   "DominantFauna": [],
   "SurfaceMaterial": "Crystalline Sand",

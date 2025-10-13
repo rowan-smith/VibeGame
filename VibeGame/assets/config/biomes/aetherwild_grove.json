@@ -43,7 +43,7 @@
     "aerial_rocks": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
   
-  "AllowedObjects": ["maple_tree"],
+  "AllowedObjects": ["maple_tree", "maple_trees", "birch_trees", "forest_trees"],
   "DominantFlora": ["Glowcap Trees", "Luminous Vines"],
   "DominantFauna": [],
   "SurfaceMaterial": "Bioluminescent moss",

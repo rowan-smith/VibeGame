@@ -41,7 +41,7 @@
   "TextureRules": {
     "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
   },
-  "AllowedObjects": [],
+  "AllowedObjects": ["maple_tree", "maple_trees", "birch_trees", "forest_trees", "dead_trees"],
   "DominantFlora": ["Thornbrush", "Oxide Ferns"],
   "DominantFauna": [],
   "SurfaceMaterial": "Corroded Soil",
