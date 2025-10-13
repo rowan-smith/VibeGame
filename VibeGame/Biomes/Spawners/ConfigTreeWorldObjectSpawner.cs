@@ -60,7 +60,7 @@ namespace VibeGame.Biomes.Spawners
 
             if (candidateDefs.Count == 0) return results;
 
-            int perType = Math.Max(1, count / candidateDefs.Count);
+            int perType = Math.Max(1, count / Math.Max(1, candidateDefs.Count));
             int seedBase = HashCode.Combine(WorldGlobals.Seed, biomeId.GetHashCode(StringComparison.OrdinalIgnoreCase),
                                             (int)originWorld.X, (int)originWorld.Y, chunkSize);
 
@@ -81,7 +81,12 @@ namespace VibeGame.Biomes.Spawners
                 if (models.Count == 0) continue;
                 float totalW = models.Sum(m => MathF.Max(0.0001f, m.Weight));
 
-                for (int i = 0; i < perType; i++)
+                // Adjust attempts per-type by spawn density (acts as a multiplier)
+                float density = Math.Clamp(sr.SpawnDensity, 0f, 2f);
+                int attempts = Math.Max(0, (int)MathF.Round(perType * density));
+                if (attempts == 0) continue;
+
+                for (int i = 0; i < attempts; i++)
                 {
                     int seed = HashCode.Combine(seedBase, def.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), i);
                     float wx = HashToRange(seed * 97 + 5, minX, maxX);
@@ -128,7 +133,7 @@ namespace VibeGame.Biomes.Spawners
                         rot = Quaternion.CreateFromAxisAngle(Vector3.UnitY, modelRotation.Value * (MathF.PI / 180f));
                     }
 
-                    float areaRadius = def.Physics?.AreaRadius ?? 0f;
+                    float areaRadius = MathF.Max(def.Physics?.AreaRadius ?? 0f, (sr.ClusterRadius > 0 ? sr.ClusterRadius : 0f));
                     bool overlaps = placedAreas.Any(pa => Vector2.DistanceSquared(pa.pos, new Vector2(wx, wz)) < (pa.radius + areaRadius) * (pa.radius + areaRadius));
                     if (overlaps) continue;
 

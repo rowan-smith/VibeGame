@@ -49,7 +49,7 @@ namespace VibeGame.Objects
             float chunkWorld = (size - 1) * tile;
             Vector2 origin = new Vector2(key.cx * chunkWorld, key.cz * chunkWorld);
 
-            var biome = _biomes.GetBiomeAt(origin, _terrain);
+            var biome = BiomeSampling.GetDominantBiomeForArea(_biomes, _terrain, origin, _terrain.TerrainSize - 1, _terrain.TileSize, 9, 2f);
             int density = 18;
             var spawned = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrain, heights, origin, density);
 

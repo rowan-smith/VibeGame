@@ -68,7 +68,7 @@ namespace VibeGame.Terrain
                         }
 
                         // Spawn world objects for this chunk using biome spawner
-                        var biome = _biomeProvider.GetBiomeAt(origin, _terrainGen);
+                        var biome = BiomeSampling.GetDominantBiomeForArea(_biomeProvider, _terrainGen, origin, ChunkSize, TileSize, 9, 2f);
                         var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
                         var filtered = new List<SpawnedObject>(raw.Count);
                         foreach (var obj in raw)
@@ -123,11 +123,8 @@ namespace VibeGame.Terrain
                 if (exclude != null && exclude.Contains(key))
                     continue;
 
-                // Apply biome texture based on chunk center
-                var biome = _biomeProvider.GetBiomeAt(
-                    new Vector2(chunk.Origin.X + ChunkSize * 0.5f, chunk.Origin.Y + ChunkSize * 0.5f),
-                    null
-                );
+                // Apply biome texture based on dominant biome across this chunk
+                var biome = GetDominantBiomeForChunk(chunk);
                 _renderer.ApplyBiomeTextures(biome.Data);
 
                 // Render the chunk (meshes are built centrally by TerrainManager.UpdateAround)
@@ -147,6 +144,18 @@ namespace VibeGame.Terrain
                     }
                 }
             }
+        }
+
+        private IBiome GetDominantBiomeForChunk(TerrainChunk chunk)
+        {
+            return BiomeSampling.GetDominantBiomeForArea(
+                _biomeProvider,
+                _terrainGen,
+                chunk.Origin,
+                ChunkSize,
+                TileSize,
+                9,
+                2f);
         }
 
         public void Render(Camera3D camera) => RenderTiles(camera);

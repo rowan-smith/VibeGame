@@ -85,6 +85,7 @@
       <Compile Remove="Terrain\ITerrainGenerator.cs" />
       <Compile Remove="Core\WorldObjects\ITreesRegistry.cs" />
       <Compile Remove="Terrain\IChunkJobScheduler.cs" />
+      <Compile Include="assets\shaders\biome_blend.fs" />
     </ItemGroup>
 
 </Project>

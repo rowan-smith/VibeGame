@@ -57,7 +57,12 @@ internal static class Program
         // -----------------------------
         builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
-        builder.Services.AddSingleton<ITerrainRenderer, TerrainRenderer>();
+        builder.Services.AddSingleton<ITerrainRenderer>(sp => new TerrainRenderer(
+            sp.GetRequiredService<ITextureManager>(),
+            sp.GetRequiredService<ITerrainTextureRegistry>(),
+            sp.GetRequiredService<IBiomeProvider>(),
+            sp.GetServices<IBiome>()
+        ));
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
         builder.Services.AddSingleton<IWorldObjectRenderer, WorldObjectRenderer>();
         builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();

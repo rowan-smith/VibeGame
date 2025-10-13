@@ -10,7 +10,7 @@
         "SpawnDensity": 0.4,
         "AltitudeRange": [0.2, 1.0],
         "TemperatureRange": [0.4, 0.8],
-        "MoistureRange": [0.3, 0.7],
+        "MoistureRange": [0.3, 0.9],
         "ClusterRadius": 5
       },
       "Physics": {
@@ -44,7 +44,7 @@
       "Category": "Tree",
       "SpawnRules": {
         "BiomeIds": ["nullscape"],
-        "SpawnDensity": 0.4,
+        "SpawnDensity": 0.15,
         "AltitudeRange": [0.2, 1.0],
         "TemperatureRange": [0.4, 0.8],
         "MoistureRange": [0.3, 0.7],

@@ -27,6 +27,7 @@ namespace VibeGame.Terrain
         private readonly ITextureManager _textureManager;
         private readonly ITerrainTextureRegistry _terrainTextures;
         private readonly IBiomeProvider _biomeProvider;
+        private readonly Dictionary<string, IBiome> _biomesById = new(StringComparer.OrdinalIgnoreCase);
 
         private Texture _lowTex;
         private bool _lowAvailable;
@@ -37,6 +38,8 @@ namespace VibeGame.Terrain
 
         private readonly Dictionary<string, Material> _materialCache = new();
         private Material _activeMaterial;
+        private Shader _blendShader;
+        private bool _blendShaderLoaded;
 
         // Async mesh generation queue
         private readonly ConcurrentQueue<MeshBuildJob> _pendingUploads = new();
@@ -44,11 +47,15 @@ namespace VibeGame.Terrain
         private readonly HashSet<Vector2> _pendingOrigins = new();
         private readonly HashSet<Vector2> _dirtyOrigins = new();
 
-        public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider)
+        public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider, IEnumerable<IBiome> allBiomes)
         {
             _textureManager = textureManager;
             _terrainTextures = terrainTextures;
             _biomeProvider = biomeProvider;
+            foreach (var b in allBiomes)
+            {
+                if (!_biomesById.ContainsKey(b.Id)) _biomesById[b.Id] = b;
+            }
         }
 
         public void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld)
@@ -78,6 +85,11 @@ namespace VibeGame.Terrain
                 Indices = new ushort[(w - 1) * (h - 1) * 6]
             };
 
+            // Determine primary biome for this chunk area
+            int chunkSize = Math.Max(1, w - 1);
+            var (primary, _) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSize, tileSize, 9, 2f);
+            string primaryId = primary.Id;
+
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
             {
@@ -89,7 +101,9 @@ namespace VibeGame.Terrain
                 chunk.Vertices[idx] = new Vector3(wx, y, wz);
                 chunk.Normals[idx] = ComputeNormal(heights, x, z, sizeX, sizeZ, tileSize);
                 chunk.UVs[idx] = new Vector2(w > 1 ? (float)x / (w - 1) : 0f, h > 1 ? (float)z / (h - 1) : 0f);
-                chunk.Colors[idx] = Raylib.WHITE;
+                float wAlpha = ComputeBlendWeight(new Vector2(wx, wz), primaryId, tileSize);
+                byte a = (byte)(Clamp01(wAlpha) * 255f);
+                chunk.Colors[idx] = new Color((byte)255, (byte)255, (byte)255, a);
             }
 
             int tri = 0;
@@ -162,6 +176,11 @@ namespace VibeGame.Terrain
 
             _ = Task.Run(() =>
             {
+                // Determine primary biome for this chunk area
+                int chunkSizeLocal = Math.Max(1, w - 1);
+                var (primary, _) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSizeLocal, tileSize, 9, 2f);
+                string primaryId = primary.Id;
+
                 var job = new MeshBuildJob
                 {
                     Origin = originWorld,
@@ -183,7 +202,10 @@ namespace VibeGame.Terrain
                     job.Vertices[idx] = new Vector3(wx, y, wz);
                     job.Normals[idx] = ComputeNormal(heights, x, z, w, h, tileSize);
                     job.UVs[idx] = new Vector2(w > 1 ? (float)x / (w - 1) : 0f, h > 1 ? (float)z / (h - 1) : 0f);
-                    job.Colors[idx] = Raylib.WHITE;
+                    // Compute alpha based on proximity to non-primary biome
+                    float wAlpha = ComputeBlendWeight(new Vector2(wx, wz), primaryId, tileSize);
+                    byte a = (byte)(Clamp01(wAlpha) * 255f);
+                    job.Colors[idx] = new Color((byte)255, (byte)255, (byte)255, a);
                 }
 
                 int tri = 0;
@@ -257,10 +279,15 @@ namespace VibeGame.Terrain
         public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, Camera3D camera)
         {
             if (!_chunksByOrigin.TryGetValue(originWorld, out var list) || list == null) return;
+
+            // Decide material per origin using dominant and secondary biome
+            int w = heights.GetLength(0);
+            int chunkSize = Math.Max(1, w - 1);
+            var (primary, secondary) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSize, tileSize, 9, 2f);
+            ApplyBlendMaterial(primary.Data, secondary?.Data);
+
             if (_activeMaterial.Equals(default(Material))) return;
 
-            // Draw all loaded chunks for this origin. Distance-based culling is coordinated by ring radii.
-            // Removing the hard clamp ensures far read-only/LOD rings are visible.
             foreach (var chunk in list)
             {
                 Matrix4x4 transform = Matrix4x4.Identity;
@@ -329,6 +356,7 @@ namespace VibeGame.Terrain
 
         public void ApplyBiomeTextures(BiomeData biome)
         {
+            // Fallback single-biome material support (kept for compatibility)
             if (biome == null) return;
 
             var biomeId = string.IsNullOrWhiteSpace(biome.Id) ? "default" : biome.Id;
@@ -354,58 +382,34 @@ namespace VibeGame.Terrain
                         var m = Raylib.LoadMaterialDefault();
                         Material* matPtr = &m;
 
-                        // Always bind albedo if available
                         if (!string.IsNullOrWhiteSpace(albedo) && _textureManager.TryGetOrLoadByPath(albedo!, out var tAlb))
-                        {
                             Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ALBEDO, tAlb);
-                        }
-
-                        // Optional normal map
                         if (!string.IsNullOrWhiteSpace(normal) && _textureManager.TryGetOrLoadByPath(normal!, out var tNor))
-                        {
                             Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_NORMAL, tNor);
-                        }
-
-                        // AO/Rough/Metal combinations
                         if (!string.IsNullOrWhiteSpace(arm) && _textureManager.TryGetOrLoadByPath(arm!, out var tArm))
                         {
-                            // Bind packed ARM texture to all three PBR slots; shader may select channels as needed
-                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tArm); // R = AO
-                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tArm); // G = Roughness
-                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tArm); // B = Metalness
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tArm);
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tArm);
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tArm);
                         }
                         else if (!string.IsNullOrWhiteSpace(aor) && _textureManager.TryGetOrLoadByPath(aor!, out var tAor))
                         {
-                            // Bind AO/Rough packed to respective slots; metal may be separate or absent
-                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tAor); // R = AO
-                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tAor); // G = Roughness
-
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tAor);
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tAor);
                             if (!string.IsNullOrWhiteSpace(metal) && _textureManager.TryGetOrLoadByPath(metal!, out var tMet))
-                            {
                                 Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tMet);
-                            }
                         }
                         else
                         {
                             if (!string.IsNullOrWhiteSpace(ao) && _textureManager.TryGetOrLoadByPath(ao!, out var tAo))
-                            {
                                 Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_OCCLUSION, tAo);
-                            }
                             if (!string.IsNullOrWhiteSpace(rough) && _textureManager.TryGetOrLoadByPath(rough!, out var tRgh))
-                            {
                                 Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ROUGHNESS, tRgh);
-                            }
                             if (!string.IsNullOrWhiteSpace(metal) && _textureManager.TryGetOrLoadByPath(metal!, out var tMet2))
-                            {
                                 Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tMet2);
-                            }
                         }
-
-                        // Optional displacement/height map
                         if (!string.IsNullOrWhiteSpace(disp) && _textureManager.TryGetOrLoadByPath(disp!, out var tDisp))
-                        {
                             Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_HEIGHT, tDisp);
-                        }
 
                         mat = m;
                     }
@@ -414,6 +418,71 @@ namespace VibeGame.Terrain
             }
 
             _activeMaterial = mat;
+        }
+
+        private void ApplyBlendMaterial(BiomeData primary, BiomeData? secondary)
+        {
+            if (primary == null) return;
+            // Use a distinct key for the blend variant even when there is no secondary
+            string key = secondary != null ? $"{primary.Id}|{secondary.Id}" : $"{primary.Id}|blend";
+            if (!_materialCache.TryGetValue(key, out var mat) || mat.Equals(default(Material)))
+            {
+                mat = default;
+                var priLayers = primary.SurfaceTextures ?? new List<SurfaceTextureLayer>();
+                var secLayers = secondary?.SurfaceTextures ?? new List<SurfaceTextureLayer>();
+                string? priAlbedo = null;
+                string? secAlbedo = null;
+                if (priLayers.Count > 0)
+                {
+                    var texId = priLayers[0].TextureId;
+                    priAlbedo = _terrainTextures.GetResolvedAlbedoPath(texId);
+                }
+                if (secLayers.Count > 0)
+                {
+                    var texId2 = secLayers[0].TextureId;
+                    secAlbedo = _terrainTextures.GetResolvedAlbedoPath(texId2);
+                }
+
+                unsafe
+                {
+                    var m = Raylib.LoadMaterialDefault();
+                    // Always use the blend shader so vertex alpha never darkens the surface
+                    EnsureBlendShader();
+                    if (!_blendShader.Equals(default(Shader)))
+                    {
+                        m.shader = _blendShader;
+                    }
+
+                    Material* matPtr = &m;
+                    Texture tAlb = default;
+                    Texture tSec = default;
+                    if (!string.IsNullOrWhiteSpace(priAlbedo) && _textureManager.TryGetOrLoadByPath(priAlbedo!, out tAlb))
+                        Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ALBEDO, tAlb);
+                    // If no secondary albedo, bind the primary texture as the secondary as well
+                    if (!string.IsNullOrWhiteSpace(secAlbedo) && _textureManager.TryGetOrLoadByPath(secAlbedo!, out tSec))
+                        Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tSec);
+                    else if (!tAlb.Equals(default(Texture)))
+                        Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tAlb);
+
+                    mat = m;
+                }
+                _materialCache[key] = mat;
+            }
+            _activeMaterial = mat;
+        }
+
+        private void EnsureBlendShader()
+        {
+            if (_blendShaderLoaded) return;
+            try
+            {
+                string baseDir = AppContext.BaseDirectory;
+                string vs = System.IO.Path.Combine(baseDir, "assets", "shaders", "biome_blend.vert");
+                string fs = System.IO.Path.Combine(baseDir, "assets", "shaders", "biome_blend.frag");
+                _blendShader = Raylib.LoadShader(vs, fs);
+            }
+            catch { /* ignore, will fall back */ }
+            finally { _blendShaderLoaded = true; }
         }
 
         public void SetColorTint(Color color) { /* optional */ }
@@ -432,6 +501,34 @@ namespace VibeGame.Terrain
 
             Vector3 n = new Vector3(hl - hr, 2f * tileSize, hd - hu);
             return Vector3.Normalize(n);
+        }
+
+        private static float Clamp01(float v) => MathF.Max(0f, MathF.Min(1f, v));
+
+        private static float Smoothstep(float edge0, float edge1, float x)
+        {
+            float t = Clamp01((x - edge0) / MathF.Max(1e-6f, edge1 - edge0));
+            return t * t * (3f - 2f * t);
+        }
+
+        private float ComputeBlendWeight(Vector2 worldPos, string primaryId, float tileSize)
+        {
+            // Sample 8 neighboring points at a small radius; weight is fraction that are NOT the primary biome
+            Vector2[] dirs = new Vector2[]
+            {
+                new Vector2(1,0), new Vector2(-1,0), new Vector2(0,1), new Vector2(0,-1),
+                Vector2.Normalize(new Vector2(1,1)), Vector2.Normalize(new Vector2(-1,1)), Vector2.Normalize(new Vector2(1,-1)), Vector2.Normalize(new Vector2(-1,-1))
+            };
+            float r = MathF.Max(tileSize * 1.5f, 0.001f);
+            int other = 0;
+            for (int i = 0; i < dirs.Length; i++)
+            {
+                var p = worldPos + dirs[i] * r;
+                var b = _biomeProvider.GetBiomeAt(p, null);
+                if (!string.Equals(b.Id, primaryId, StringComparison.OrdinalIgnoreCase)) other++;
+            }
+            float frac = other / (float)dirs.Length;
+            return Smoothstep(0.25f, 0.75f, frac);
         }
 
         public static Color ToRaylibColor(System.Drawing.Color c) => new Color(c.R, c.G, c.B, c.A);
