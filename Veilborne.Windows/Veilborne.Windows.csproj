@@ -9,7 +9,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Logging\Logging.csproj" />
-      <ProjectReference Include="..\Veilborne.Core\Veilborne.Core.csproj" />
     </ItemGroup>
 
     <ItemGroup>
