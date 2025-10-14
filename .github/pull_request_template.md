@@ -10,7 +10,7 @@ Please delete options that are not relevant.
 
 ## Prompt Details
 ### What Prompt was used?
-[Copy prompt text here]
+> [Copy prompt text here]
 
 ### Generation Parameters
 Please delete options that are not relevant.
