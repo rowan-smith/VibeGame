@@ -1,0 +1,56 @@
+{
+  "Id": "bloodpetal_wilds",
+  "DisplayName": "Bloodpetal Wilds",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.75,
+      "Moisture": 0.7,
+      "Altitude": 0.2,
+      "Fertility": 0.95,
+      "Roughness": 0.6,
+      "VegetationDensity": 1.0
+    },
+    "Weights": {
+      "WtTemp": 1.0,
+      "WtMoisture": 1.2,
+      "WtElevation": 0.8,
+      "WtFertility": 1.4
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.35,
+      "Frequency": 1.1,
+      "Persistence": 0.6,
+      "Lacunarity": 2.4,
+      "Detail": 0.8
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 220, "G": 20, "B": 60, "A": 255 },
+    "Secondary": { "R": 10, "G": 10, "B": 10, "A": 255 },
+    "Accent": { "R": 0, "G": 100, "B": 0, "A": 255 }
+  },
+
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
+  
+  "AllowedObjects": [],
+  "DominantFlora": ["Bloodvines", "Carnivorous Petal Trees"],
+  "DominantFauna": [],
+  "SurfaceMaterial": "Dark Soil",
+  "WeatherPatterns": ["Red mist", "heavy rain"],
+  "AssetTags": ["organic", "vines", "overgrowth"],
+  "LightingModifier": 0.9,
+  "FeatureDescription": "A lush jungle of beauty and horror, where every flower hungers.",
+  "SpecialFeatures": ["Plant-based predators"],
+  "MusicTag": "jungle"
+}

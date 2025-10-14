@@ -1,0 +1,268 @@
+{
+  "WorldObjects": [
+    {
+      "Id": "maple_tree",
+      "DisplayName": "Maple Tree",
+      "Description": "A sturdy deciduous tree known for its rich amber leaves and dense wood. Common in temperate biomes.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["aetherwild_grove", "verdigris_expanse", "solaris_steppe"],
+        "SpawnDensity": 0.4,
+        "AltitudeRange": [0.2, 1.0],
+        "TemperatureRange": [0.4, 0.8],
+        "MoistureRange": [0.3, 0.9],
+        "ClusterRadius": 5
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 300,
+        "AreaRadius": 1.0,
+        "ColliderRadius": 0.45
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/maple_tree.glb", "Weight": 1.0, "Rotation": 180 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.85, 1.0, 0.85],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [1.0, 0.7, 0.5],
+          "Winter": [0.8, 0.8, 0.8]
+        },
+        "BaseScale": [0.03, 0.03, 0.03],
+        "ScaleVariance": 0.08,
+        "RandomRotationY": true
+      }
+    },
+    {
+      "Id": "dead_trees",
+      "DisplayName": "Dead Trees",
+      "Description": "Desiccated trunks and branches; most common in desolate or corrupted biomes.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["nullscape", "verdigris_expanse"],
+        "SpawnDensity": 0.15,
+        "AltitudeRange": [0.0, 1.0],
+        "TemperatureRange": [0.2, 0.9],
+        "MoistureRange": [0.0, 0.5],
+        "ClusterRadius": 5
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 300,
+        "AreaRadius": 1.0,
+        "ColliderRadius": 0.45
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/Dead_Trees.glb", "Weight": 1.0, "Rotation": 90 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.85, 1.0, 0.85],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [1.0, 0.7, 0.5],
+          "Winter": [0.8, 0.8, 0.8]
+        },
+        "BaseScale": [100.0, 100.0, 100.0],
+        "ScaleVariance": 0.08,
+        "RandomRotationY": true
+      }
+    },
+
+    {
+      "Id": "birch_trees",
+      "DisplayName": "Birch Trees",
+      "Description": "Slender white-barked trees common in groves and temperate regions.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["aetherwild_grove", "solaris_steppe", "verdigris_expanse"],
+        "SpawnDensity": 0.35,
+        "AltitudeRange": [0.15, 1.0],
+        "TemperatureRange": [0.35, 0.75],
+        "MoistureRange": [0.25, 0.9],
+        "ClusterRadius": 5
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 250,
+        "AreaRadius": 1.0,
+        "ColliderRadius": 0.45
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/Birch_Trees.glb", "Weight": 1.0 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.9, 1.0, 0.9],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [1.0, 0.85, 0.6],
+          "Winter": [0.85, 0.9, 0.95]
+        },
+        "BaseScale": [100.0, 100.0, 100.0],
+        "ScaleVariance": 0.1,
+        "RandomRotationY": true
+      }
+    },
+
+    {
+      "Id": "maple_trees",
+      "DisplayName": "Maple Trees",
+      "Description": "Clusters of mature maple trees with dense crowns.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["aetherwild_grove", "verdigris_expanse", "solaris_steppe"],
+        "SpawnDensity": 0.3,
+        "AltitudeRange": [0.1, 1.0],
+        "TemperatureRange": [0.4, 0.85],
+        "MoistureRange": [0.3, 0.95],
+        "ClusterRadius": 6
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 300,
+        "AreaRadius": 1.2,
+        "ColliderRadius": 0.5
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/Maple_Trees.glb", "Weight": 1.0, "Rotation": 90 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.85, 1.0, 0.85],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [1.0, 0.7, 0.5],
+          "Winter": [0.8, 0.8, 0.8]
+        },
+        "BaseScale": [100.0, 100.0, 100.0],
+        "ScaleVariance": 0.08,
+        "RandomRotationY": true
+      }
+    },
+
+    {
+      "Id": "palm_trees",
+      "DisplayName": "Palm Trees",
+      "Description": "Resilient desert palms thriving near oases and dunes.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["shatterglass_desert", "mistral_dunes"],
+        "SpawnDensity": 0.25,
+        "AltitudeRange": [0.0, 0.6],
+        "TemperatureRange": [0.7, 1.0],
+        "MoistureRange": [0.05, 0.5],
+        "ClusterRadius": 5
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 220,
+        "AreaRadius": 1.0,
+        "ColliderRadius": 0.45
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/Palm_Trees.glb", "Weight": 1.0 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.9, 1.0, 0.9],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [0.95, 0.9, 0.8],
+          "Winter": [0.9, 0.95, 1.0]
+        },
+        "BaseScale": [100.0, 100.0, 100.0],
+        "ScaleVariance": 0.12,
+        "RandomRotationY": true
+      }
+    },
+
+    {
+      "Id": "pine_trees",
+      "DisplayName": "Pine Trees",
+      "Description": "Tall evergreen conifers adapted to colder, rocky regions.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["frostveil_tundra", "glimmerfall_ridge"],
+        "SpawnDensity": 0.3,
+        "AltitudeRange": [0.2, 1.0],
+        "TemperatureRange": [0.1, 0.6],
+        "MoistureRange": [0.2, 0.8],
+        "ClusterRadius": 6
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 280,
+        "AreaRadius": 1.2,
+        "ColliderRadius": 0.5
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/Pine_Trees.glb", "Weight": 1.0, "Rotation": 0 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.85, 0.95, 0.85],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [0.9, 0.85, 0.8],
+          "Winter": [0.85, 0.9, 0.95]
+        },
+        "BaseScale": [100.0, 100.0, 100.0],
+        "ScaleVariance": 0.1,
+        "RandomRotationY": true
+      }
+    },
+
+    {
+      "Id": "forest_trees",
+      "DisplayName": "Forest Trees",
+      "Description": "Mixed generic tree clusters used as a fallback in many temperate regions.",
+      "Category": "Tree",
+      "SpawnRules": {
+        "BiomeIds": ["aetherwild_grove", "solaris_steppe", "verdigris_expanse", "glimmerfall_ridge"],
+        "SpawnDensity": 0.2,
+        "AltitudeRange": [0.1, 1.0],
+        "TemperatureRange": [0.3, 0.85],
+        "MoistureRange": [0.2, 0.9],
+        "ClusterRadius": 5
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": true,
+        "Mass": 260,
+        "AreaRadius": 1.0,
+        "ColliderRadius": 0.45
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/trees/Trees.glb", "Weight": 1.0 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.9, 1.0, 0.9],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [1.0, 0.85, 0.7],
+          "Winter": [0.85, 0.9, 0.9]
+        },
+        "BaseScale": [100.0, 100.0, 100.0],
+        "ScaleVariance": 0.1,
+        "RandomRotationY": true
+      }
+    }
+  ]
+}

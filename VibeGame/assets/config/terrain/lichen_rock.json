@@ -1,0 +1,11 @@
+{
+  "Id": "lichen_rock",
+  "DisplayName": "Lichen Rock",
+  "Textures": {
+    "Albedo": "textures/terrain/lichen_rock/lichen_rock_diff_4k.png",
+    "Normal": "textures/terrain/lichen_rock/lichen_rock_nor_gl_4k.png",
+    "ARM": "textures/terrain/lichen_rock/lichen_rock_arm_4k.png",
+    "Displacement": "textures/terrain/lichen_rock/lichen_rock_disp_4k.png"
+  },
+  "TileSize": 8.0
+}

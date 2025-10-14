@@ -4,23 +4,89 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <UserSecretsId>a6c139ca-d94c-47dc-b495-c2d6c5b4d04b</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Logging\Logging.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <PackageReference Include="AlvorEngine.FastNoiseLite" Version="1.0.0" />
+    <PackageReference Include="AssimpNet" Version="4.1.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.9" />
-    <PackageReference Include="Raylib-cs" Version="7.0.1" />
+    <PackageReference Include="Raylib-CSharp-Vinculum" Version="5.0.1" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Enrichers.CorrelationId" Version="3.0.1" />
+    <PackageReference Include="Serilog.Enrichers.Demystifier" Version="1.0.3" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="SharpNoise" Version="0.12.1.1" />
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <PackageReference Include="Svg.Skia" Version="2.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
 
     <ItemGroup>
         <None Include="appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Include="assets\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\models\world\trees\Birch Trees.glb">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\models\world\trees\Dead Trees.glb">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\models\world\trees\Maple Trees.glb">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\models\world\trees\Palm Trees.glb">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\models\world\trees\Pine Trees.glb">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\models\world\trees\Trees.glb">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_diff_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_diff_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_nor_gl_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\aerial_rocks\aerial_rocks_04_rough_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_arm_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_diff_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_nor_gl_4k.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="assets\config\terrain\aerial_rocks.json">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="assets\textures\terrain\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="Biomes\Environment\BiomeConfig.cs" />
+      <Compile Remove="Biomes\Environment\IEnvironmentSampler.cs" />
+      <Compile Remove="Terrain\ITerrainGenerator.cs" />
+      <Compile Remove="Core\WorldObjects\ITreesRegistry.cs" />
+      <Compile Remove="Terrain\IChunkJobScheduler.cs" />
+      <Compile Include="assets\shaders\biome_blend.fs" />
     </ItemGroup>
 
 </Project>

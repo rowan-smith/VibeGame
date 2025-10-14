@@ -1,0 +1,54 @@
+{
+  "Id": "nullscape",
+  "DisplayName": "Nullscape",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.0,
+      "Moisture": 0.0,
+      "Altitude": 0.5,
+      "Fertility": 0.0,
+      "Roughness": 0.0,
+      "VegetationDensity": 0.0
+    },
+    "Weights": {
+      "WtTemp": 1.2,
+      "WtMoisture": 1.2,
+      "WtElevation": 0.6,
+      "WtFertility": 1.0
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.0,
+      "Frequency": 0.0,
+      "Persistence": 0.0,
+      "Lacunarity": 0.0,
+      "Detail": 0.0
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 0, "G": 0, "B": 0, "A": 255 },
+    "Secondary": { "R": 128, "G": 128, "B": 128, "A": 255 },
+    "Accent": { "R": 255, "G": 255, "B": 255, "A": 255 }
+  },
+  "SurfaceTextures": [
+    {
+      "TextureId": "lichen_rock",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "lichen_rock": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
+  "AllowedObjects": ["dead_trees"],
+  "DominantFlora": [],
+  "DominantFauna": [],
+  "SurfaceMaterial": "None",
+  "WeatherPatterns": [],
+  "AssetTags": ["void", "abstract", "glitch"],
+  "LightingModifier": 0.8,
+  "FeatureDescription": "The void between worlds — static hums, and reality unravels.",
+  "SpecialFeatures": ["Floating terrain", "distortion"],
+  "MusicTag": "void"
+}

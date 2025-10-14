@@ -1,0 +1,54 @@
+{
+  "Id": "glimmerfall_ridge",
+  "DisplayName": "Glimmerfall Ridge",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.5,
+      "Moisture": 0.4,
+      "Altitude": 0.9,
+      "Fertility": 0.35,
+      "Roughness": 0.8,
+      "VegetationDensity": 0.3
+    },
+    "Weights": {
+      "WtTemp": 0.9,
+      "WtMoisture": 0.9,
+      "WtElevation": 1.6,
+      "WtFertility": 0.8
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.6,
+      "Frequency": 1.4,
+      "Persistence": 0.7,
+      "Lacunarity": 2.8,
+      "Detail": 0.9
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 192, "G": 192, "B": 192, "A": 255 },
+    "Secondary": { "R": 0, "G": 127, "B": 255, "A": 255 },
+    "Accent": { "R": 112, "G": 128, "B": 144, "A": 255 }
+  },
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
+  "AllowedObjects": ["pine_trees", "forest_trees"],
+  "DominantFlora": ["Cliff Moss", "Frost Fern"],
+  "DominantFauna": [],
+  "SurfaceMaterial": "Shale/Stone",
+  "WeatherPatterns": ["Snow flurries", "cold mist"],
+  "AssetTags": ["rock", "cliff", "waterfall"],
+  "LightingModifier": 0.95,
+  "FeatureDescription": "Sheer cliffs where waterfalls glow faintly under moonlight.",
+  "SpecialFeatures": ["Waterfall networks", "frozen ledges"],
+  "MusicTag": "mountain"
+}

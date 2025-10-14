@@ -1,0 +1,56 @@
+{
+  "Id": "aetherwild_grove",
+  "DisplayName": "Aetherwild Grove",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.7,
+      "Moisture": 0.8,
+      "Altitude": 0.3,
+      "Fertility": 0.9,
+      "Roughness": 0.5,
+      "VegetationDensity": 0.9
+    },
+    "Weights": {
+      "WtTemp": 0.9,
+      "WtMoisture": 1.2,
+      "WtElevation": 0.9,
+      "WtFertility": 1.2
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.35,
+      "Frequency": 1.2,
+      "Persistence": 0.6,
+      "Lacunarity": 2.3,
+      "Detail": 0.8
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 0, "G": 174, "B": 239, "A": 255 },
+    "Secondary": { "R": 80, "G": 200, "B": 120, "A": 255 },
+    "Accent": { "R": 181, "G": 126, "B": 220, "A": 255 }
+  },
+
+  "SurfaceTextures": [
+    {
+      "TextureId": "aerial_rocks",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "aerial_rocks": { "MinAltitude": 0.3, "MaxAltitude": 1.0, "SlopeMin": 20 }
+  },
+  
+  "AllowedObjects": ["maple_tree", "maple_trees", "birch_trees", "forest_trees"],
+  "DominantFlora": ["Glowcap Trees", "Luminous Vines"],
+  "DominantFauna": [],
+  "SurfaceMaterial": "Bioluminescent moss",
+  "WeatherPatterns": ["Light mist", "Sparkling pollen drift"],
+  "AssetTags": ["bioluminescent", "tree", "moss", "vines"],
+  "LightingModifier": 1.15,
+  "FeatureDescription": "A magical jungle pulsing with radiant life, light drifting through the canopy.",
+  "SpecialFeatures": ["Floating spores", "glowing ponds"],
+  "MusicTag": "mystic"
+}

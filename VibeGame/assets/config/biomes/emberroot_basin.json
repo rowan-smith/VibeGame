@@ -1,0 +1,60 @@
+{
+  "Id": "emberroot_basin",
+  "DisplayName": "Emberroot Basin",
+  "Enabled": true,
+  "ProceduralData": {
+    "Base": {
+      "Temperature": 0.85,
+      "Moisture": 0.2,
+      "Altitude": 0.4,
+      "Fertility": 0.35,
+      "Roughness": 0.6,
+      "VegetationDensity": 0.3
+    },
+    "Weights": {
+      "WtTemp": 1.3,
+      "WtMoisture": 1.1,
+      "WtElevation": 1.0,
+      "WtFertility": 0.9
+    },
+    "NoiseModifiers": {
+      "HeightScale": 0.4,
+      "Frequency": 1.1,
+      "Persistence": 0.55,
+      "Lacunarity": 2.5,
+      "Detail": 0.7
+    }
+  },
+  "ColorPalette": {
+    "Primary": { "R": 220, "G": 20, "B": 60, "A": 255 },
+    "Secondary": { "R": 10, "G": 10, "B": 10, "A": 255 },
+    "Accent": { "R": 255, "G": 191, "B": 0, "A": 255 }
+  },
+  "SurfaceTextures": [
+    {
+      "TextureId": "brown_mud_leaves",
+      "BlendMin": 0.5,
+      "BlendMax": 1.0
+    },
+    {
+      "TextureId": "aerial_rocks",
+      "BlendMin": 0.0,
+      "BlendMax": 1.0
+    }
+  ],
+
+  "TextureRules": {
+    "brown_mud_leaves": { "MinAltitude": 0.0, "MaxAltitude": 1.0, "SlopeMax": 35 },
+    "aerial_rocks": { "SlopeMin": 25 }
+  },
+  "AllowedObjects": [],
+  "DominantFlora": ["Firebloom Shrubs", "Ember Trees"],
+  "DominantFauna": [],
+  "SurfaceMaterial": "Charred Earth",
+  "WeatherPatterns": ["Ashfall", "heat haze"],
+  "AssetTags": ["lava", "ash", "charred-rock"],
+  "LightingModifier": 0.9,
+  "FeatureDescription": "Fire cracks the surface as molten roots pulse beneath scorched ground.",
+  "SpecialFeatures": ["Lava vents", "cracked terrain"],
+  "MusicTag": "volcanic"
+}
