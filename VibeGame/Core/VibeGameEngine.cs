@@ -141,6 +141,7 @@ namespace VibeGame.Core
                         break;
                     case GameState.Playing:
                         if (_showDebugOverlay) DrawDebugOverlay();
+                        DrawCrosshair();
                         DrawHotbar();
                         break;
                     case GameState.Paused:
@@ -243,9 +244,11 @@ namespace VibeGame.Core
                     {
                         if (_terrain is IEditableTerrain editable)
                         {
-                            Vector3 dir = Vector3.Normalize(_camera.Target - _camera.Position);
-                            Vector3 digPos = _camera.Position + dir * 5f;
-                            editable.DigSphereAsync(digPos, 1f, 1f, VoxelFalloff.Linear).Wait();
+                            // Only dig if we are looking at the ground in front of us
+                            if (TryGetGroundHit(6f, 0.25f, 0.05f, out var hit))
+                            {
+                                editable.DigSphereAsync(hit, 1f, 1f, VoxelFalloff.Linear).Wait();
+                            }
                         }
                     }
                     break;
@@ -515,6 +518,54 @@ namespace VibeGame.Core
                     // Draw item texture in slot (placeholder)
                 }
             }
+        }
+
+        private void DrawCrosshair()
+        {
+            int cx = Raylib.GetScreenWidth() / 2;
+            int cy = Raylib.GetScreenHeight() / 2;
+            int size = 6;
+
+            // Determine color based on whether we are aiming at diggable ground
+            Color color = new Color(230, 230, 230, 255);
+            if (_state == GameState.Playing && TryGetGroundHit(6f, 0.25f, 0.05f, out _))
+            {
+                color = Raylib.GREEN;
+            }
+
+            Raylib.DrawLine(cx - size, cy, cx + size, cy, color);
+            Raylib.DrawLine(cx, cy - size, cx, cy + size, color);
+        }
+
+        private bool TryGetGroundHit(float maxDistance, float step, float epsilon, out Vector3 hit)
+        {
+            hit = default;
+
+            // Forward direction of camera
+            Vector3 dir = Vector3.Normalize(_camera.Target - _camera.Position);
+
+            // Require some downward component to be considered "looking at the ground"
+            float downDot = Vector3.Dot(dir, Vector3.UnitY);
+            if (downDot > -0.15f) // not looking down enough
+            {
+                return false;
+            }
+
+            float traveled = 0f;
+            Vector3 p = _camera.Position;
+            while (traveled <= maxDistance)
+            {
+                p += dir * step;
+                traveled += step;
+
+                float groundY = _terrain.SampleHeight(new Vector3(p.X, 0, p.Z));
+                if (p.Y <= groundY + epsilon)
+                {
+                    hit = new Vector3(p.X, groundY, p.Z);
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
