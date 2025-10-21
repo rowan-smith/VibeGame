@@ -13,7 +13,6 @@ using VibeGame.Biomes.Environment;
 using VibeGame.Biomes.Spawners;
 using VibeGame.Camera;
 using VibeGame.Core;
-using VibeGame.Core.Downscalers;
 using VibeGame.Core.Items;
 using VibeGame.Core.WorldObjects;
 using VibeGame.Objects;
@@ -57,11 +56,13 @@ internal static class Program
         // -----------------------------
         builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
+        builder.Services.AddSingleton<TerrainTextureStreamingManager>();
         builder.Services.AddSingleton<ITerrainRenderer>(sp => new TerrainRenderer(
             sp.GetRequiredService<ITextureManager>(),
             sp.GetRequiredService<ITerrainTextureRegistry>(),
             sp.GetRequiredService<IBiomeProvider>(),
-            sp.GetServices<IBiome>()
+            sp.GetServices<IBiome>(),
+            sp.GetRequiredService<TerrainTextureStreamingManager>()
         ));
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
         builder.Services.AddSingleton<IWorldObjectRenderer, WorldObjectRenderer>();
@@ -139,7 +140,6 @@ internal static class Program
         // -----------------------------
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
         builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
-        builder.Services.AddSingleton<ITextureDownscaler, ImageSharpTextureDownscaler>();
         builder.Services.AddSingleton<ITextureManager, TextureManager>();
         builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
 

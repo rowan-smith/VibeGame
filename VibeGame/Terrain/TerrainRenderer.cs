@@ -27,6 +27,7 @@ namespace VibeGame.Terrain
         private readonly ITextureManager _textureManager;
         private readonly ITerrainTextureRegistry _terrainTextures;
         private readonly IBiomeProvider _biomeProvider;
+        private readonly TerrainTextureStreamingManager _streaming;
         private readonly Dictionary<string, IBiome> _biomesById = new(StringComparer.OrdinalIgnoreCase);
 
         private Texture _lowTex;
@@ -37,6 +38,8 @@ namespace VibeGame.Terrain
         private readonly Dictionary<Vector2, List<Chunk>> _chunksByOrigin = new();
 
         private readonly Dictionary<string, Material> _materialCache = new();
+        // Streamed textures cache by base path to reuse across materials
+        private readonly Dictionary<string, StreamedTexture> _streamedTextures = new(StringComparer.OrdinalIgnoreCase);
         private Material _activeMaterial;
         private Shader _blendShader;
         private bool _blendShaderLoaded;
@@ -47,11 +50,12 @@ namespace VibeGame.Terrain
         private readonly HashSet<Vector2> _pendingOrigins = new();
         private readonly HashSet<Vector2> _dirtyOrigins = new();
 
-        public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider, IEnumerable<IBiome> allBiomes)
+        public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider, IEnumerable<IBiome> allBiomes, TerrainTextureStreamingManager streaming)
         {
             _textureManager = textureManager;
             _terrainTextures = terrainTextures;
             _biomeProvider = biomeProvider;
+            _streaming = streaming;
             foreach (var b in allBiomes)
             {
                 if (!_biomesById.ContainsKey(b.Id)) _biomesById[b.Id] = b;
@@ -292,7 +296,12 @@ namespace VibeGame.Terrain
             // Expand sampling by ~3 chunk widths and use higher sample count for stability across borders
             float expand = chunkSize * tileSize * 3.0f;
             var (primary, secondary) = BiomeSampling.GetDominantAndSecondaryBiomeForArea(_biomeProvider, null, originWorld, chunkSize, tileSize, 13, 2f, expand);
-            ApplyBlendMaterial(primary.Data, secondary?.Data);
+
+            // Compute distance from camera to chunk center for mip selection
+            Vector3 center = new Vector3(originWorld.X + ((w - 1) * 0.5f) * tileSize, 0f, originWorld.Y + ((w - 1) * 0.5f) * tileSize);
+            float dist = Vector3.Distance(camera.position, center);
+            int mip = _streaming.GetTargetMip(editable: false, distance: dist);
+            ApplyBlendMaterial(primary.Data, secondary?.Data, mip);
 
             if (_activeMaterial.Equals(default(Material))) return;
 
@@ -428,7 +437,7 @@ namespace VibeGame.Terrain
             _activeMaterial = mat;
         }
 
-        private void ApplyBlendMaterial(BiomeData primary, BiomeData? secondary)
+        private void ApplyBlendMaterial(BiomeData primary, BiomeData? secondary, int mip)
         {
             if (primary == null) return;
             // Use a distinct key for the blend variant even when there is no secondary
@@ -464,13 +473,23 @@ namespace VibeGame.Terrain
                     Material* matPtr = &m;
                     Texture tAlb = default;
                     Texture tSec = default;
-                    if (!string.IsNullOrWhiteSpace(priAlbedo) && _textureManager.TryGetOrLoadByPath(priAlbedo!, out tAlb))
-                        Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ALBEDO, tAlb);
+                    if (!string.IsNullOrWhiteSpace(priAlbedo))
+                    {
+                        var stPri = GetStreamedTexture(priAlbedo!);
+                        if (stPri.EnsureMip(mip, out tAlb))
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_ALBEDO, tAlb);
+                    }
                     // If no secondary albedo, bind the primary texture as the secondary as well
-                    if (!string.IsNullOrWhiteSpace(secAlbedo) && _textureManager.TryGetOrLoadByPath(secAlbedo!, out tSec))
-                        Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tSec);
+                    if (!string.IsNullOrWhiteSpace(secAlbedo))
+                    {
+                        var stSec = GetStreamedTexture(secAlbedo!);
+                        if (stSec.EnsureMip(mip, out tSec))
+                            Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tSec);
+                    }
                     else if (!tAlb.Equals(default(Texture)))
+                    {
                         Raylib.SetMaterialTexture(matPtr, MaterialMapIndex.MATERIAL_MAP_METALNESS, tAlb);
+                    }
 
                     mat = m;
                 }
@@ -491,6 +510,16 @@ namespace VibeGame.Terrain
             }
             catch { /* ignore, will fall back */ }
             finally { _blendShaderLoaded = true; }
+        }
+
+        private StreamedTexture GetStreamedTexture(string basePath)
+        {
+            if (!_streamedTextures.TryGetValue(basePath, out var st))
+            {
+                st = new StreamedTexture(basePath, _streaming, _textureManager);
+                _streamedTextures[basePath] = st;
+            }
+            return st;
         }
 
         public void SetColorTint(Color color) { /* optional */ }
