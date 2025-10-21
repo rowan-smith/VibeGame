@@ -13,7 +13,6 @@ namespace VibeGame.Core
         private Task? _preloadTask;
         private bool _disposed;
 
-        private readonly ITextureDownscaler _downscaler;
 
         // Staged preload state
         private readonly ConcurrentQueue<(string key, Image img)> _decodedQueue = new();
@@ -26,10 +25,9 @@ namespace VibeGame.Core
         private CancellationTokenSource? _preloadCts;
         private Task? _cpuDecodeTask;
 
-        public TextureManager(VibeGame.Terrain.ITerrainTextureRegistry terrainTextures, ITextureDownscaler downscaler)
+        public TextureManager(VibeGame.Terrain.ITerrainTextureRegistry terrainTextures)
         {
             _terrainTextures = terrainTextures;
-            _downscaler = downscaler;
         }
 
         public void BeginPreload(CancellationToken cancellationToken = default)
@@ -128,7 +126,7 @@ namespace VibeGame.Core
                             if (ct.IsCancellationRequested) return;
                             try
                             {
-                                var img = _downscaler.LoadImageWithDownscale(pair.path);
+                                var img = Raylib.LoadImage(pair.path);
                                 if (img.width > 0 && img.height > 0)
                                 {
                                     _decodedQueue.Enqueue((pair.key, img));
@@ -336,7 +334,7 @@ namespace VibeGame.Core
                         if (ct.IsCancellationRequested) return;
                         try
                         {
-                            var img = _downscaler.LoadImageWithDownscale(pair.path);
+                            var img = Raylib.LoadImage(pair.path);
                             if (img.width > 0 && img.height > 0)
                             {
                                 decoded.Enqueue((pair.key, img));
@@ -455,10 +453,8 @@ namespace VibeGame.Core
                     return;
                 }
 
-                // Load image via selected downscaler (may perform runtime downscale)
-                var img = _downscaler.LoadImageWithDownscale(path);
-                
-                
+                // Load image (no runtime downscale; streaming manager selects mip-specific PNG)
+                var img = Raylib.LoadImage(path);
                 var tex = Raylib.LoadTextureFromImage(img);
                 Raylib.UnloadImage(img); // free CPU memory, keep GPU texture
 
