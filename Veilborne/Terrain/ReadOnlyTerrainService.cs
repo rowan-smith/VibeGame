@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using Veilborne.Biomes;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
 using Veilborne.Interfaces;
 using Veilborne.Objects;
 using ZeroElectric.Vinculum;
@@ -17,22 +19,24 @@ namespace Veilborne.Terrain
         private readonly EditableTerrainService _editable;
         private readonly ITerrainGenerator _terrainGen;
         private readonly IWorldObjectRenderer _worldObjectRenderer;
+        private readonly EntityRegistry _entityRegistry;
 
         // Track loaded chunks and preserve their mesh generation state across frames
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
-        private readonly Dictionary<(int cx, int cz), List<SpawnedObject>> _objectsByChunk = new();
+        private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
 
         // Async generation state
         private readonly HashSet<(int cx, int cz)> _generating = new();
         private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin, List<SpawnedObject> objects)> _completed = new();
 
-        public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer)
+        public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer, EntityRegistry entityRegistry)
         {
             _editable = editable;
             _biomeProvider = biomeProvider;
             _renderer = renderer;
             _terrainGen = terrainGen;
             _worldObjectRenderer = worldObjectRenderer;
+            _entityRegistry = entityRegistry;
         }
 
         public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
@@ -90,7 +94,12 @@ namespace Veilborne.Terrain
             foreach (var key in toRemove)
             {
                 _loadedChunks.Remove(key);
-                _objectsByChunk.Remove(key);
+                if (_entitiesByChunk.TryGetValue(key, out var entities))
+                {
+                    foreach (var entity in entities)
+                        _entityRegistry.DestroyEntity(entity);
+                    _entitiesByChunk.Remove(key);
+                }
             }
         }
 
@@ -107,13 +116,38 @@ namespace Veilborne.Terrain
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
                 };
-                // Store objects for this chunk
-                _objectsByChunk[item.key] = item.objects ?? new List<SpawnedObject>();
+                // Create entities for this chunk
+                var entities = new List<Entity>();
+                if (item.objects != null)
+                {
+                    foreach (var obj in item.objects)
+                    {
+                        var entity = _entityRegistry.CreateEntity();
+                        entity.AddComponent(new TransformComponent
+                        {
+                            Position = obj.Position,
+                            Rotation = obj.Rotation,
+                            Scale = obj.Scale
+                        });
+                        entity.AddComponent(new RenderComponent
+                        {
+                            ModelPath = obj.ModelPath,
+                            ConfigRotationDegrees = obj.ConfigRotationDegrees
+                        });
+                        entity.AddComponent(new PhysicsComponent
+                        {
+                            CollisionRadius = obj.CollisionRadius,
+                            IsStatic = true
+                        });
+                        entities.Add(entity);
+                    }
+                }
+                _entitiesByChunk[item.key] = entities;
                 await Task.Yield();
             }
         }
 
-        public void RenderTiles(Camera3D camera, HashSet<(int cx, int cz)>? exclude = null)
+        public void RenderTiles(CameraComponent camera, HashSet<(int cx, int cz)>? exclude = null)
         {
             foreach (var kvp in _loadedChunks)
             {
@@ -129,20 +163,6 @@ namespace Veilborne.Terrain
 
                 // Render the chunk (meshes are built centrally by TerrainManager.UpdateAround)
                 _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
-
-                // Draw any spawned world objects (e.g., trees) for this chunk
-                if (_objectsByChunk.TryGetValue(key, out var objs) && objs is { Count: > 0 })
-                {
-                    // Simple distance culling to avoid drawing distant objects
-                    Vector3 camPos = new Vector3(camera.position.X, camera.position.Y, camera.position.Z);
-                    const float maxDist = 180f;
-                    float maxDist2 = maxDist * maxDist;
-                    foreach (var obj in objs)
-                    {
-                        if (Vector3.DistanceSquared(camPos, obj.Position) > maxDist2) continue;
-                        _worldObjectRenderer.DrawWorldObject(obj);
-                    }
-                }
             }
         }
 
@@ -158,9 +178,9 @@ namespace Veilborne.Terrain
                 2f);
         }
 
-        public void Render(Camera3D camera) => RenderTiles(camera);
+        public void Render(CameraComponent camera) => RenderTiles(camera);
 
-        public void RenderWithExclusions(Camera3D camera, HashSet<(int cx, int cz)> exclusions)
+        public void RenderWithExclusions(CameraComponent camera, HashSet<(int cx, int cz)> exclusions)
             => RenderTiles(camera, exclusions);
 
         public float SampleHeight(float worldX, float worldZ)
@@ -169,7 +189,7 @@ namespace Veilborne.Terrain
         public IBiome GetBiomeAt(float worldX, float worldZ)
             => _biomeProvider.GetBiomeAt(new Vector2(worldX, worldZ), null);
 
-        public void RenderDebugChunkBounds(Camera3D camera)
+        public void RenderDebugChunkBounds(CameraComponent camera)
         {
             foreach (var (cx, cz) in _loadedChunks.Keys)
             {

@@ -1,20 +1,21 @@
 using System.Numerics;
 using Veilborne.Biomes;
-using ZeroElectric.Vinculum;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
 
 namespace Veilborne.Interfaces
 {
     public interface ITerrainRenderer
     {
-        void Render(float[,] heights, float tileSize, Camera3D camera, Color baseColor);
+        void Render(float[,] heights, float tileSize, CameraComponent camera, Vector3 baseColor);
 
         // Render a heightmap positioned with its (0,0) corner at originWorld (bottom-left), no centering
-        void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, Camera3D camera);
+        void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera);
 
         // Apply the biome-specific surface texture set prior to rendering
         void ApplyBiomeTextures(BiomeData biome);
 
-        void SetColorTint(Color color);
+        void SetColorTint(Vector4 color);
 
         // Synchronous build (CPU + GPU upload) — kept for compatibility
         void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld);

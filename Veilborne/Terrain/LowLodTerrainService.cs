@@ -2,9 +2,11 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Numerics;
+using Veilborne.Core.Ecs;
 using Veilborne.Interfaces;
 using ZeroElectric.Vinculum;
 using Veilborne.Biomes;
+using Veilborne.Core.Ecs.Components;
 
 namespace Veilborne.Terrain
 {
@@ -92,7 +94,7 @@ namespace Veilborne.Terrain
             }
         }
 
-        public void Render(Camera3D camera)
+        public void Render(CameraComponent camera)
         {
             foreach (var kvp in _loadedChunks)
             {
@@ -103,7 +105,7 @@ namespace Veilborne.Terrain
             }
         }
 
-        public void RenderDebugChunkBounds(Camera3D camera)
+        public void RenderDebugChunkBounds(CameraComponent camera)
         {
             foreach (var (cx, cz) in _loadedChunks.Keys)
             {

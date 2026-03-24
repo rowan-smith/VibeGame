@@ -3,6 +3,7 @@ using Veilborne.Interfaces;
 using Veilborne.Objects;
 using Veilborne.Terrain;
 using Veilborne.Biomes;
+using Veilborne.Core.Ecs;
 
 namespace Veilborne.Core
 {
@@ -20,20 +21,22 @@ namespace Veilborne.Core
         public IBiomeProvider Biomes { get; init; }
         public ObjectSpawner Spawner { get; init; }
         public Player Player { get; init; }
+        public EntityRegistry Entities { get; init; }
 
         // Active chunks and async queue
         public Dictionary<Vector3, Chunk> ActiveChunks { get; } = new();
         public AsyncTaskQueue AsyncQueue { get; } = new();
 
         // Constructor
-        public World(int seed, Player player, TerrainManager terrain, IBiomeProvider biomes, ObjectSpawner spawner)
+        public World(int seed, Player player, TerrainManager terrain, IBiomeProvider biomes, ObjectSpawner spawner, EntityRegistry entities)
         {
             Seed = seed;
             Player = player;
             Terrain = terrain;
             Biomes = biomes;
-            TerrainAdapter = new TerrainManagerAdapter(terrain); // wrap TerrainManager
+            TerrainAdapter = terrain;
             Spawner = spawner;
+            Entities = entities;
         }
 
         /// <summary>

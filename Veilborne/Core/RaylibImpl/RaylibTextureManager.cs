@@ -2,12 +2,13 @@ using System.Collections.Concurrent;
 using Serilog;
 using Veilborne.Interfaces;
 using ZeroElectric.Vinculum;
+using Veilborne.Core.TerrainTexture;
 
-namespace Veilborne.Core.TerrainTexture
+namespace Veilborne.Core.RaylibImpl
 {
-    public class TextureManager : ITextureManager
+    public class RaylibTextureManager : ITextureManager
     {
-        private readonly ILogger _logger = Log.ForContext<TextureManager>();
+        private readonly ILogger _logger = Log.ForContext<RaylibTextureManager>();
         private readonly object _lock = new object();
         private readonly Dictionary<string, Texture> _textures = new();
         private readonly ITerrainTextureRegistry _terrainTextures;
@@ -26,7 +27,7 @@ namespace Veilborne.Core.TerrainTexture
         private CancellationTokenSource? _preloadCts;
         private Task? _cpuDecodeTask;
 
-        public TextureManager(ITerrainTextureRegistry terrainTextures)
+        public RaylibTextureManager(ITerrainTextureRegistry terrainTextures)
         {
             _terrainTextures = terrainTextures;
         }
@@ -35,7 +36,7 @@ namespace Veilborne.Core.TerrainTexture
         {
             lock (_lock)
             {
-                if (_disposed) throw new ObjectDisposedException(nameof(TextureManager));
+                if (_disposed) throw new ObjectDisposedException(nameof(RaylibTextureManager));
                 if (_preloading) return; // already running
 
                 _preloadCts?.Cancel();
@@ -531,6 +532,14 @@ namespace Veilborne.Core.TerrainTexture
 
             // Return from cache if present
             return TryGet(key, out texture);
+        }
+
+        public void Register(string key, Texture texture)
+        {
+            lock (_lock)
+            {
+                _textures[key] = texture;
+            }
         }
 
         public void Dispose()

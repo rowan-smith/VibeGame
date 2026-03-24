@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
+using Veilborne.Core.Ecs;
 using Veilborne.Interfaces;
 using Veilborne.Objects;
 using ZeroElectric.Vinculum;
 using Veilborne.Biomes;
+using Veilborne.Core.Ecs.Components;
 
 namespace Veilborne.Terrain
 {
@@ -65,18 +67,19 @@ namespace Veilborne.Terrain
         private readonly ITerrainRenderer _renderer;
         private readonly ITerrainGenerator _terrainGen;
         private readonly IWorldObjectRenderer _worldObjectRenderer;
+        private readonly EntityRegistry _entityRegistry;
 
-        // Cache loaded chunks with their heightmaps; meshes are built by TerrainManager
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
-        private readonly Dictionary<(int cx, int cz), List<SpawnedObject>> _objectsByChunk = new();
+        private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
         private readonly object _lock = new();
 
-        public EditableTerrainService(IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer)
+        public EditableTerrainService(IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer, EntityRegistry entityRegistry)
         {
             _biomeProvider = biomeProvider;
             _renderer = renderer;
             _terrainGen = terrainGen;
             _worldObjectRenderer = worldObjectRenderer;
+            _entityRegistry = entityRegistry;
         }
 
         public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
@@ -141,14 +144,33 @@ namespace Veilborne.Terrain
                         var biome = _biomeProvider.GetBiomeAt(origin, _terrainGen);
                         var adapter = new EditableTerrainAdapter(this);
                         var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, adapter, heights, origin, 18);
-                        var filtered = new List<SpawnedObject>(raw.Count);
+                        var entities = new List<Entity>();
                         foreach (var obj in raw)
                         {
                             var at = _biomeProvider.GetBiomeAt(new Vector2(obj.Position.X, obj.Position.Z), _terrainGen);
                             if (string.Equals(at.Id, biome.Id, StringComparison.OrdinalIgnoreCase))
-                                filtered.Add(obj);
+                            {
+                                var entity = _entityRegistry.CreateEntity();
+                                entity.AddComponent(new TransformComponent
+                                {
+                                    Position = obj.Position,
+                                    Rotation = obj.Rotation,
+                                    Scale = obj.Scale
+                                });
+                                entity.AddComponent(new RenderComponent
+                                {
+                                    ModelPath = obj.ModelPath,
+                                    ConfigRotationDegrees = obj.ConfigRotationDegrees
+                                });
+                                entity.AddComponent(new PhysicsComponent
+                                {
+                                    CollisionRadius = obj.CollisionRadius,
+                                    IsStatic = true
+                                });
+                                entities.Add(entity);
+                            }
                         }
-                        _objectsByChunk[key] = filtered;
+                        _entitiesByChunk[key] = entities;
                     }
                 }
 
@@ -159,7 +181,12 @@ namespace Veilborne.Terrain
                 foreach (var key in toRemove)
                 {
                     _loadedChunks.Remove(key);
-                    _objectsByChunk.Remove(key);
+                    if (_entitiesByChunk.TryGetValue(key, out var entities))
+                    {
+                        foreach (var entity in entities)
+                            _entityRegistry.DestroyEntity(entity);
+                        _entitiesByChunk.Remove(key);
+                    }
                 }
             }
         }
@@ -206,7 +233,7 @@ namespace Veilborne.Terrain
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
-        public void Render(Camera3D camera)
+        public void Render(CameraComponent camera)
         {
             if (!RenderBaseHeightmap) return;
 
@@ -223,25 +250,11 @@ namespace Veilborne.Terrain
 
                     _renderer.ApplyBiomeTextures(biome.Data);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
-
-                    // Draw spawned world objects for this editable chunk
-                    if (_objectsByChunk.TryGetValue(key, out var objs) && objs is { Count: > 0 })
-                    {
-                        // Simple distance culling to avoid drawing distant objects
-                        Vector3 camPos = new Vector3(camera.position.X, camera.position.Y, camera.position.Z);
-                        const float maxDist = 180f;
-                        float maxDist2 = maxDist * maxDist;
-                        foreach (var obj in objs)
-                        {
-                            if (Vector3.DistanceSquared(camPos, obj.Position) > maxDist2) continue;
-                            _worldObjectRenderer.DrawWorldObject(obj);
-                        }
-                    }
                 }
             }
         }
 
-        public void RenderDebugChunkBounds(Camera3D camera)
+        public void RenderDebugChunkBounds(CameraComponent camera)
         {
             lock (_lock)
             {

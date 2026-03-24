@@ -2,13 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
+using Veilborne.Core.Ecs;
 using Veilborne.Interfaces;
-using ZeroElectric.Vinculum;
 using Veilborne.Biomes;
+using Veilborne.Core;
+using Veilborne.Core.Ecs.Components;
 
 namespace Veilborne.Terrain
 {
-    public class TerrainManager : IEditableTerrain
+    public class TerrainManager : IEditableTerrain, ITerrainGenerator
     {
         private readonly EditableTerrainService _editableRing;
         private readonly ReadOnlyTerrainService _readOnlyRing;
@@ -16,6 +18,8 @@ namespace Veilborne.Terrain
         private readonly TerrainRingConfig _cfg;
         private readonly IBiomeProvider _biomeProvider;
         private readonly ITerrainRenderer _renderer;
+        private readonly IWorldConfigService _configService;
+        private readonly ITimeService _time;
 
         // Adaptive state
         private Vector3 _lastCameraPos;
@@ -43,6 +47,8 @@ namespace Veilborne.Terrain
             TerrainRingConfig cfg,
             IBiomeProvider biomeProvider,
             ITerrainRenderer renderer,
+            IWorldConfigService configService,
+            ITimeService time,
             LowLodTerrainService? lowLodRing = null)
         {
             _editableRing = editableRing;
@@ -51,10 +57,45 @@ namespace Veilborne.Terrain
             _lowLodRing = lowLodRing;
             _biomeProvider = biomeProvider;
             _renderer = renderer;
+            _configService = configService;
+            _time = time;
         }
 
         public float TileSize => _readOnlyRing.TileSize;
         public int ChunkSize => _readOnlyRing.ChunkSize;
+        public int TerrainSize => ChunkSize;
+
+        public float ComputeHeight(float worldX, float worldZ) => SampleHeight(new Vector3(worldX, 0, worldZ));
+
+        public float[,] GenerateHeights()
+        {
+            float[,] heights = new float[ChunkSize, ChunkSize];
+            for (int z = 0; z < ChunkSize; z++)
+            for (int x = 0; x < ChunkSize; x++)
+                heights[x, z] = ComputeHeight(x * TileSize, z * TileSize);
+            return heights;
+        }
+
+        public float[,] GenerateHeightsForChunk(int chunkX, int chunkZ, int chunkSize)
+        {
+            float[,] heights = new float[chunkSize + 1, chunkSize + 1];
+            float originX = chunkX * chunkSize * TileSize;
+            float originZ = chunkZ * chunkSize * TileSize;
+            for (int z = 0; z <= chunkSize; z++)
+            for (int x = 0; x <= chunkSize; x++)
+                heights[x, z] = ComputeHeight(originX + x * TileSize, originZ + z * TileSize);
+            return heights;
+        }
+
+        public float SampleHeight(float[,] heights, float worldX, float worldZ)
+        {
+            int size = heights.GetLength(0);
+            float gx = worldX / TileSize;
+            float gz = worldZ / TileSize;
+            int x0 = Math.Clamp((int)MathF.Floor(gx), 0, size - 1);
+            int z0 = Math.Clamp((int)MathF.Floor(gz), 0, size - 1);
+            return heights[x0, z0];
+        }
 
         // -----------------------------
         // Update
@@ -62,7 +103,7 @@ namespace Veilborne.Terrain
         public void UpdateAround(Vector3 worldPos, int _)
         {
             // --- Adaptive radii calculation ---
-            float dt = Raylib.GetFrameTime();
+            float dt = _time.DeltaTime;
             if (dt <= 0f) dt = 1f / 60f;
             _avgDt = Lerp(_avgDt <= 0 ? dt : _avgDt, dt, 0.1f);
 
@@ -85,8 +126,7 @@ namespace Veilborne.Terrain
             _hasLast = true;
 
             // Terrain density via biome roughness/vegetation
-            var adapter = new ReadOnlyTerrainAdapter(_readOnlyRing);
-            var biome = _biomeProvider.GetBiomeAt(new Vector2(worldPos.X, worldPos.Z), adapter);
+            var biome = _biomeProvider.GetBiomeAt(new Vector2(worldPos.X, worldPos.Z), this);
             float rough = biome?.Data?.ProceduralData?.Base?.Roughness ?? 0.5f;
             float veg = biome?.Data?.ProceduralData?.Base?.VegetationDensity ?? 0.5f;
             float density = Clamp01((rough + veg) * 0.5f);
@@ -367,7 +407,7 @@ namespace Veilborne.Terrain
         // -----------------------------
         // Render
         // -----------------------------
-        public void Render(Camera3D camera)
+        public void Render(CameraComponent camera)
         {
             // Far
             _lowLodRing?.Render(camera);
@@ -382,8 +422,8 @@ namespace Veilborne.Terrain
                 int excludeInner = Math.Max(0, (int)MathF.Floor((_curEditable * eChunkWorld) / roChunkWorld) - 1);
                 if (excludeInner > 0)
                 {
-                    int ccx = (int)MathF.Floor(camera.position.X / roChunkWorld);
-                    int ccz = (int)MathF.Floor(camera.position.Z / roChunkWorld);
+                    int ccx = (int)MathF.Floor(camera.Position.X / roChunkWorld);
+                    int ccz = (int)MathF.Floor(camera.Position.Z / roChunkWorld);
                     for (int dz = -_curReadOnly; dz <= _curReadOnly; dz++)
                     for (int dx = -_curReadOnly; dx <= _curReadOnly; dx++)
                     {
@@ -401,16 +441,16 @@ namespace Veilborne.Terrain
         // -----------------------------
         // Interface explicit implementations
         // -----------------------------
-        void IInfiniteTerrain.RenderWithExclusions(Camera.Camera camera, HashSet<(int cx, int cz)> exclude)
+        void IInfiniteTerrain.RenderWithExclusions(CameraComponent camera, HashSet<(int cx, int cz)> exclude)
         {
-            _readOnlyRing.RenderTiles(camera.RaylibCamera, exclude);
+            _readOnlyRing.RenderTiles(camera, exclude);
         }
 
-        void IDebugTerrain.RenderDebugChunkBounds(Camera.Camera camera)
+        void IDebugTerrain.RenderDebugChunkBounds(CameraComponent camera)
         {
-            _lowLodRing?.RenderDebugChunkBounds(camera.RaylibCamera);
-            _readOnlyRing.RenderDebugChunkBounds(camera.RaylibCamera);
-            _editableRing.RenderDebugChunkBounds(camera.RaylibCamera);
+            _lowLodRing?.RenderDebugChunkBounds(camera);
+            _readOnlyRing.RenderDebugChunkBounds(camera);
+            _editableRing.RenderDebugChunkBounds(camera);
         }
 
         void IInfiniteTerrain.UpdateCenter(Vector3 cameraPosition) => UpdateAround(cameraPosition, 0);
@@ -420,8 +460,8 @@ namespace Veilborne.Terrain
             /* no-op */
         }
 
-        void IInfiniteTerrain.Render(Camera.Camera camera)
-            => Render(camera.RaylibCamera);
+        void IInfiniteTerrain.Render(CameraComponent camera)
+            => Render(camera);
 
         float IInfiniteTerrain.SampleHeight(Vector3 worldPos) => SampleHeight(worldPos);
 
@@ -443,8 +483,7 @@ namespace Veilborne.Terrain
             float modZ = worldPos.Z - cz * chunkWorld;
             int localX = (int)MathF.Floor(modX / TileSize);
             int localZ = (int)MathF.Floor(modZ / TileSize);
-            var adapter = new ReadOnlyTerrainAdapter(_readOnlyRing);
-            var biome = _biomeProvider.GetBiomeAt(new Vector2(worldPos.X, worldPos.Z), adapter);
+            var biome = _biomeProvider.GetBiomeAt(new Vector2(worldPos.X, worldPos.Z), this);
             string biomeId = biome?.Data.DisplayName ?? "Unknown";
             return new TerrainDebugInfo(cx, cz, localX, localZ, ChunkSize, TileSize, biomeId, worldPos);
         }

@@ -3,7 +3,7 @@ using ZeroElectric.Vinculum;
 using SkiaSharp;
 using Svg.Skia;
 
-namespace Veilborne.Core
+namespace Veilborne.Core.RaylibImpl
 {
     /// <summary>
     /// Minimal helper to rasterize SVG files to temporary PNGs and load them as Raylib textures/images.

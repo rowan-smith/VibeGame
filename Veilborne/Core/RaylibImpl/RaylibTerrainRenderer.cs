@@ -9,11 +9,16 @@ using Veilborne.Biomes;
 using Veilborne.Core.TerrainTexture;
 using Veilborne.Interfaces;
 using Veilborne.Core;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Terrain;
+using Veilborne.Core.RaylibImpl;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.RaylibImpl
 {
-    public class TerrainRenderer : ITerrainRenderer
+    public class RaylibTerrainRenderer : ITerrainRenderer
     {
+        // ... (rest remains same)
         // Prepared mesh data built off-thread; uploaded on main thread
         private class MeshBuildJob
         {
@@ -25,7 +30,7 @@ namespace Veilborne.Terrain
             public ushort[] Indices;
         }
 
-        private readonly ILogger logger = Log.ForContext<TerrainRenderer>();
+        private readonly ILogger logger = Log.ForContext<RaylibTerrainRenderer>();
         private readonly ITextureManager _textureManager;
         private readonly ITerrainTextureRegistry _terrainTextures;
         private readonly IBiomeProvider _biomeProvider;
@@ -52,7 +57,7 @@ namespace Veilborne.Terrain
         private readonly HashSet<Vector2> _pendingOrigins = new();
         private readonly HashSet<Vector2> _dirtyOrigins = new();
 
-        public TerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider, IEnumerable<IBiome> allBiomes, TerrainTextureStreamingManager streaming)
+        public RaylibTerrainRenderer(ITextureManager textureManager, ITerrainTextureRegistry terrainTextures, IBiomeProvider biomeProvider, IEnumerable<IBiome> allBiomes, TerrainTextureStreamingManager streaming)
         {
             _textureManager = textureManager;
             _terrainTextures = terrainTextures;
@@ -285,10 +290,10 @@ namespace Veilborne.Terrain
             }
         }
 
-        public void Render(float[,] heights, float tileSize, Camera3D camera, Color baseColor)
+        public void Render(float[,] heights, float tileSize, CameraComponent camera, Vector3 baseColor)
             => RenderAt(heights, tileSize, Vector2.Zero, camera);
 
-        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, Camera3D camera)
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera)
         {
             if (!_chunksByOrigin.TryGetValue(originWorld, out var list) || list == null) return;
 
@@ -301,7 +306,7 @@ namespace Veilborne.Terrain
 
             // Compute distance from camera to chunk center for mip selection
             Vector3 center = new Vector3(originWorld.X + ((w - 1) * 0.5f) * tileSize, 0f, originWorld.Y + ((w - 1) * 0.5f) * tileSize);
-            float dist = Vector3.Distance(camera.position, center);
+            float dist = Vector3.Distance(camera.Position, center);
             int mip = _streaming.GetTargetMip(editable: false, distance: dist);
             ApplyBlendMaterial(primary.Data, secondary?.Data, mip);
 
@@ -524,7 +529,7 @@ namespace Veilborne.Terrain
             return st;
         }
 
-        public void SetColorTint(Color color) { /* optional */ }
+        public void SetColorTint(Vector4 color) { /* optional */ }
 
         private void EnsureMaterials()
         {

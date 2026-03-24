@@ -18,13 +18,15 @@ namespace Veilborne.Biomes.Spawners
         private readonly ITreesRegistry _trees;
         private readonly IEnvironmentSampler _sampler;
         private readonly ITerrainGenerator _envTerrain;
+        private readonly IWorldConfigService _config;
         private readonly IReadOnlyList<string>? _allowedIds;
 
-        public ConfigTreeWorldObjectSpawner(ITreesRegistry trees, IEnvironmentSampler sampler, ITerrainGenerator envTerrain, IReadOnlyList<string>? allowedObjectIds = null)
+        public ConfigTreeWorldObjectSpawner(ITreesRegistry trees, IEnvironmentSampler sampler, ITerrainGenerator envTerrain, IWorldConfigService config, IReadOnlyList<string>? allowedObjectIds = null)
         {
             _trees = trees;
             _sampler = sampler;
             _envTerrain = envTerrain;
+            _config = config;
             _allowedIds = allowedObjectIds;
         }
 
@@ -62,7 +64,7 @@ namespace Veilborne.Biomes.Spawners
             if (candidateDefs.Count == 0) return results;
 
             int perType = Math.Max(1, count / Math.Max(1, candidateDefs.Count));
-            int seedBase = HashCode.Combine(WorldGlobals.Seed, biomeId.GetHashCode(StringComparison.OrdinalIgnoreCase),
+            int seedBase = HashCode.Combine(_config.Seed, biomeId.GetHashCode(StringComparison.OrdinalIgnoreCase),
                                             (int)originWorld.X, (int)originWorld.Y, chunkSize);
 
             var placedAreas = new List<(Vector2 pos, float radius)>();

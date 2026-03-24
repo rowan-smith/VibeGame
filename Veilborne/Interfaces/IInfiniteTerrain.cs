@@ -1,4 +1,6 @@
 using System.Numerics;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
 
 namespace Veilborne.Interfaces
 {
@@ -10,8 +12,8 @@ namespace Veilborne.Interfaces
 
         void Update();
 
-        void Render(Camera.Camera camera);
+        void Render(CameraComponent camera);
 
-        void RenderWithExclusions(Camera.Camera camera, HashSet<(int cx, int cz)> exclude);
+        void RenderWithExclusions(CameraComponent camera, HashSet<(int cx, int cz)> exclude);
     }
 }

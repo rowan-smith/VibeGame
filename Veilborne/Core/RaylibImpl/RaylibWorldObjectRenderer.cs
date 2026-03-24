@@ -2,44 +2,70 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Veilborne.Core;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
 using ZeroElectric.Vinculum;
+using Veilborne.Interfaces;
+using Veilborne.Objects;
 
-namespace Veilborne.Objects
+namespace Veilborne.Core.RaylibImpl
 {
-    public sealed class WorldObjectRenderer : IWorldObjectRenderer, IDisposable
+    public sealed class RaylibWorldObjectRenderer : IWorldObjectRenderer, IRenderSystem, IDisposable
     {
         private readonly Dictionary<string, Model> _cache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly EntityRegistry _entities;
+
+        public RaylibWorldObjectRenderer(EntityRegistry entities)
+        {
+            _entities = entities;
+        }
+
+        public void Draw()
+        {
+            foreach (var entity in _entities.GetEntitiesWith<RenderComponent>())
+            {
+                if (entity.TryGetComponent<TransformComponent>(out var transform) &&
+                    entity.TryGetComponent<RenderComponent>(out var render))
+                {
+                    if (!render.Visible) continue;
+                    DrawInternal(transform.Position, transform.Rotation, transform.Scale, render.ModelPath, render.ConfigRotationDegrees);
+                }
+            }
+        }
 
         public void DrawWorldObject(SpawnedObject obj)
         {
-            if (obj == null || string.IsNullOrWhiteSpace(obj.ModelPath)) return;
-            if (!_cache.TryGetValue(obj.ModelPath, out var model))
+            if (obj == null) return;
+            DrawInternal(obj.Position, obj.Rotation, obj.Scale, obj.ModelPath, obj.ConfigRotationDegrees);
+        }
+
+        private void DrawInternal(Vector3 position, Quaternion rotation, Vector3 scale, string modelPath, float? configRotationDegrees)
+        {
+            if (string.IsNullOrWhiteSpace(modelPath)) return;
+            if (!_cache.TryGetValue(modelPath, out var model))
             {
-                try { model = Raylib.LoadModel(obj.ModelPath); _cache[obj.ModelPath] = model; }
+                try { model = Raylib.LoadModel(modelPath); _cache[modelPath] = model; }
                 catch { return; }
             }
 
             var bbox = Raylib.GetModelBoundingBox(model);
 
-            // Determine final rotation:
-            // Always apply up-axis auto-correction (Y-up vs Z-up). If config Rotation is present (including 0°),
-            // apply that Y rotation on top of the correction so authors can still spin the model.
             Quaternion qFinal;
             {
-                Quaternion qCorrection = ChooseUpAxisByExtents(bbox, obj.Scale, preferYUp: true);
-                if (obj.ConfigRotationDegrees.HasValue)
-                    qFinal = Quaternion.Normalize(Quaternion.Concatenate(obj.Rotation, qCorrection));
+                Quaternion qCorrection = ChooseUpAxisByExtents(bbox, scale, preferYUp: true);
+                if (configRotationDegrees.HasValue)
+                    qFinal = Quaternion.Normalize(Quaternion.Concatenate(rotation, qCorrection));
                 else
                     qFinal = Quaternion.Normalize(qCorrection);
             }
 
             ToAxisAngle(qFinal, out Vector3 axis, out float angleDegrees);
 
-            float baseOffset = ComputeBaseLift(bbox, obj.Scale, qFinal);
+            float baseOffset = ComputeBaseLift(bbox, scale, qFinal);
 
-            Vector3 modelPos = new(obj.Position.X, obj.Position.Y + baseOffset, obj.Position.Z);
+            Vector3 modelPos = new(position.X, position.Y + baseOffset, position.Z);
 
-            Raylib.DrawModelEx(model, modelPos, axis, angleDegrees, obj.Scale, Raylib.WHITE);
+            Raylib.DrawModelEx(model, modelPos, axis, angleDegrees, scale, Raylib.WHITE);
         }
 
 

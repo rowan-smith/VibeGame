@@ -1,6 +1,4 @@
 using Serilog;
-using Veilborne.Interfaces;
-using ZeroElectric.Vinculum;
 
 namespace Veilborne.Core.TerrainTexture
 {
@@ -26,10 +24,9 @@ namespace Veilborne.Core.TerrainTexture
             return MipGenerator.GetMipPath(basePath, mip);
         }
 
-        public bool TryGetOrLoad(ITextureManager textureManager, string basePath, int mip, out Texture texture)
+        public string GetFullMipPath(string basePath, int mip)
         {
-            texture = default;
-            if (string.IsNullOrWhiteSpace(basePath)) return false;
+            if (string.IsNullOrWhiteSpace(basePath)) return string.Empty;
 
             // Ensure the mip file exists (generate on demand if missing)
             string mipPath = GetMipPath(basePath, mip);
@@ -38,12 +35,12 @@ namespace Veilborne.Core.TerrainTexture
             {
                 // Attempt to generate the chain; if generation fails, fall back to original
                 string baseFull = ResolveExistingPath(basePath);
-                if (!File.Exists(baseFull)) return false;
+                if (!File.Exists(baseFull)) return string.Empty;
                 MipGenerator.EnsureMipExists(baseFull, mip);
                 fullMipPath = ResolveExistingPath(mipPath);
             }
 
-            return textureManager.TryGetOrLoadByPath(fullMipPath, out texture);
+            return fullMipPath;
         }
 
         private static string ResolveExistingPath(string relative)

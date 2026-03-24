@@ -11,6 +11,8 @@ using Veilborne.Biomes.Environment;
 using Veilborne.Biomes.Spawners;
 using Veilborne.Camera;
 using Veilborne.Core;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Systems;
 using Veilborne.Core.Items;
 using Veilborne.Core.TerrainTexture;
 using Veilborne.Core.WorldObjects;
@@ -18,6 +20,7 @@ using Veilborne.Interfaces;
 using Veilborne.Logging;
 using Veilborne.Objects;
 using Veilborne.Terrain;
+using Veilborne.Core.RaylibImpl;
 
 namespace Veilborne;
 
@@ -26,39 +29,23 @@ internal static class Program
     public static async Task Main(string[] args)
     {
         using var logging = new LoggingService();
-
         var builder = Host.CreateApplicationBuilder(args);
 
-        // Load enabled biome configs
-        var biomesDir = Path.Combine(AppContext.BaseDirectory, "assets", "config", "biomes");
-        if (!Directory.Exists(biomesDir))
-            throw new InvalidOperationException($"Biomes directory not found: {biomesDir}");
+        // Bootstrap Core configuration
+        var configService = new WorldConfigService();
+        builder.Services.AddSingleton<IWorldConfigService>(configService);
 
-        var biomeFiles = Directory.GetFiles(biomesDir, "*.json", SearchOption.TopDirectoryOnly);
-        if (biomeFiles.Length == 0)
-            throw new InvalidOperationException($"No biome configuration files (*.json) found in {biomesDir}");
+        // Core Input, Time, Graphics and UI
+        builder.Services.AddSingleton<IInputProvider, RaylibInputProvider>();
+        builder.Services.AddSingleton<ITimeService, RaylibTimeService>();
+        builder.Services.AddSingleton<IGraphicsProvider, RaylibGraphicsProvider>();
+        builder.Services.AddSingleton<IUiProvider, RaylibUiProvider>();
 
-        var enabledBiomes = new List<BiomeData>();
-        foreach (var file in biomeFiles)
-        {
-            var dto = JsonModelLoader.LoadFile<BiomeData>(file);
-            if (dto.Enabled)
-                enabledBiomes.Add(dto);
-        }
-
-        if (enabledBiomes.Count == 0)
-            throw new InvalidOperationException("No enabled biomes found. Enable at least one biome config file.");
-
-        // Entry point
-        builder.Services.AddHostedService<Entry>();
-
-        // -----------------------------
         // Core terrain & environment
-        // -----------------------------
-        builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
+        builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
         builder.Services.AddSingleton<TerrainTextureStreamingManager>();
-        builder.Services.AddSingleton<ITerrainRenderer>(sp => new TerrainRenderer(
+        builder.Services.AddSingleton<ITerrainRenderer>(sp => new RaylibTerrainRenderer(
             sp.GetRequiredService<ITextureManager>(),
             sp.GetRequiredService<ITerrainTextureRegistry>(),
             sp.GetRequiredService<IBiomeProvider>(),
@@ -66,102 +53,95 @@ internal static class Program
             sp.GetRequiredService<TerrainTextureStreamingManager>()
         ));
         builder.Services.AddSingleton<ITreeRenderer, TreeRenderer>();
-        builder.Services.AddSingleton<IWorldObjectRenderer, WorldObjectRenderer>();
-        builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();
-        builder.Services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(new MultiNoiseConfig { Seed = WorldGlobals.Seed }));
+        builder.Services.AddSingleton<IWorldObjectRenderer, RaylibWorldObjectRenderer>();
+        
+        // ECS Systems
+        builder.Services.AddSingleton<ISystem, PlayerSystem>();
+        builder.Services.AddSingleton<ISystem, TerrainUpdateSystem>();
+        builder.Services.AddSingleton<IRenderSystem, TerrainRenderSystem>();
+        builder.Services.AddSingleton<IRenderSystem>(sp => (IRenderSystem)sp.GetRequiredService<IWorldObjectRenderer>());
 
-        // -----------------------------
-        // Biome registration
-        // -----------------------------
-        foreach (var def in enabledBiomes)
-        {
-            builder.Services.AddSingleton<IBiome>(sp =>
-            {
-                var sampler = sp.GetRequiredService<IEnvironmentSampler>();
-                var trees = sp.GetRequiredService<ITreesRegistry>();
-                var envTerrain = sp.GetRequiredService<ITerrainGenerator>();
-                IWorldObjectSpawner spawner = new ConfigTreeWorldObjectSpawner(trees, sampler, envTerrain, def.AllowedObjects);
-                return new ConfigBiome(def.Id, def, spawner);
-            });
-        }
+        builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();
+        builder.Services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
+
+        // Load biomes dynamically
+        RegisterBiomes(builder.Services);
 
         builder.Services.AddSingleton<IBiomeProvider>(sp =>
         {
-            var allBiomes = sp.GetServices<IBiome>().ToList();
-            if (allBiomes.Count == 0)
-            {
-                throw new InvalidOperationException("No IBiome instances registered");
-            }
-
-            var config = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
-            var bp = new BiomeProviderConfig();
-            var section = config.GetSection("Biomes:Provider");
-            // Read configured values if present; fall back to defaults otherwise
-            float avgSize = bp.AverageCellSize;
-            float jitter = bp.Jitter;
-            int seedVal = WorldGlobals.Seed;
-
-            var avgStr = section["AverageCellSize"]; if (!string.IsNullOrWhiteSpace(avgStr) && float.TryParse(avgStr, out var avgParsed)) avgSize = avgParsed;
-            var jitStr = section["Jitter"]; if (!string.IsNullOrWhiteSpace(jitStr) && float.TryParse(jitStr, out var jitParsed)) jitter = jitParsed;
-            var seedStr = section["Seed"]; if (!string.IsNullOrWhiteSpace(seedStr) && int.TryParse(seedStr, out var seedParsed)) seedVal = seedParsed;
-
-            return new SimpleBiomeProvider(allBiomes, avgSize, seedVal, jitter);
+            var config = sp.GetRequiredService<IWorldConfigService>();
+            return new SimpleBiomeProvider(sp.GetServices<IBiome>(), config.BiomeProviderConfig.AverageCellSize, config.Seed, config.BiomeProviderConfig.Jitter);
         });
 
-        // -----------------------------
         // Terrain services
-        // -----------------------------
         builder.Services.AddSingleton<EditableTerrainService>();
         builder.Services.AddSingleton<ReadOnlyTerrainService>();
         builder.Services.AddSingleton<LowLodTerrainService>();
+        builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorldConfigService>().TerrainConfig);
 
-        var worldCfg = WorldGlobals.Config;
-        builder.Services.AddSingleton(new TerrainRingConfig
-        {
-            EditableRadius = worldCfg?.EditableRadius ?? 3,
-            ReadOnlyRadius = worldCfg?.ReadOnlyRadius ?? 6,
-            LowLodRadius = worldCfg?.LowLodRadius ?? 12,
-        });
-
-        // TerrainManager orchestrates all rings
         builder.Services.AddSingleton<IInfiniteTerrain>(sp =>
         {
-            var editable = sp.GetRequiredService<EditableTerrainService>();
-            var readOnly = sp.GetRequiredService<ReadOnlyTerrainService>();
-            var lowLod = sp.GetRequiredService<LowLodTerrainService>();
-            var cfg = sp.GetRequiredService<TerrainRingConfig>();
-            var biomeProvider = sp.GetRequiredService<IBiomeProvider>();
-            var renderer = sp.GetRequiredService<ITerrainRenderer>();
-            return new TerrainManager(editable, readOnly, cfg, biomeProvider, renderer, lowLod);
+            var config = sp.GetRequiredService<IWorldConfigService>();
+            return new TerrainManager(
+                sp.GetRequiredService<EditableTerrainService>(),
+                sp.GetRequiredService<ReadOnlyTerrainService>(),
+                config.TerrainConfig,
+                sp.GetRequiredService<IBiomeProvider>(),
+                sp.GetRequiredService<ITerrainRenderer>(),
+                config,
+                sp.GetRequiredService<ITimeService>(),
+                sp.GetRequiredService<LowLodTerrainService>());
         });
         builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
 
-        // -----------------------------
-        // Game engine & player
-        // -----------------------------
+        // Game engine & state
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
         builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
-        builder.Services.AddSingleton<ITextureManager, TextureManager>();
+        builder.Services.AddSingleton<ITextureManager, RaylibTextureManager>();
         builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
 
         builder.Services.AddSingleton(sp => new ObjectSpawner(
-            WorldGlobals.Seed,
+            sp.GetRequiredService<IWorldConfigService>().Seed,
             sp.GetRequiredService<ITerrainGenerator>(),
             sp.GetRequiredService<IBiomeProvider>()));
 
-        builder.Services.AddSingleton(sp => new Player(new Vector3(0f, 0f, 0f)));
+        // ECS
+        builder.Services.AddSingleton<EntityRegistry>();
+        builder.Services.AddSingleton(new Player(Vector3.Zero));
         builder.Services.AddSingleton(sp => new World(
-            WorldGlobals.Seed,
+            sp.GetRequiredService<IWorldConfigService>().Seed,
             sp.GetRequiredService<Player>(),
             sp.GetRequiredService<TerrainManager>(),
             sp.GetRequiredService<IBiomeProvider>(),
-            sp.GetRequiredService<ObjectSpawner>()));
+            sp.GetRequiredService<ObjectSpawner>(),
+            sp.GetRequiredService<EntityRegistry>()));
 
-        // VibeGameEngine
+        builder.Services.AddHostedService<Entry>();
         builder.Services.AddTransient<IGameEngine, VibeGameEngine>();
 
         var host = builder.Build();
         await host.StartAsync();
         await host.WaitForShutdownAsync();
+    }
+
+    private static void RegisterBiomes(IServiceCollection services)
+    {
+        var biomesDir = Path.Combine(AppContext.BaseDirectory, "assets", "config", "biomes");
+        if (!Directory.Exists(biomesDir)) return;
+
+        foreach (var file in Directory.GetFiles(biomesDir, "*.json"))
+        {
+            var dto = JsonModelLoader.LoadFile<BiomeData>(file);
+            if (!dto.Enabled) continue;
+
+            services.AddSingleton<IBiome>(sp =>
+            {
+                var trees = sp.GetRequiredService<ITreesRegistry>();
+                var sampler = sp.GetRequiredService<IEnvironmentSampler>();
+                var envTerrain = sp.GetRequiredService<ITerrainGenerator>();
+                var config = sp.GetRequiredService<IWorldConfigService>();
+                return new ConfigBiome(dto.Id, dto, new ConfigTreeWorldObjectSpawner(trees, sampler, envTerrain, config, dto.AllowedObjects));
+            });
+        }
     }
 }

@@ -1,6 +1,7 @@
 using System.Numerics;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
 using Veilborne.Interfaces;
-using ZeroElectric.Vinculum;
 
 namespace Veilborne.Camera
 {
@@ -11,27 +12,29 @@ namespace Veilborne.Camera
         private readonly float _gravity;
         private readonly float _jumpSpeed;
         private readonly float _eyeHeight;
+        private readonly IInputProvider _input;
 
-        public SimplePhysicsController(float gravity = -20f, float jumpSpeed = 8.5f, float eyeHeight = 1.7f)
+        public SimplePhysicsController(IInputProvider input, float gravity = -20f, float jumpSpeed = 8.5f, float eyeHeight = 1.7f)
         {
+            _input = input;
             _gravity = gravity;
             _jumpSpeed = jumpSpeed;
             _eyeHeight = eyeHeight;
         }
 
-        public void Integrate(ref Camera3D camera, float dt, Vector3 horizontalDisplacement, Func<float, float, float> groundHeightFunc)
+        public void Integrate(CameraComponent camera, float dt, Vector3 horizontalDisplacement, Func<float, float, float> groundHeightFunc)
         {
             // Track initial position to preserve camera forward by applying same delta to target
-            Vector3 startPos = camera.position;
+            Vector3 startPos = camera.Position;
 
             // Horizontal move first (horizontalDisplacement is already scaled by dt)
-            camera.position += new Vector3(horizontalDisplacement.X, 0, horizontalDisplacement.Z);
+            camera.Position += new Vector3(horizontalDisplacement.X, 0, horizontalDisplacement.Z);
 
             // Ground height under current position (eye height applied after sampling)
-            float groundY = groundHeightFunc(camera.position.X, camera.position.Z) + _eyeHeight;
+            float groundY = groundHeightFunc(camera.Position.X, camera.Position.Z) + _eyeHeight;
 
             // Jump input only when grounded
-            if (_isGrounded && Raylib.IsKeyPressed(KeyboardKey.KEY_SPACE))
+            if (_isGrounded && _input.IsKeyPressed(InputKeys.KEY_SPACE))
             {
                 _verticalVelocity = _jumpSpeed;
                 _isGrounded = false;
@@ -39,16 +42,16 @@ namespace Veilborne.Camera
 
             // Integrate vertical velocity
             _verticalVelocity += _gravity * dt;
-            camera.position = camera.position with
+            camera.Position = camera.Position with
             {
-                Y = camera.position.Y + _verticalVelocity * dt,
+                Y = camera.Position.Y + _verticalVelocity * dt,
             };
 
             // Ground collision
-            groundY = groundHeightFunc(camera.position.X, camera.position.Z) + _eyeHeight;
-            if (camera.position.Y <= groundY)
+            groundY = groundHeightFunc(camera.Position.X, camera.Position.Z) + _eyeHeight;
+            if (camera.Position.Y <= groundY)
             {
-                camera.position = new Vector3(camera.position.X, groundY, camera.position.Z);
+                camera.Position = new Vector3(camera.Position.X, groundY, camera.Position.Z);
                 _verticalVelocity = 0f;
                 _isGrounded = true;
             }
@@ -58,8 +61,8 @@ namespace Veilborne.Camera
             }
 
             // Apply same positional delta to target to avoid fighting camera controller orientation
-            Vector3 delta = camera.position - startPos;
-            camera.target += delta;
+            Vector3 delta = camera.Position - startPos;
+            camera.Target += delta;
         }
     }
 }

@@ -29,7 +29,8 @@ namespace Veilborne.Core.TerrainTexture
                 return true;
             }
 
-            if (_stream.TryGetOrLoad(_texMgr, BasePath, targetMip, out var tex) && tex.id != 0)
+            string fullPath = _stream.GetFullMipPath(BasePath, targetMip);
+            if (!string.IsNullOrEmpty(fullPath) && _texMgr.TryGetOrLoadByPath(fullPath, out var tex) && tex.id != 0)
             {
                 _current = tex;
                 CurrentMipLevel = targetMip;

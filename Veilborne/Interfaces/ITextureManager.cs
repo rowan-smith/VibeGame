@@ -28,5 +28,8 @@ namespace Veilborne.Interfaces
 
         // Loads a texture from a relative or absolute path if not cached yet; returns false if load failed.
         bool TryGetOrLoadByPath(string relativeOrAbsolutePath, out Texture texture);
+
+        // Manually registers a texture into the manager's cache.
+        void Register(string key, Texture texture);
     }
 }
