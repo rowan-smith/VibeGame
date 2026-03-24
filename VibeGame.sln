@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VibeGame", "VibeGame\VibeGame.csproj", "{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne", "Veilborne\Veilborne.csproj", "{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Items", "Items", "{556906A2-F4B2-4066-B200-B0B98E263172}"
 	ProjectSection(SolutionItems) = preProject
