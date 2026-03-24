@@ -1,7 +1,24 @@
 using System.Drawing;
+using System.Text.Json.Serialization;
 
 namespace Veilborne.Biomes
 {
+    /// <summary>RGBA colour entry as stored in JSON (0-255 per channel).</summary>
+    public class ColorRgba
+    {
+        public byte R { get; set; } = 255;
+        public byte G { get; set; } = 255;
+        public byte B { get; set; } = 255;
+        public byte A { get; set; } = 255;
+    }
+
+    public class ColorPaletteData
+    {
+        public ColorRgba? Primary { get; set; }
+        public ColorRgba? Secondary { get; set; }
+        public ColorRgba? Accent { get; set; }
+    }
+
     public class BiomeData
     {
         public string Id { get; set; } = string.Empty;
@@ -12,7 +29,16 @@ namespace Veilborne.Biomes
         public Dictionary<string, TextureRule>? TextureRules { get; set; }
         public List<string> DominantFlora { get; set; } = new();
         public List<string> DominantFauna { get; set; } = new();
-        public Color Color { get; set; } = Color.Green;
+
+        /// <summary>Deserialized from JSON's ColorPalette block.</summary>
+        public ColorPaletteData? ColorPalette { get; set; }
+
+        /// <summary>Primary biome colour, derived from ColorPalette.Primary if present.</summary>
+        [JsonIgnore]
+        public Color Color => ColorPalette?.Primary is { } p
+            ? Color.FromArgb(p.A, p.R, p.G, p.B)
+            : Color.Green;
+
         public float BaseHeight { get; set; } = 0f;
         public float HeightMultiplier { get; set; } = 1f;
 

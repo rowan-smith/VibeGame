@@ -1,6 +1,7 @@
 using System.Numerics;
 using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Settings;
 using Veilborne.Interfaces;
 
 namespace Veilborne.Camera
@@ -13,10 +14,12 @@ namespace Veilborne.Camera
         private readonly float _jumpSpeed;
         private readonly float _eyeHeight;
         private readonly IInputProvider _input;
+        private readonly IGameSettingsService _settings;
 
-        public SimplePhysicsController(IInputProvider input, float gravity = -20f, float jumpSpeed = 8.5f, float eyeHeight = 1.7f)
+        public SimplePhysicsController(IInputProvider input, IGameSettingsService settings, float gravity = -20f, float jumpSpeed = 8.5f, float eyeHeight = 1.7f)
         {
             _input = input;
+            _settings = settings;
             _gravity = gravity;
             _jumpSpeed = jumpSpeed;
             _eyeHeight = eyeHeight;
@@ -34,7 +37,7 @@ namespace Veilborne.Camera
             float groundY = groundHeightFunc(camera.Position.X, camera.Position.Z) + _eyeHeight;
 
             // Jump input only when grounded
-            if (_isGrounded && _input.IsKeyPressed(InputKeys.KEY_SPACE))
+            if (_isGrounded && KeyBindingTokens.IsPressed(_input, _settings.Current.Keyboard.Jump))
             {
                 _verticalVelocity = _jumpSpeed;
                 _isGrounded = false;

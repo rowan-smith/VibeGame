@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Numerics;
 using Veilborne.Core.Ecs;
 using Veilborne.Interfaces;
-using ZeroElectric.Vinculum;
 using Veilborne.Biomes;
 using Veilborne.Core.Ecs.Components;
 
@@ -17,6 +16,7 @@ namespace Veilborne.Terrain
         public int InnerExclusionRadiusChunks { get; set; }
 
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
+        private readonly Dictionary<(int cx, int cz), BiomeData> _biomeByChunk = new();
 
         private readonly IBiomeProvider _biomeProvider;
         private readonly ITerrainRenderer _renderer;
@@ -24,7 +24,8 @@ namespace Veilborne.Terrain
 
         // Async generation state
         private readonly HashSet<(int cx, int cz)> _generating = new();
-        private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin)> _completed = new();
+        private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin, BiomeData biome)> _completed = new();
+        private int _lastDesiredChunkCount;
 
         public LowLodTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer)
         {
@@ -34,6 +35,9 @@ namespace Veilborne.Terrain
         }
 
         public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
+        public int DesiredChunkCount => _lastDesiredChunkCount;
+        public int LoadedChunkCount => _loadedChunks.Count;
+        public int GeneratingChunkCount => _generating.Count;
 
         public void UpdateAround(Vector3 worldPos, int radiusChunks)
         {
@@ -66,7 +70,11 @@ namespace Veilborne.Terrain
                             float wz = origin.Y + zz * TileSize;
                             heights[xx, zz] = _editable.SampleHeight(wx, wz);
                         }
-                        _completed.Enqueue((key, heights, origin));
+                        var center = new Vector2(
+                            origin.X + ChunkSize * TileSize * 0.5f,
+                            origin.Y + ChunkSize * TileSize * 0.5f);
+                        var biome = BiomeSampling.GetDominantBiomeNearPoint(_biomeProvider, null, center, 96f, 11, 2f);
+                        _completed.Enqueue((key, heights, origin, biome.Data));
                     });
                 }
             }
@@ -75,11 +83,18 @@ namespace Veilborne.Terrain
             var toRemove = new List<(int cx, int cz)>();
             foreach (var key in _loadedChunks.Keys)
                 if (!desired.Contains(key)) toRemove.Add(key);
-            foreach (var key in toRemove) _loadedChunks.Remove(key);
+            foreach (var key in toRemove)
+            {
+                _loadedChunks.Remove(key);
+                _biomeByChunk.Remove(key);
+            }
+
+            _lastDesiredChunkCount = desired.Count;
         }
 
-        public async Task PumpAsyncJobs()
+        public async Task PumpAsyncJobs(int maxInstallsPerFrame = int.MaxValue)
         {
+            int installs = 0;
             while (_completed.TryDequeue(out var item))
             {
                 _generating.Remove(item.key);
@@ -90,28 +105,34 @@ namespace Veilborne.Terrain
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
                 };
+                _biomeByChunk[item.key] = item.biome;
+                installs++;
+                if (installs >= maxInstallsPerFrame) break;
                 await Task.Yield();
             }
         }
 
-        public void Render(CameraComponent camera)
+        public void Render(CameraComponent camera, HashSet<(int cx, int cz)>? exclude = null)
         {
             foreach (var kvp in _loadedChunks)
             {
+                var key = kvp.Key;
+                if (exclude != null && exclude.Contains(key))
+                    continue;
                 var chunk = kvp.Value;
-                var biome = _biomeProvider.GetBiomeAt(new Vector2(chunk.Origin.X + ChunkSize * 0.5f, chunk.Origin.Y + ChunkSize * 0.5f), null);
-                _renderer.ApplyBiomeTextures(biome.Data);
+                if (_biomeByChunk.TryGetValue(key, out var primaryBiome))
+                    _renderer.ApplyBiomeTextures(primaryBiome);
+                else
+                    _renderer.ApplyBiomeTextures(BiomeSampling.GetDominantBiomeNearPoint(_biomeProvider, null,
+                        new Vector2(chunk.Origin.X + ChunkSize * TileSize * 0.5f, chunk.Origin.Y + ChunkSize * TileSize * 0.5f),
+                        96f, 11, 2f).Data);
                 _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
             }
         }
 
         public void RenderDebugChunkBounds(CameraComponent camera)
         {
-            foreach (var (cx, cz) in _loadedChunks.Keys)
-            {
-                Vector3 pos = new(cx * ChunkSize * TileSize, 0, cz * ChunkSize * TileSize);
-                Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.5f, ChunkSize * TileSize, Raylib.GRAY);
-            }
+            // Debug chunk bounds are backend-specific and currently disabled.
         }
     }
 }

@@ -47,7 +47,7 @@ namespace Veilborne.Biomes.Spawners
 
             // Build candidate tree list
             List<TreeObjectConfig> candidateDefs = new();
-            if (_allowedIds != null)
+            if (_allowedIds != null && _allowedIds.Count > 0)
             {
                 foreach (var id in _allowedIds)
                     if (_trees.TryGet(id, out var def)) candidateDefs.Add(def);
@@ -154,6 +154,39 @@ namespace Veilborne.Biomes.Spawners
                     });
 
                     placedAreas.Add((new Vector2(wx, wz), areaRadius));
+                }
+            }
+
+            // Fallback: if strict filters rejected everything, place a few deterministic trees anyway
+            // so each biome still renders visible world objects.
+            if (results.Count == 0)
+            {
+                int fallbackCount = Math.Min(4, candidateDefs.Count);
+                for (int i = 0; i < fallbackCount; i++)
+                {
+                    var def = candidateDefs[i % candidateDefs.Count];
+                    var model = def.Assets?.Models?.FirstOrDefault();
+                    if (model == null) continue;
+
+                    int seed = HashCode.Combine(seedBase, def.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 1000 + i);
+                    float wx = HashToRange(seed * 97 + 5, minX, maxX);
+                    float wz = HashToRange(seed * 211 + 23, minZ, maxZ);
+                    float baseY = SampleMeshHeight(heights, originWorld, terrain.TileSize, wx, wz);
+
+                    Vector3 baseScale = def.Visual?.BaseScale?.Length >= 3
+                        ? new Vector3(def.Visual.BaseScale[0], def.Visual.BaseScale[1], def.Visual.BaseScale[2])
+                        : Vector3.One;
+
+                    results.Add(new SpawnedObject
+                    {
+                        ObjectId = def.Id,
+                        ModelPath = NormalizePath(model.Path),
+                        Position = new Vector3(wx, baseY, wz),
+                        Rotation = Quaternion.Identity,
+                        Scale = baseScale,
+                        CollisionRadius = def.Physics?.ColliderRadius > 0f ? def.Physics.ColliderRadius : (def.Physics?.AreaRadius ?? 1f),
+                        ConfigRotationDegrees = model.Rotation
+                    });
                 }
             }
 

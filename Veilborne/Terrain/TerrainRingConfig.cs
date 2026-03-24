@@ -26,5 +26,12 @@ namespace Veilborne.Terrain
 
         // Mesh build throttling
         public int MaxMeshBuildsPerFrame { get; set; } = 3;
+
+        // Chunk update/install throttling to smooth movement spikes
+        public int MaxEditableRebuildsPerFrame { get; set; } = 1;
+        public int MaxReadOnlyChunkUpdatesPerFrame { get; set; } = 2;
+        public int MaxLowLodChunkUpdatesPerFrame { get; set; } = 1;
+        public int MaxReadOnlyInstallsPerFrame { get; set; } = 1;
+        public int MaxLowLodInstallsPerFrame { get; set; } = 1;
     }
 }

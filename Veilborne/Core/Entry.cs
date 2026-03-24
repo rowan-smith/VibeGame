@@ -18,10 +18,7 @@ namespace Veilborne.Core
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            logger.Information("Launching Veilborne (Raylib)...");
-
-            // Install Raylib -> Serilog log bridge so all Raylib output goes through our logger
-            // RaylibLogBridge.Install();
+            logger.Information("Launching Veilborne (MonoGame)...");
             try
             {
                 await _engine.RunAsync();

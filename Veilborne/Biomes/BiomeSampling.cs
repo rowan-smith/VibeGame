@@ -55,6 +55,21 @@ namespace Veilborne.Biomes
             float centerExtraWeight = 2f,
             float expandWorldMargin = 0f)
         {
+            var (primary, secondary, _, _) = GetDominantAndSecondaryBiomeForAreaWithWeights(
+                provider, terrain, chunkOriginWorld, chunkSize, tileSize, samplesPerAxis, centerExtraWeight, expandWorldMargin);
+            return (primary, secondary);
+        }
+
+        public static (IBiome primary, IBiome? secondary, float primaryWeight, float secondaryWeight) GetDominantAndSecondaryBiomeForAreaWithWeights(
+            IBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 chunkOriginWorld,
+            int chunkSize,
+            float tileSize,
+            int samplesPerAxis = 9,
+            float centerExtraWeight = 2f,
+            float expandWorldMargin = 0f)
+        {
             samplesPerAxis = Math.Max(3, samplesPerAxis);
             var counts = new Dictionary<string, (IBiome biome, float weight)>(StringComparer.OrdinalIgnoreCase);
 
@@ -93,13 +108,60 @@ namespace Veilborne.Biomes
                 float cx = origin.X + size * 0.5f;
                 float cz = origin.Y + size * 0.5f;
                 var c = provider.GetBiomeAt(new Vector2(cx, cz), terrain!);
-                return (c, null);
+                return (c, null, 1f, 0f);
             }
 
             var ordered = counts.Values.OrderByDescending(v => v.weight).ToList();
             var primary = ordered[0].biome;
             IBiome? secondary = ordered.Count > 1 ? ordered[1].biome : null;
-            return (primary, secondary);
+            float primaryWeight = ordered[0].weight;
+            float secondaryWeight = ordered.Count > 1 ? ordered[1].weight : 0f;
+            return (primary, secondary, primaryWeight, secondaryWeight);
+        }
+
+        /// <summary>
+        /// Samples biomes over a fixed world-space square centered at <paramref name="centerWorld"/>.
+        /// This is useful for keeping biome assignment stable across rings that use different chunk sizes.
+        /// </summary>
+        public static IBiome GetDominantBiomeNearPoint(
+            IBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 centerWorld,
+            float halfExtentWorld = 96f,
+            int samplesPerAxis = 11,
+            float centerExtraWeight = 2f)
+        {
+            float extent = MathF.Max(1f, halfExtentWorld);
+            Vector2 origin = new Vector2(centerWorld.X - extent, centerWorld.Y - extent);
+            float worldSize = extent * 2f;
+            int pseudoChunkSize = Math.Max(1, samplesPerAxis);
+            float pseudoTile = worldSize / pseudoChunkSize;
+            return GetDominantBiomeForArea(provider, terrain, origin, pseudoChunkSize, pseudoTile, samplesPerAxis, centerExtraWeight, 0f);
+        }
+
+        public static (IBiome primary, IBiome? secondary, float secondaryBlend) GetDominantSecondaryBlendNearPoint(
+            IBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 centerWorld,
+            float halfExtentWorld = 96f,
+            int samplesPerAxis = 11,
+            float centerExtraWeight = 2f)
+        {
+            float extent = MathF.Max(1f, halfExtentWorld);
+            Vector2 origin = new Vector2(centerWorld.X - extent, centerWorld.Y - extent);
+            float worldSize = extent * 2f;
+            int pseudoChunkSize = Math.Max(1, samplesPerAxis);
+            float pseudoTile = worldSize / pseudoChunkSize;
+
+            var (primary, secondary, primaryWeight, secondaryWeight) = GetDominantAndSecondaryBiomeForAreaWithWeights(
+                provider, terrain, origin, pseudoChunkSize, pseudoTile, samplesPerAxis, centerExtraWeight, 0f);
+
+            float blend = 0f;
+            float denom = primaryWeight + secondaryWeight;
+            if (secondary is not null && denom > 1e-5f)
+                blend = Math.Clamp(secondaryWeight / denom, 0f, 0.49f);
+
+            return (primary, secondary, blend);
         }
     }
 }

@@ -26,7 +26,6 @@ namespace Veilborne.Interfaces
         void DrawLine(int x1, int y1, int x2, int y2, Vector4 color);
         int MeasureText(string text, int fontSize);
         
-        // Use keys to refer to textures loaded via ITextureManager
         void DrawTexture(string key, Rect src, Rect dst, Vector2 origin, float rotation, Vector4 color);
         // Helper for simple texture drawing
         void DrawTexture(string key, int x, int y, float scale, Vector4 color);

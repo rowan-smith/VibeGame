@@ -7,6 +7,7 @@ using Veilborne.Interfaces;
 using Veilborne.Biomes;
 using Veilborne.Core;
 using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Settings;
 
 namespace Veilborne.Terrain
 {
@@ -20,6 +21,7 @@ namespace Veilborne.Terrain
         private readonly ITerrainRenderer _renderer;
         private readonly IWorldConfigService _configService;
         private readonly ITimeService _time;
+        private readonly IGameSettingsService _settings;
 
         // Adaptive state
         private Vector3 _lastCameraPos;
@@ -41,6 +43,13 @@ namespace Veilborne.Terrain
         private int _lastReadOnlyRadius = -1;
         private int _lastLowLodRadius = -1;
 
+        public readonly record struct TerrainLoadingProgress(
+            float Progress01,
+            string Stage,
+            int DesiredChunks,
+            int LoadedChunks,
+            int GeneratingChunks);
+
         public TerrainManager(
             EditableTerrainService editableRing,
             ReadOnlyTerrainService readOnlyRing,
@@ -49,6 +58,7 @@ namespace Veilborne.Terrain
             ITerrainRenderer renderer,
             IWorldConfigService configService,
             ITimeService time,
+            IGameSettingsService settings,
             LowLodTerrainService? lowLodRing = null)
         {
             _editableRing = editableRing;
@@ -59,6 +69,7 @@ namespace Veilborne.Terrain
             _renderer = renderer;
             _configService = configService;
             _time = time;
+            _settings = settings;
         }
 
         public float TileSize => _readOnlyRing.TileSize;
@@ -107,9 +118,12 @@ namespace Veilborne.Terrain
             if (dt <= 0f) dt = 1f / 60f;
             _avgDt = Lerp(_avgDt <= 0 ? dt : _avgDt, dt, 0.1f);
 
+            float movedDistance = 0f;
+
             if (_hasLast)
             {
                 float d = Vector3.Distance(worldPos, _lastCameraPos);
+                movedDistance = d;
                 float instSpeed = d / MathF.Max(dt, 1e-4f);
                 _speedMps = Lerp(_speedMps, instSpeed, 0.2f);
 
@@ -122,9 +136,6 @@ namespace Veilborne.Terrain
                     _lastMoveDirXZ = delta / len;
                 }
             }
-            _lastCameraPos = worldPos;
-            _hasLast = true;
-
             // Terrain density via biome roughness/vegetation
             var biome = _biomeProvider.GetBiomeAt(new Vector2(worldPos.X, worldPos.Z), this);
             float rough = biome?.Data?.ProceduralData?.Base?.Roughness ?? 0.5f;
@@ -160,7 +171,7 @@ namespace Veilborne.Terrain
             // Debounce: if camera hasn't moved perceptibly, keep previous radii to avoid thrashing
             if (_hasLast)
             {
-                float dStill = Vector3.Distance(worldPos, _lastCameraPos);
+                float dStill = movedDistance;
                 if (dStill < 0.01f)
                 {
                     if (_lastEditableRadius >= 0) e = _lastEditableRadius;
@@ -174,6 +185,8 @@ namespace Veilborne.Terrain
             _lastReadOnlyRadius = ro;
             _lastLowLodRadius = lod;
             _curEditable = e; _curReadOnly = ro; _curLowLod = lod;
+            _lastCameraPos = worldPos;
+            _hasLast = true;
 
             // --- Predict forward position for preloading ---
             Vector3 predictedPos = worldPos;
@@ -200,7 +213,10 @@ namespace Veilborne.Terrain
 
             if (_lowLodRing is not null)
             {
-                _lowLodRing.InnerExclusionRadiusChunks = Math.Max(0, ro);
+                float roChunkWorld = _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;
+                float lodChunkWorld = _lowLodRing.ChunkSize * _lowLodRing.TileSize;
+                int lodInnerExclusion = (int)MathF.Ceiling((ro * roChunkWorld) / lodChunkWorld);
+                _lowLodRing.InnerExclusionRadiusChunks = Math.Max(0, lodInnerExclusion);
                 if (_frameCounter % lodInterval == 0)
                 {
                     _lowLodRing.UpdateAround(predictedPos, lod);
@@ -208,8 +224,10 @@ namespace Veilborne.Terrain
             }
 
             // --- Mesh generation ---
+            int roUpdated = 0;
             foreach (var chunk in _readOnlyRing.GetLoadedChunks().Values)
             {
+                if (roUpdated >= _cfg.MaxReadOnlyChunkUpdatesPerFrame) break;
                 float minX = chunk.Origin.X;
                 float minZ = chunk.Origin.Y;
                 float maxX = minX + _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;
@@ -220,6 +238,7 @@ namespace Veilborne.Terrain
                     _renderer.EnqueueBuild(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
                     chunk.IsMeshGenerated = true;
                     chunk.BuiltFromVersion = srcVer;
+                    roUpdated++;
                 }
                 else if (chunk.BuiltFromVersion != srcVer)
                 {
@@ -278,6 +297,7 @@ namespace Veilborne.Terrain
                     {
                         _renderer.PatchRegion(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin, aggX0, aggZ0, aggX1, aggZ1);
                         chunk.BuiltFromVersion = srcVer;
+                        roUpdated++;
                     }
                     else
                     {
@@ -286,12 +306,15 @@ namespace Veilborne.Terrain
                         _renderer.EnqueueBuild(chunk.Heights, _readOnlyRing.TileSize, chunk.Origin);
                         chunk.IsMeshGenerated = true;
                         chunk.BuiltFromVersion = srcVer;
+                        roUpdated++;
                     }
                 }
             }
 
+            int editableUpdated = 0;
             foreach (var chunk in _editableRing.GetLoadedChunks().Values)
             {
+                if (editableUpdated >= _cfg.MaxEditableRebuildsPerFrame) break;
                 int srcVer = chunk.Version;
                 if (!chunk.IsMeshGenerated || chunk.BuiltFromVersion != srcVer)
                 {
@@ -300,13 +323,16 @@ namespace Veilborne.Terrain
                     chunk.IsMeshGenerated = true;
                     chunk.BuiltFromVersion = srcVer;
                     chunk.Dirty = false;
+                    editableUpdated++;
                 }
             }
 
             if (_lowLodRing is not null)
             {
+                int lodUpdated = 0;
                 foreach (var chunk in _lowLodRing.GetLoadedChunks().Values)
                 {
+                    if (lodUpdated >= _cfg.MaxLowLodChunkUpdatesPerFrame) break;
                     float minX = chunk.Origin.X;
                     float minZ = chunk.Origin.Y;
                     float maxX = minX + _lowLodRing.ChunkSize * _lowLodRing.TileSize;
@@ -317,6 +343,7 @@ namespace Veilborne.Terrain
                         _renderer.EnqueueBuild(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
                         chunk.IsMeshGenerated = true;
                         chunk.BuiltFromVersion = srcVer;
+                        lodUpdated++;
                     }
                     else if (chunk.BuiltFromVersion != srcVer)
                     {
@@ -375,6 +402,7 @@ namespace Veilborne.Terrain
                         {
                             _renderer.PatchRegion(chunk.Heights, _lowLodRing.TileSize, chunk.Origin, aggX0, aggZ0, aggX1, aggZ1);
                             chunk.BuiltFromVersion = srcVer;
+                            lodUpdated++;
                         }
                         else
                         {
@@ -383,6 +411,7 @@ namespace Veilborne.Terrain
                             _renderer.EnqueueBuild(chunk.Heights, _lowLodRing.TileSize, chunk.Origin);
                             chunk.IsMeshGenerated = true;
                             chunk.BuiltFromVersion = srcVer;
+                            lodUpdated++;
                         }
                     }
                 }
@@ -409,33 +438,84 @@ namespace Veilborne.Terrain
         // -----------------------------
         public void Render(CameraComponent camera)
         {
-            // Far
-            _lowLodRing?.Render(camera);
+            bool showEditableRing = ShouldShowEditableRing();
+            bool showReadOnlyRing = ShouldShowReadOnlyRing();
+            bool showLowLodRing = ShouldShowLowLodRing();
 
-            // Mid
-            var exclude = new HashSet<(int cx, int cz)>();
-            // Convert the editable radius (in editable chunks) to read-only chunks using world-units
-            // This avoids over-excluding mid-ring tiles and causing visible gaps between rings.
+            float roChunkWorld = _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;
+            float eChunkWorld = _editableRing.ChunkSize * _editableRing.TileSize;
+            float lodChunkWorld = _lowLodRing is not null ? _lowLodRing.ChunkSize * _lowLodRing.TileSize : 1f;
+
+            var roExclude = new HashSet<(int cx, int cz)>();
+            var lodExclude = new HashSet<(int cx, int cz)>();
+            var editableKeySet = showEditableRing
+                ? new HashSet<(int cx, int cz)>(_editableRing.GetLoadedChunks().Keys)
+                : new HashSet<(int cx, int cz)>();
+
+            // Exclude RO and LOD chunks that overlap editable chunks.
+            foreach (var (ecx, ecz) in editableKeySet)
             {
-                float roChunkWorld = _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;   // world meters per RO chunk
-                float eChunkWorld = _editableRing.ChunkSize * _editableRing.TileSize;    // world meters per E chunk
-                int excludeInner = Math.Max(0, (int)MathF.Floor((_curEditable * eChunkWorld) / roChunkWorld) - 1);
-                if (excludeInner > 0)
+                float eMinX = ecx * eChunkWorld;
+                float eMinZ = ecz * eChunkWorld;
+                float eMaxX = eMinX + eChunkWorld;
+                float eMaxZ = eMinZ + eChunkWorld;
+
+                int roMinX = (int)MathF.Floor(eMinX / roChunkWorld);
+                int roMaxX = (int)MathF.Floor((eMaxX - 1e-3f) / roChunkWorld);
+                int roMinZ = (int)MathF.Floor(eMinZ / roChunkWorld);
+                int roMaxZ = (int)MathF.Floor((eMaxZ - 1e-3f) / roChunkWorld);
+                for (int cz = roMinZ; cz <= roMaxZ; cz++)
+                for (int cx = roMinX; cx <= roMaxX; cx++)
+                    roExclude.Add((cx, cz));
+
+                if (_lowLodRing is not null)
                 {
-                    int ccx = (int)MathF.Floor(camera.Position.X / roChunkWorld);
-                    int ccz = (int)MathF.Floor(camera.Position.Z / roChunkWorld);
-                    for (int dz = -_curReadOnly; dz <= _curReadOnly; dz++)
-                    for (int dx = -_curReadOnly; dx <= _curReadOnly; dx++)
+                    int lodMinX = (int)MathF.Floor(eMinX / lodChunkWorld);
+                    int lodMaxX = (int)MathF.Floor((eMaxX - 1e-3f) / lodChunkWorld);
+                    int lodMinZ = (int)MathF.Floor(eMinZ / lodChunkWorld);
+                    int lodMaxZ = (int)MathF.Floor((eMaxZ - 1e-3f) / lodChunkWorld);
+                    for (int cz = lodMinZ; cz <= lodMaxZ; cz++)
+                    for (int cx = lodMinX; cx <= lodMaxX; cx++)
+                        lodExclude.Add((cx, cz));
+                }
+            }
+
+            // Exclude LOD chunks that overlap RO chunks only if the RO ring is actually being rendered.
+            // This avoids far-distance holes when RO is intentionally hidden/disabled.
+            if (_lowLodRing is not null)
+            {
+                if (showReadOnlyRing)
+                {
+                    foreach (var (rcx, rcz) in _readOnlyRing.GetLoadedChunks().Keys)
                     {
-                        int ring = Math.Max(Math.Abs(dx), Math.Abs(dz));
-                        if (ring <= excludeInner) exclude.Add((ccx + dx, ccz + dz));
+                        if (roExclude.Contains((rcx, rcz))) continue;
+                        float rMinX = rcx * roChunkWorld;
+                        float rMinZ = rcz * roChunkWorld;
+                        float rMaxX = rMinX + roChunkWorld;
+                        float rMaxZ = rMinZ + roChunkWorld;
+
+                        int lodMinX = (int)MathF.Floor(rMinX / lodChunkWorld);
+                        int lodMaxX = (int)MathF.Floor((rMaxX - 1e-3f) / lodChunkWorld);
+                        int lodMinZ = (int)MathF.Floor(rMinZ / lodChunkWorld);
+                        int lodMaxZ = (int)MathF.Floor((rMaxZ - 1e-3f) / lodChunkWorld);
+                        for (int cz = lodMinZ; cz <= lodMaxZ; cz++)
+                        for (int cx = lodMinX; cx <= lodMaxX; cx++)
+                            lodExclude.Add((cx, cz));
                     }
                 }
             }
-            _readOnlyRing.RenderTiles(camera, exclude);
+
+            // Far
+            if (showLowLodRing)
+                _lowLodRing?.Render(camera, lodExclude);
+
+            // Mid
+            if (showReadOnlyRing)
+                _readOnlyRing.RenderTiles(camera, roExclude);
 
             // Near
-            _editableRing.Render(camera);
+            if (showEditableRing)
+                _editableRing.Render(camera);
         }
 
         // -----------------------------
@@ -494,9 +574,53 @@ namespace Veilborne.Terrain
             await _editableRing.PumpAsyncJobs();
             // Pump RO/LOD background height sampling jobs so chunks appear when ready
             if (_readOnlyRing is not null && _readOnlyRing is ReadOnlyTerrainService ro)
-                await ro.PumpAsyncJobs();
+                await ro.PumpAsyncJobs(Math.Max(1, _cfg.MaxReadOnlyInstallsPerFrame));
             if (_lowLodRing is not null)
-                await _lowLodRing.PumpAsyncJobs();
+                await _lowLodRing.PumpAsyncJobs(Math.Max(1, _cfg.MaxLowLodInstallsPerFrame));
         }
+
+        public TerrainLoadingProgress GetLoadingProgress()
+        {
+            bool showReadOnlyRing = ShouldShowReadOnlyRing();
+            bool showLowLodRing = ShouldShowLowLodRing();
+
+            int desiredEditable = _editableRing.DesiredChunkCount;
+            int desiredReadOnly = showReadOnlyRing ? _readOnlyRing.DesiredChunkCount : 0;
+            int desiredLod = (_lowLodRing is not null && showLowLodRing) ? _lowLodRing.DesiredChunkCount : 0;
+
+            int loadedEditable = _editableRing.LoadedChunkCount;
+            int loadedReadOnly = showReadOnlyRing ? _readOnlyRing.LoadedChunkCount : 0;
+            int loadedLod = (_lowLodRing is not null && showLowLodRing) ? _lowLodRing.LoadedChunkCount : 0;
+
+            int generatingReadOnly = showReadOnlyRing ? _readOnlyRing.GeneratingChunkCount : 0;
+            int generatingLod = (_lowLodRing is not null && showLowLodRing) ? _lowLodRing.GeneratingChunkCount : 0;
+            int generatingTotal = generatingReadOnly + generatingLod;
+
+            int desiredTotal = desiredEditable + desiredReadOnly + desiredLod;
+            int loadedTotal = loadedEditable + loadedReadOnly + loadedLod;
+
+            float progress = desiredTotal > 0
+                ? Math.Clamp(loadedTotal / (float)desiredTotal, 0f, 1f)
+                : 1f;
+
+            string stage;
+            if (desiredTotal == 0) stage = "Preparing world";
+            else if (loadedEditable < desiredEditable) stage = "Loading editable terrain";
+            else if (loadedReadOnly < desiredReadOnly || generatingReadOnly > 0) stage = "Loading mid terrain";
+            else if (loadedLod < desiredLod || generatingLod > 0) stage = "Loading distant terrain";
+            else if (generatingTotal > 0) stage = "Finalizing terrain";
+            else stage = "Complete";
+
+            return new TerrainLoadingProgress(progress, stage, desiredTotal, loadedTotal, generatingTotal);
+        }
+
+        private bool ShouldShowEditableRing()
+            => !RuntimeEnvironment.IsDevelopmentEnvironment || _settings.Current.Debug.ShowEditableRing;
+
+        private bool ShouldShowReadOnlyRing()
+            => !RuntimeEnvironment.IsDevelopmentEnvironment || _settings.Current.Debug.ShowReadOnlyRing;
+
+        private bool ShouldShowLowLodRing()
+            => !RuntimeEnvironment.IsDevelopmentEnvironment || _settings.Current.Debug.ShowLowLodRing;
     }
 }

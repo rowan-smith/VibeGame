@@ -4,8 +4,8 @@ using Veilborne.Terrain;
 using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
 using Veilborne.Core.Items;
+using Veilborne.Core.Settings;
 using Veilborne.Objects;
-using Veilborne.Core.RaylibImpl;
 
 namespace Veilborne.Core
 {
@@ -15,24 +15,59 @@ namespace Veilborne.Core
         private readonly IPhysicsController _physics;
         private readonly IInfiniteTerrain _terrain;
         private readonly IItemRegistry _items;
-        private readonly ITextureManager _textureManager;
         private readonly ITimeService _time;
-        private readonly IWorldObjectRenderer _worldObjectRenderer;
         private readonly EntityRegistry _entities;
         private readonly IGraphicsProvider _graphics;
         private readonly IInputProvider _input;
-        private readonly IUiProvider _ui;
-        private readonly List<ISystem> _updateSystems = new();
-        private readonly List<IRenderSystem> _renderSystems = new();
+        private readonly EcsManager _ecsManager;
+        private readonly IGameSettingsService _settings;
+        private readonly bool _isMonoGameBackend;
+        private readonly bool _isDevelopmentEnvironment;
 
-        private bool _showDebugOverlay = false;
-        private bool _showDebugChunkBounds = false;
+        // These will be initialized by ECS manager after MonoGame is ready
+        private IUiProvider _ui;
+        private IWorldObjectRenderer _worldObjectRenderer;
+
+        private bool _showDebugOverlay;
+        private bool _showDebugChunkBounds;
+        private bool _isFullscreenApplied;
         private int _selectedHotbarSlot = 0;
         private Entity _playerEntity = default!;
+        private float _lastGameDt;
 
         // Simple UI state machine
-        private enum GameState { Initialization, MainMenu, Loading, Playing, Paused }
+        private enum GameState { Initialization, MainMenu, Settings, Loading, Playing, Paused }
+        private enum SettingsReturnState { MainMenu, Paused }
+        private enum SettingsTab { General, Graphics, Keyboard, Debug }
+        private enum KeyboardAction
+        {
+            Forward,
+            Backward,
+            Left,
+            Right,
+            Jump,
+            DigInteract,
+            DebugOverlay,
+            Fullscreen,
+            Hotbar1,
+            Hotbar2,
+            Hotbar3,
+            Hotbar4,
+            Hotbar5,
+            Hotbar6,
+            Hotbar7,
+            Hotbar8,
+            Hotbar9,
+            Scroll
+        }
         private GameState _state = GameState.MainMenu;
+        private SettingsReturnState _settingsReturnState = SettingsReturnState.MainMenu;
+        private SettingsTab _settingsTab = SettingsTab.General;
+        private int _keyboardTabScrollOffset;
+        private bool _isCapturingBinding;
+        private KeyboardAction _capturingAction;
+        private bool _capturingPrimary = true;
+        private int _captureIgnoreFrames;
 
         // UI asset keys
         private const string LogoTextureKey = "ui/logo";
@@ -40,8 +75,11 @@ namespace Veilborne.Core
 
         // Loading state
         private float _loadingProgress;
-        private double _loadingTime;
-        private const double LoadingDurationSeconds = 1.5; // heuristic warmup time
+        private string _loadingStageText = "Preparing world";
+        private int _loadingLoadedChunks;
+        private int _loadingDesiredChunks;
+        private int _loadingGeneratingChunks;
+        private double _loadingCompleteTime;
         private bool _requestedExit;
 
         // Initialization splash timing
@@ -52,40 +90,33 @@ namespace Veilborne.Core
             IPhysicsController physics,
             IInfiniteTerrain terrain,
             IItemRegistry items,
-            ITextureManager textureManager,
             ITimeService time,
-            IWorldObjectRenderer worldObjectRenderer,
             EntityRegistry entities,
             IGraphicsProvider graphics,
             IInputProvider input,
-            IUiProvider ui,
-            IEnumerable<ISystem> updateSystems,
-            IEnumerable<IRenderSystem> renderSystems)
+            EcsManager ecsManager,
+            IGameSettingsService settings)
         {
             _cameraController = cameraController;
             _physics = physics;
             _terrain = terrain;
             _items = items;
-            _textureManager = textureManager;
             _time = time;
-            _worldObjectRenderer = worldObjectRenderer;
             _entities = entities;
             _graphics = graphics;
             _input = input;
-            _ui = ui;
-            _updateSystems.AddRange(updateSystems);
-            _renderSystems.AddRange(renderSystems);
+            _ecsManager = ecsManager;
+            _settings = settings;
+            _isMonoGameBackend = graphics is MonoGameImpl.MonoGameGraphicsProvider;
+            _isDevelopmentEnvironment = RuntimeEnvironment.IsDevelopmentEnvironment;
         }
 
-        public async Task RunAsync()
+        public Task RunAsync()
         {
             _graphics.InitializeWindow(1280, 720, "Veilborne");
-            _graphics.SetTargetFps(60);
+            ApplySettings(initialApply: true);
 
-            // Load UI assets (logo/splash + set window icon)
-            LoadUiAssets();
-
-            // Create player entity
+            // Set up player entity
             _playerEntity = _entities.CreateEntity();
             _playerEntity.AddComponent(new PlayerComponent());
             var transform = new TransformComponent { Position = new Vector3(0, 5, -10) };
@@ -100,119 +131,163 @@ namespace Veilborne.Core
             };
             _playerEntity.AddComponent(cameraComp);
 
-            // Start staged preload and show initialization screen while it runs
-            _state = GameState.Initialization;
-            _input.ShowCursor();
-            _textureManager.BeginPreload();
+            _state = GameState.MainMenu;
 
-            while (!_graphics.ShouldClose() && !_requestedExit)
+            // Wire up callbacks so MonoGame drives the engine
+            var graphicsProvider = _graphics as MonoGameImpl.MonoGameGraphicsProvider;
+                if (graphicsProvider != null)
+                {
+                    graphicsProvider.SetLoadContentCallback(() =>
+                    {
+                    // Initialize ECS manager once MonoGame's graphics device is ready
+                    _ecsManager.InitializeFromGraphicsProvider(graphicsProvider, _entities, _terrain);
+                    _ui = _ecsManager.GetUiProvider();
+                    _input.ShowCursor();
+                    LoadUiAssets();
+                });
+
+                    graphicsProvider.SetUpdateCallback(dt => UpdateStep(dt));
+                    graphicsProvider.Set3DDrawCallback(() => Draw3DStep());
+                    graphicsProvider.Set2DDrawCallback(() => Draw2DStep());
+
+                    // Blocks until the game window closes
+                    graphicsProvider.RunGameLoop();
+                }
+
+            return Task.CompletedTask;
+        }
+
+        private void UpdateStep(float dt)
+        {
+            if (_requestedExit) { _graphics.CloseWindow(); return; }
+
+            _input.UpdateStates();
+            _time.Update(dt);
+            float gameDt = _time.DeltaTime;
+            _lastGameDt = gameDt;
+
+            HandleInput(gameDt);
+
+            if (_state == GameState.Playing)
             {
-                float dt = _graphics.GetFrameTime();
-                _time.Update(dt);
-                float gameDt = _time.DeltaTime;
-
-                HandleInput(gameDt);
-
-                // Update based on state
-                if (_state == GameState.Playing)
-                {
-                    // Execute all update systems (includes PlayerSystem, TerrainUpdateSystem etc)
-                    foreach (var system in _updateSystems)
-                        system.Update(gameDt);
-                }
-                else if (_state == GameState.Initialization)
-                {
-                    // Pump staged texture preload while showing initialization screen
-                    _textureManager.PumpPreload(32);
-                    if (!_textureManager.IsPreloading)
-                    {
-                        _state = GameState.MainMenu;
-                    }
-                }
-                else if (_state == GameState.Loading)
-                {
-                    var cam = _playerEntity.GetComponent<CameraComponent>();
-                    // Warm up terrain around initial camera position for a short time
-                    _terrain.UpdateCenter(cam.Position);
-                    _loadingTime += dt;
-                    _loadingProgress = (float)Math.Clamp(_loadingTime / LoadingDurationSeconds, 0.0, 1.0);
-                    if (_loadingProgress >= 1.0f)
-                    {
-                        _state = GameState.Playing;
-                        _loadingTime = 0;
-                        _loadingProgress = 0;
-                        _input.HideCursor();
-                    }
-                }
-
-                // Rendering
-                _graphics.BeginDrawing();
-                _graphics.Clear(new Vector3(0.53f, 0.81f, 0.92f)); // Skyblue
-
-                // 3D world rendering only during Playing or Paused (show world behind pause menu)
-                if (_state == GameState.Playing || _state == GameState.Paused)
-                {
-                    var cam = _playerEntity.GetComponent<CameraComponent>();
-                    _graphics.Begin3D(cam);
-                    
-                    // Execute all render systems (includes TerrainRenderSystem, WorldObjectRenderer etc)
-                    foreach (var renderSystem in _renderSystems)
-                        renderSystem.Draw();
-
-                    if (_showDebugChunkBounds)
-                    {
-                        _terrain.RenderDebugChunkBounds(cam);
-                    }
-
-                    _graphics.End3D();
-                }
-
-                // 2D UI overlays
-                switch (_state)
-                {
-                    case GameState.Initialization:
-                        DrawInitializationScreen();
-                        break;
-                    case GameState.MainMenu:
-                        DrawMainMenu();
-                        break;
-                    case GameState.Loading:
-                        DrawLoadingScreen();
-                        break;
-                    case GameState.Playing:
-                        if (_showDebugOverlay) DrawDebugOverlay();
-                        DrawCrosshair();
-                        DrawHotbar();
-                        break;
-                    case GameState.Paused:
-                        // Dim the scene then draw pause menu
-                        DrawPauseOverlay();
-                        DrawPauseMenu();
-                        break;
-                }
-
-                _graphics.EndDrawing();
+                _ecsManager.UpdateSystems(gameDt);
+                // Process terrain async completions (RO/LOD chunk installs + spawned entities).
+                if (_terrain is TerrainManager tm)
+                    tm.PumpAsyncJobs().GetAwaiter().GetResult();
             }
+            else if (_state == GameState.Initialization)
+            {
+                _state = GameState.MainMenu;
+            }
+            else if (_state == GameState.Loading)
+            {
+                var cam = _playerEntity.GetComponent<CameraComponent>();
+                _terrain.UpdateCenter(cam.Position);
+                if (_terrain is TerrainManager tm)
+                {
+                    tm.PumpAsyncJobs().GetAwaiter().GetResult();
+                    var loading = tm.GetLoadingProgress();
+                    _loadingProgress = loading.Progress01;
+                    _loadingStageText = loading.Stage;
+                    _loadingDesiredChunks = loading.DesiredChunks;
+                    _loadingLoadedChunks = loading.LoadedChunks;
+                    _loadingGeneratingChunks = loading.GeneratingChunks;
+                }
+                else
+                {
+                    _loadingProgress = 1f;
+                    _loadingStageText = "Complete";
+                    _loadingDesiredChunks = 0;
+                    _loadingLoadedChunks = 0;
+                    _loadingGeneratingChunks = 0;
+                }
 
-            _graphics.CloseWindow();
+                if (_loadingProgress >= 0.999f && _loadingGeneratingChunks == 0)
+                    _loadingCompleteTime += dt;
+                else
+                    _loadingCompleteTime = 0;
+
+                if (_loadingCompleteTime >= 0.2)
+                {
+                    _state = GameState.Playing;
+                    _loadingCompleteTime = 0;
+                    _loadingProgress = 0;
+                    _input.HideCursor();
+                }
+            }
+        }
+
+        private void Draw3DStep()
+        {
+            if (_state == GameState.Playing || _state == GameState.Paused)
+            {
+                var camera = _playerEntity.GetComponent<CameraComponent>();
+                _graphics.Begin3D(camera);
+                _ecsManager.RenderSystems(_lastGameDt, camera);
+                if (_showDebugChunkBounds && !_isMonoGameBackend) _terrain.RenderDebugChunkBounds(camera);
+                _graphics.End3D();
+            }
+        }
+
+        private void Draw2DStep()
+        {
+            _time.NotifyFrameRendered();
+            switch (_state)
+            {
+                case GameState.Initialization: DrawInitializationScreen(); break;
+                case GameState.MainMenu: DrawMainMenu(); break;
+                case GameState.Settings: DrawSettingsMenu(); break;
+                case GameState.Loading: DrawLoadingScreen(); break;
+                case GameState.Playing:
+                    if (_showDebugOverlay) DrawDebugOverlay();
+                    if (_settings.Current.General.ShowCrosshair) DrawCrosshair();
+                    DrawHotbar();
+                    break;
+                case GameState.Paused:
+                    DrawPauseOverlay();
+                    DrawPauseMenu();
+                    break;
+            }
         }
 
         private void HandleInput(float dt)
         {
-            // Global toggles (available in all states)
-            if (_input.IsKeyPressed(InputKeys.KEY_F1)) _showDebugOverlay = !_showDebugOverlay;
-            if (_input.IsKeyPressed(InputKeys.KEY_F2)) _showDebugChunkBounds = !_showDebugChunkBounds;
+            if (_captureIgnoreFrames > 0)
+                _captureIgnoreFrames--;
 
-            // Toggle borderless fullscreen on F12 key press
-            if (_input.IsKeyPressed(InputKeys.KEY_F12))
+            if (_state == GameState.Settings && _isCapturingBinding)
             {
-                _graphics.ToggleBorderless();
+                HandleBindingCaptureInput();
+                return;
+            }
+
+            var keyboard = _settings.Current.Keyboard;
+
+            // Global toggles (available in all states)
+            if (_isDevelopmentEnvironment)
+            {
+                if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay)) _showDebugOverlay = !_showDebugOverlay;
+                if (_input.IsKeyPressed(InputKeys.KEY_F2)) _showDebugChunkBounds = !_showDebugChunkBounds;
+                if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay))
+                    _settings.Update(s => s.Debug.ShowDebugOverlay = _showDebugOverlay);
+                if (_input.IsKeyPressed(InputKeys.KEY_F2))
+                    _settings.Update(s => s.Debug.ShowChunkBounds = _showDebugChunkBounds);
+            }
+
+            // Toggle fullscreen on bound key press
+            if (KeyBindingTokens.IsPressed(_input, keyboard.Fullscreen))
+            {
+                _settings.Update(s => s.Graphics.Fullscreen = !s.Graphics.Fullscreen);
+                ApplySettings();
             }
 
             switch (_state)
             {
                 case GameState.MainMenu:
-                    // Keyboard shortcuts
+                    if (_input.IsKeyPressed(InputKeys.KEY_ENTER))
+                        StartGame();
+                    if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
+                        _requestedExit = true;
                     break;
 
                 case GameState.Loading:
@@ -220,7 +295,12 @@ namespace Veilborne.Core
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
                     {
                         _state = GameState.MainMenu;
-                        _loadingTime = 0; _loadingProgress = 0;
+                        _loadingCompleteTime = 0;
+                        _loadingProgress = 0;
+                        _loadingStageText = "Preparing world";
+                        _loadingLoadedChunks = 0;
+                        _loadingDesiredChunks = 0;
+                        _loadingGeneratingChunks = 0;
                         _input.ShowCursor();
                     }
                     break;
@@ -235,21 +315,25 @@ namespace Veilborne.Core
 
                     // Mouse wheel hotbar scroll
                     float wheel = _input.GetMouseWheelMove();
-                    if (wheel != 0)
+                    if (wheel != 0 && IsBindingConfigured(keyboard.Scroll))
                     {
                         int delta = wheel > 0 ? -1 : 1;
                         _selectedHotbarSlot = ((_selectedHotbarSlot + delta) % 9 + 9) % 9;
+                    }
+                    else if (KeyBindingTokens.IsPressed(_input, keyboard.Scroll))
+                    {
+                        _selectedHotbarSlot = (_selectedHotbarSlot + 1) % 9;
                     }
 
                     // Hotbar selection 1-9
                     for (int i = 0; i < 9; i++)
                     {
-                        if (_input.IsKeyPressed(InputKeys.KEY_ONE + i))
+                        if (KeyBindingTokens.IsPressed(_input, GetHotbarBinding(i)))
                             _selectedHotbarSlot = i;
                     }
 
                     // Example dig action
-                    if (_input.IsMouseButtonDown(InputKeys.MOUSE_BUTTON_LEFT))
+                    if (KeyBindingTokens.IsDown(_input, keyboard.DigInteract))
                     {
                         if (_terrain is IEditableTerrain editable)
                         {
@@ -269,20 +353,24 @@ namespace Veilborne.Core
                         _input.HideCursor();
                     }
                     break;
+
+                case GameState.Settings:
+                    if (_settingsTab == SettingsTab.Keyboard && !_isCapturingBinding)
+                        HandleKeyboardTabScrollInput();
+                    if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
+                    {
+                        ReturnFromSettings();
+                    }
+                    break;
             }
         }
 
         private void LoadUiAssets()
         {
-            if (SvgTextureLoader.TryGetTexture("assets\\splash.svg", 2000, 1200, out var splash))
+            if (_ui is MonoGameImpl.MonoGameUiProvider monoUi)
             {
-                _textureManager.Register(SplashTextureKey, splash);
+                monoUi.RegisterSvgTexture(SplashTextureKey, "assets\\splash.svg", 2000, 1200);
             }
-            if (SvgTextureLoader.TryGetTexture("assets\\logo.svg", 1600, 800, out var logo))
-            {
-                _textureManager.Register(LogoTextureKey, logo);
-            }
-
             _graphics.SetWindowIcon("assets\\logo.svg");
         }
 
@@ -294,8 +382,12 @@ namespace Veilborne.Core
 
             // Begin loading/warmup
             _state = GameState.Loading;
-            _loadingTime = 0;
             _loadingProgress = 0;
+            _loadingStageText = "Preparing world";
+            _loadingLoadedChunks = 0;
+            _loadingDesiredChunks = 0;
+            _loadingGeneratingChunks = 0;
+            _loadingCompleteTime = 0;
         }
 
         private void DrawMainMenu()
@@ -303,42 +395,50 @@ namespace Veilborne.Core
             int w = _graphics.ScreenWidth;
             int h = _graphics.ScreenHeight;
 
-            // Background
             _graphics.Clear(new Vector3(15 / 255f, 18 / 255f, 22 / 255f));
 
-            // Choose logo if available, else fallback to splash
-            string artKey = _textureManager.TryGet(LogoTextureKey, out _) ? LogoTextureKey : SplashTextureKey;
-
-            // Draw art centered near top
-            int centerY = (int)(h * 0.22f);
-            int texW = 1600; // placeholder for scale calculation
-            int texH = 800;
-            int maxW = (int)(w * 0.6f);
-            int maxH = (int)(h * 0.32f); 
-            float scale = MathF.Min(maxW / (float)Math.Max(1, texW), maxH / (float)Math.Max(1, texH));
-            int drawW = (int)(Math.Max(1, texW) * scale);
-            int drawH = (int)(Math.Max(1, texH) * scale);
-            int x = w / 2 - drawW / 2;
-            int y = centerY - drawH / 2;
-            
-            _ui.DrawTexture(artKey, x, y, scale, Vector4.One);
-
             // Buttons
-            int btnW = Math.Min(360, (int)(w * 0.4f));
-            int btnH = 60;
+            int btnW = Math.Min(340, (int)(w * 0.35f));
+            int btnH = 52;
             int xCenter = w / 2 - btnW / 2;
-            int firstY = (int)(h * 0.5f);
-            Rect startRect = new Rect(xCenter, firstY, btnW, btnH);
-            Rect exitRect = new Rect(xCenter, firstY + btnH + 16, btnW, btnH);
+            int startY = (int)(h * 0.62f);
+            int gap = btnH + 14;
 
-            if (Button("Start", startRect))
+            bool drewSplash = false;
+            if (_ui is MonoGameImpl.MonoGameUiProvider monoUi &&
+                monoUi.HasTexture(SplashTextureKey) &&
+                monoUi.TryGetTextureSize(SplashTextureKey, out int texW, out int texH))
             {
+                int maxW = Math.Min((int)(w * 0.99f), 2200);
+                int maxH = Math.Min((int)(h * 0.58f), 860);
+                float scale = MathF.Min(maxW / (float)texW, maxH / (float)texH);
+                int drawW = Math.Max(1, (int)MathF.Round(texW * scale));
+                int drawH = Math.Max(1, (int)MathF.Round(texH * scale));
+                int x = w / 2 - drawW / 2;
+                int y = Math.Max(0, startY - drawH - 6);
+                _ui.DrawTexture(SplashTextureKey, x, y, scale, Vector4.One);
+                drewSplash = true;
+            }
+
+            if (!drewSplash)
+            {
+                int titleSize = 64;
+                string title = "VEILBORNE";
+                int tw = _ui.MeasureText(title, titleSize);
+                _ui.DrawText(title, w / 2 - tw / 2, (int)(h * 0.28f), titleSize, Vector4.One);
+            }
+
+            if (Button("Play", new Rect(xCenter, startY, btnW, btnH)))
                 StartGame();
-            }
-            if (Button("Exit", exitRect))
+
+            if (Button("Settings", new Rect(xCenter, startY + gap, btnW, btnH)))
             {
-                _requestedExit = true;
+                OpenSettings(SettingsReturnState.MainMenu);
+                return;
             }
+
+            if (Button("Exit", new Rect(xCenter, startY + gap * 2, btnW, btnH)))
+                _requestedExit = true;
         }
 
         private void DrawLoadingScreen()
@@ -347,7 +447,7 @@ namespace Veilborne.Core
             int h = _graphics.ScreenHeight;
             _graphics.Clear(new Vector3(10 / 255f, 12 / 255f, 16 / 255f));
 
-            string title = "Loading terrain...";
+            string title = "Loading world...";
             int tw = _ui.MeasureText(title, 30);
             _ui.DrawText(title, w / 2 - tw / 2, h / 2 - 80, 30, Vector4.One);
 
@@ -360,6 +460,20 @@ namespace Veilborne.Core
             int filled = (int)(barW * Math.Clamp(_loadingProgress, 0f, 1f));
             _ui.DrawRectangle(x, y, filled, barH, new Vector4(100 / 255f, 200 / 255f, 255 / 255f, 1.0f));
             _ui.DrawRectangleLines(x, y, barW, barH, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+
+            string progressText = $"{Math.Clamp((int)(_loadingProgress * 100f), 0, 100)}%";
+            string stageText = string.IsNullOrWhiteSpace(_loadingStageText) ? "Preparing world" : _loadingStageText;
+            int stw = _ui.MeasureText(stageText, 20);
+            _ui.DrawText(stageText, w / 2 - stw / 2, y + barH + 10, 20, Vector4.One);
+
+            string chunkText = _loadingDesiredChunks > 0
+                ? $"Chunks: {_loadingLoadedChunks}/{_loadingDesiredChunks}" + (_loadingGeneratingChunks > 0 ? $" (generating {_loadingGeneratingChunks})" : "")
+                : "Chunks: preparing";
+            int ctw = _ui.MeasureText(chunkText, 18);
+            _ui.DrawText(chunkText, w / 2 - ctw / 2, y + barH + 36, 18, new Vector4(0.82f, 0.88f, 0.95f, 1f));
+
+            int ptw = _ui.MeasureText(progressText, 20);
+            _ui.DrawText(progressText, w / 2 - ptw / 2, y - 30, 20, Vector4.One);
         }
 
         private void DrawInitializationScreen()
@@ -383,8 +497,8 @@ namespace Veilborne.Core
             int contentBottom = y + drawH;
 
             // Progress UI
-            float p = _textureManager.PreloadProgress;
-            string stage = _textureManager.PreloadStage ?? "";
+            float p = 1f;
+            string stage = "Complete";
 
             string title = stage != "Complete" ? "Initializing Textures..." : "Initializing Veilborne...";
             int tw2 = _ui.MeasureText(title, 24);
@@ -440,16 +554,564 @@ namespace Veilborne.Core
                 _input.HideCursor();
                 return;
             }
-            if (Button("Exit to Menu", new Rect(xCenter, startY + btnH + 14, btnW, btnH)))
+            if (Button("Settings", new Rect(xCenter, startY + btnH + 14, btnW, btnH)))
+            {
+                OpenSettings(SettingsReturnState.Paused);
+                return;
+            }
+            if (Button("Exit to Menu", new Rect(xCenter, startY + (btnH + 14) * 2, btnW, btnH)))
             {
                 _state = GameState.MainMenu;
                 _input.ShowCursor();
                 return;
             }
-            if (Button("Exit to Desktop", new Rect(xCenter, startY + (btnH + 14) * 2, btnW, btnH)))
+            if (Button("Exit to Desktop", new Rect(xCenter, startY + (btnH + 14) * 3, btnW, btnH)))
             {
                 _requestedExit = true;
                 return;
+            }
+        }
+
+        private void DrawSettingsMenu()
+        {
+            int w = _graphics.ScreenWidth;
+            int h = _graphics.ScreenHeight;
+            _graphics.Clear(new Vector3(15 / 255f, 18 / 255f, 22 / 255f));
+
+            int panelW = Math.Min(900, (int)(w * 0.8f));
+            int panelH = Math.Min(540, (int)(h * 0.75f));
+            int panelX = w / 2 - panelW / 2;
+            int panelY = h / 2 - panelH / 2;
+
+            _ui.DrawRectangle(panelX, panelY, panelW, panelH, new Vector4(28 / 255f, 34 / 255f, 42 / 255f, 1f));
+            _ui.DrawRectangleLines(panelX, panelY, panelW, panelH, new Vector4(90 / 255f, 100 / 255f, 115 / 255f, 1f));
+
+            string title = "Settings";
+            _ui.DrawText(title, panelX + 24, panelY + 18, 34, Vector4.One);
+
+            int tabY = panelY + 72;
+            int tabW = 130;
+            int tabH = 42;
+            int tabGap = 10;
+            if (Button("General", new Rect(panelX + 24, tabY, tabW, tabH), 22)) _settingsTab = SettingsTab.General;
+            if (Button("Graphics", new Rect(panelX + 24 + (tabW + tabGap), tabY, tabW, tabH), 22)) _settingsTab = SettingsTab.Graphics;
+            if (Button("Keyboard", new Rect(panelX + 24 + (tabW + tabGap) * 2, tabY, tabW, tabH), 22)) _settingsTab = SettingsTab.Keyboard;
+            if (_isDevelopmentEnvironment &&
+                Button("Debug", new Rect(panelX + 24 + (tabW + tabGap) * 3, tabY, tabW, tabH), 22))
+                _settingsTab = SettingsTab.Debug;
+            if (!_isDevelopmentEnvironment && _settingsTab == SettingsTab.Debug)
+                _settingsTab = SettingsTab.General;
+
+            int contentX = panelX + 30;
+            int contentY = tabY + tabH + 18;
+            int lineH = 40;
+
+            var settings = _settings.Current;
+            switch (_settingsTab)
+            {
+                case SettingsTab.General:
+                {
+                    _ui.DrawText("General", contentX, contentY, 28, Vector4.One);
+                    contentY += 46;
+                    DrawLabeledOption("Mouse Sensitivity", $"{settings.General.MouseSensitivity:0.0000}", contentX, contentY);
+                    if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.General.MouseSensitivity -= 0.0005f);
+                        ApplySettings();
+                    }
+                    if (Button("+", new Rect(contentX + 410, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.General.MouseSensitivity += 0.0005f);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Invert Mouse Y", settings.General.InvertMouseY ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.General.InvertMouseY = !s.General.InvertMouseY);
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Show Crosshair", settings.General.ShowCrosshair ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.General.ShowCrosshair = !s.General.ShowCrosshair);
+                    }
+                    break;
+                }
+                case SettingsTab.Graphics:
+                {
+                    _ui.DrawText("Graphics", contentX, contentY, 28, Vector4.One);
+                    contentY += 46;
+
+                    DrawLabeledOption("Target FPS", $"{settings.Graphics.TargetFps}", contentX, contentY);
+                    if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Graphics.TargetFps = Math.Max(30, s.Graphics.TargetFps - 10));
+                        ApplySettings();
+                    }
+                    if (Button("+", new Rect(contentX + 410, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Graphics.TargetFps = Math.Min(240, s.Graphics.TargetFps + 10));
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Fullscreen", settings.Graphics.Fullscreen ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Graphics.Fullscreen = !s.Graphics.Fullscreen);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Render Distance", $"{settings.Graphics.RenderDistance}%", contentX, contentY);
+                    if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Graphics.RenderDistance = Math.Max(40, s.Graphics.RenderDistance - 10));
+                        ApplySettings();
+                    }
+                    if (Button("+", new Rect(contentX + 410, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Graphics.RenderDistance = Math.Min(200, s.Graphics.RenderDistance + 10));
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Brightness", $"{settings.Graphics.Brightness}%", contentX, contentY);
+                    if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Graphics.Brightness = Math.Max(50, s.Graphics.Brightness - 5));
+                        ApplySettings();
+                    }
+                    if (Button("+", new Rect(contentX + 410, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Graphics.Brightness = Math.Min(150, s.Graphics.Brightness + 5));
+                        ApplySettings();
+                    }
+                    break;
+                }
+                case SettingsTab.Debug:
+                {
+                    _ui.DrawText("Debug", contentX, contentY, 28, Vector4.One);
+                    contentY += 46;
+
+                    DrawLabeledOption("Debug Overlay (F1)", settings.Debug.ShowDebugOverlay ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Debug.ShowDebugOverlay = !s.Debug.ShowDebugOverlay);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Chunk Bounds (F2)", settings.Debug.ShowChunkBounds ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Debug.ShowChunkBounds = !s.Debug.ShowChunkBounds);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Wireframe", settings.Debug.Wireframe ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Debug.Wireframe = !s.Debug.Wireframe);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Show Editable Ring", settings.Debug.ShowEditableRing ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Debug.ShowEditableRing = !s.Debug.ShowEditableRing);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Show ReadOnly Ring", settings.Debug.ShowReadOnlyRing ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Debug.ShowReadOnlyRing = !s.Debug.ShowReadOnlyRing);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Show LowLod Ring", settings.Debug.ShowLowLodRing ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Debug.ShowLowLodRing = !s.Debug.ShowLowLodRing);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Run Speed Multiplier", $"{settings.Debug.RunSpeedMultiplier}%", contentX, contentY);
+                    if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Debug.RunSpeedMultiplier = Math.Max(50, s.Debug.RunSpeedMultiplier - 10));
+                        ApplySettings();
+                    }
+                    if (Button("+", new Rect(contentX + 410, contentY - 4, 42, 32), 22))
+                    {
+                        _settings.Update(s => s.Debug.RunSpeedMultiplier = Math.Min(300, s.Debug.RunSpeedMultiplier + 10));
+                        ApplySettings();
+                    }
+                    break;
+                }
+                case SettingsTab.Keyboard:
+                {
+                    DrawKeyboardSettingsPanel(panelX, panelY, panelW, panelH, contentX, contentY, lineH);
+                    break;
+                }
+            }
+
+            if (Button("Back", new Rect(panelX + panelW - 170, panelY + panelH - 62, 140, 40), 22))
+            {
+                if (_isCapturingBinding)
+                {
+                    _isCapturingBinding = false;
+                    _captureIgnoreFrames = 2;
+                    return;
+                }
+                ReturnFromSettings();
+            }
+        }
+
+        private void DrawLabeledOption(string label, string value, int x, int y)
+        {
+            _ui.DrawText(label, x, y, 22, Vector4.One);
+            _ui.DrawText(value, x + 250, y, 22, new Vector4(0.75f, 0.9f, 1f, 1f));
+        }
+
+        private void DrawKeyboardSettingsPanel(int panelX, int panelY, int panelW, int panelH, int contentX, int contentY, int lineH)
+        {
+            _ui.DrawText("Keyboard", contentX, contentY, 28, Vector4.One);
+            int contentTop = contentY + 46;
+            int footerHeight = _isCapturingBinding ? 74 : 46;
+            int usableBottom = panelY + panelH - 62 - footerHeight;
+            int visibleRows = Math.Max(1, (usableBottom - contentTop) / lineH);
+
+            var bindings = GetKeyboardActionRows();
+            int totalRows = bindings.Length;
+            int availableWidth = panelW - 60;
+            int columnWidth = Math.Min(540, Math.Max(300, availableWidth));
+            int maxOffset = Math.Max(0, totalRows - visibleRows);
+            _keyboardTabScrollOffset = Math.Clamp(_keyboardTabScrollOffset, 0, maxOffset);
+            int startIndex = _keyboardTabScrollOffset;
+            int endExclusive = Math.Min(totalRows, startIndex + visibleRows);
+
+            for (int i = startIndex; i < endExclusive; i++)
+            {
+                int row = i - startIndex;
+                int rowX = contentX;
+                int rowY = contentTop + row * lineH;
+                var item = bindings[i];
+                DrawKeyboardBindingRow(item.label, item.action, rowX, rowY, columnWidth, item.disabled);
+            }
+
+            if (maxOffset > 0)
+            {
+                int barX = contentX + columnWidth + 6;
+                int barY = contentTop;
+                int barH = visibleRows * lineH - 8;
+                _ui.DrawRectangleLines(barX, barY, 10, barH, new Vector4(0.4f, 0.45f, 0.5f, 1f));
+                float thumbRatio = visibleRows / (float)totalRows;
+                int thumbH = Math.Max(18, (int)(barH * thumbRatio));
+                int thumbTravel = Math.Max(0, barH - thumbH);
+                int thumbY = barY + (thumbTravel == 0 ? 0 : (int)(thumbTravel * (_keyboardTabScrollOffset / (float)maxOffset)));
+                _ui.DrawRectangle(barX + 1, thumbY + 1, 8, Math.Max(1, thumbH - 2), new Vector4(0.55f, 0.75f, 0.95f, 1f));
+                _ui.DrawText($"{startIndex + 1}-{endExclusive} / {totalRows}", contentX, panelY + panelH - 106, 18, new Vector4(0.75f, 0.9f, 1f, 1f));
+            }
+
+            if (_isCapturingBinding)
+            {
+                string captureText = $"Press a key/button for {GetActionLabel(_capturingAction)} ({(_capturingPrimary ? "Primary" : "Secondary")})...";
+                _ui.DrawText(captureText, contentX, panelY + panelH - 92, 18, new Vector4(1f, 0.85f, 0.35f, 1f));
+                _ui.DrawText("Esc cancel | Backspace/Delete clear", contentX, panelY + panelH - 70, 18, new Vector4(0.8f, 0.85f, 0.9f, 1f));
+            }
+        }
+
+        private void HandleKeyboardTabScrollInput()
+        {
+            int deltaRows = 0;
+            float wheel = _input.GetMouseWheelMove();
+            if (wheel > 0) deltaRows -= 1;
+            if (wheel < 0) deltaRows += 1;
+            if (_input.IsKeyPressed(InputKeys.KEY_UP)) deltaRows -= 1;
+            if (_input.IsKeyPressed(InputKeys.KEY_DOWN)) deltaRows += 1;
+
+            if (deltaRows != 0)
+            {
+                _keyboardTabScrollOffset = Math.Max(0, _keyboardTabScrollOffset + deltaRows);
+            }
+        }
+
+        private (string label, KeyboardAction action, bool disabled)[] GetKeyboardActionRows()
+        {
+            return new (string label, KeyboardAction action, bool disabled)[]
+            {
+                ("Forward", KeyboardAction.Forward, false),
+                ("Backward", KeyboardAction.Backward, false),
+                ("Left", KeyboardAction.Left, false),
+                ("Right", KeyboardAction.Right, false),
+                ("Jump", KeyboardAction.Jump, false),
+                ("Dig / Interact", KeyboardAction.DigInteract, false),
+                ("Debug Overlay", KeyboardAction.DebugOverlay, !_isDevelopmentEnvironment),
+                ("Fullscreen", KeyboardAction.Fullscreen, false),
+                ("Hotbar 1", KeyboardAction.Hotbar1, false),
+                ("Hotbar 2", KeyboardAction.Hotbar2, false),
+                ("Hotbar 3", KeyboardAction.Hotbar3, false),
+                ("Hotbar 4", KeyboardAction.Hotbar4, false),
+                ("Hotbar 5", KeyboardAction.Hotbar5, false),
+                ("Hotbar 6", KeyboardAction.Hotbar6, false),
+                ("Hotbar 7", KeyboardAction.Hotbar7, false),
+                ("Hotbar 8", KeyboardAction.Hotbar8, false),
+                ("Hotbar 9", KeyboardAction.Hotbar9, false),
+                ("Scroll", KeyboardAction.Scroll, false),
+            };
+        }
+
+        private void DrawKeyboardBindingRow(string label, KeyboardAction action, int x, int y, int rowWidth, bool disabled = false)
+        {
+            var binding = GetBinding(action);
+            string primaryText = KeyBindingTokens.ToDisplay(binding.Primary);
+            string secondaryText = KeyBindingTokens.ToDisplay(binding.Secondary);
+            int primaryW = rowWidth >= 500 ? 88 : 70;
+            int secondaryW = rowWidth >= 500 ? 104 : 86;
+            int buttonGap = 8;
+            int secondaryX = x + rowWidth - secondaryW;
+            int primaryX = secondaryX - buttonGap - primaryW;
+            int valueX = x + Math.Clamp(rowWidth / 3, 130, 200);
+            string primaryLabel = rowWidth >= 500 ? "Primary" : "P";
+            string secondaryLabel = rowWidth >= 500 ? "Secondary" : "S";
+            _ui.DrawText(label, x, y, 20, Vector4.One);
+            _ui.DrawText($"{primaryText} / {secondaryText}", valueX, y, 20, new Vector4(0.75f, 0.9f, 1f, 1f));
+
+            if (Button(primaryLabel, new Rect(primaryX, y - 4, primaryW, 32), 16) && !disabled)
+            {
+                _isCapturingBinding = true;
+                _capturingAction = action;
+                _capturingPrimary = true;
+                _captureIgnoreFrames = 2;
+            }
+            if (Button(secondaryLabel, new Rect(secondaryX, y - 4, secondaryW, 32), 16) && !disabled)
+            {
+                _isCapturingBinding = true;
+                _capturingAction = action;
+                _capturingPrimary = false;
+                _captureIgnoreFrames = 2;
+            }
+            if (disabled)
+                _ui.DrawText("Dev only", secondaryX - 90, y + 2, 16, new Vector4(0.9f, 0.6f, 0.35f, 1f));
+        }
+
+        private void HandleBindingCaptureInput()
+        {
+            if (_captureIgnoreFrames > 0)
+                return;
+
+            if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
+            {
+                _isCapturingBinding = false;
+                _captureIgnoreFrames = 2;
+                return;
+            }
+
+            if (_input.IsKeyPressed(InputKeys.KEY_BACKSPACE) || _input.IsKeyPressed(InputKeys.KEY_DELETE))
+            {
+                SetBindingToken(_capturingAction, _capturingPrimary, KeyBindingTokens.None);
+                _isCapturingBinding = false;
+                _captureIgnoreFrames = 2;
+                return;
+            }
+
+            var pressedKeys = _input.GetPressedKeys();
+            foreach (int key in pressedKeys)
+            {
+                string token = KeyBindingTokens.FromKeyCode(key);
+                if (token == KeyBindingTokens.None)
+                    continue;
+                if (!_isDevelopmentEnvironment && _capturingAction == KeyboardAction.DebugOverlay)
+                    break;
+                SetBindingToken(_capturingAction, _capturingPrimary, token);
+                _isCapturingBinding = false;
+                _captureIgnoreFrames = 2;
+                return;
+            }
+
+            var pressedMouseButtons = _input.GetPressedMouseButtons();
+            foreach (int button in pressedMouseButtons)
+            {
+                string token = KeyBindingTokens.FromMouseButton(button);
+                if (token == KeyBindingTokens.None)
+                    continue;
+                if (!_isDevelopmentEnvironment && _capturingAction == KeyboardAction.DebugOverlay)
+                    break;
+                SetBindingToken(_capturingAction, _capturingPrimary, token);
+                _isCapturingBinding = false;
+                _captureIgnoreFrames = 2;
+                return;
+            }
+        }
+
+        private InputBindingSettings GetBinding(KeyboardAction action)
+        {
+            var keyboard = _settings.Current.Keyboard;
+            return action switch
+            {
+                KeyboardAction.Forward => keyboard.Forward,
+                KeyboardAction.Backward => keyboard.Backward,
+                KeyboardAction.Left => keyboard.Left,
+                KeyboardAction.Right => keyboard.Right,
+                KeyboardAction.Jump => keyboard.Jump,
+                KeyboardAction.DigInteract => keyboard.DigInteract,
+                KeyboardAction.DebugOverlay => keyboard.DebugOverlay,
+                KeyboardAction.Fullscreen => keyboard.Fullscreen,
+                KeyboardAction.Hotbar1 => keyboard.Hotbar1,
+                KeyboardAction.Hotbar2 => keyboard.Hotbar2,
+                KeyboardAction.Hotbar3 => keyboard.Hotbar3,
+                KeyboardAction.Hotbar4 => keyboard.Hotbar4,
+                KeyboardAction.Hotbar5 => keyboard.Hotbar5,
+                KeyboardAction.Hotbar6 => keyboard.Hotbar6,
+                KeyboardAction.Hotbar7 => keyboard.Hotbar7,
+                KeyboardAction.Hotbar8 => keyboard.Hotbar8,
+                KeyboardAction.Hotbar9 => keyboard.Hotbar9,
+                KeyboardAction.Scroll => keyboard.Scroll,
+                _ => keyboard.Forward
+            };
+        }
+
+        private string GetActionLabel(KeyboardAction action)
+        {
+            return action switch
+            {
+                KeyboardAction.Forward => "Forward",
+                KeyboardAction.Backward => "Backward",
+                KeyboardAction.Left => "Left",
+                KeyboardAction.Right => "Right",
+                KeyboardAction.Jump => "Jump",
+                KeyboardAction.DigInteract => "Dig / Interact",
+                KeyboardAction.DebugOverlay => "Debug Overlay",
+                KeyboardAction.Fullscreen => "Fullscreen",
+                KeyboardAction.Hotbar1 => "Hotbar 1",
+                KeyboardAction.Hotbar2 => "Hotbar 2",
+                KeyboardAction.Hotbar3 => "Hotbar 3",
+                KeyboardAction.Hotbar4 => "Hotbar 4",
+                KeyboardAction.Hotbar5 => "Hotbar 5",
+                KeyboardAction.Hotbar6 => "Hotbar 6",
+                KeyboardAction.Hotbar7 => "Hotbar 7",
+                KeyboardAction.Hotbar8 => "Hotbar 8",
+                KeyboardAction.Hotbar9 => "Hotbar 9",
+                KeyboardAction.Scroll => "Scroll",
+                _ => action.ToString()
+            };
+        }
+
+        private void SetBindingToken(KeyboardAction action, bool primary, string token)
+        {
+            string normalized = KeyBindingTokens.Normalize(token);
+            _settings.Update(s =>
+            {
+                var binding = action switch
+                {
+                    KeyboardAction.Forward => s.Keyboard.Forward,
+                    KeyboardAction.Backward => s.Keyboard.Backward,
+                    KeyboardAction.Left => s.Keyboard.Left,
+                    KeyboardAction.Right => s.Keyboard.Right,
+                    KeyboardAction.Jump => s.Keyboard.Jump,
+                    KeyboardAction.DigInteract => s.Keyboard.DigInteract,
+                    KeyboardAction.DebugOverlay => s.Keyboard.DebugOverlay,
+                    KeyboardAction.Fullscreen => s.Keyboard.Fullscreen,
+                    KeyboardAction.Hotbar1 => s.Keyboard.Hotbar1,
+                    KeyboardAction.Hotbar2 => s.Keyboard.Hotbar2,
+                    KeyboardAction.Hotbar3 => s.Keyboard.Hotbar3,
+                    KeyboardAction.Hotbar4 => s.Keyboard.Hotbar4,
+                    KeyboardAction.Hotbar5 => s.Keyboard.Hotbar5,
+                    KeyboardAction.Hotbar6 => s.Keyboard.Hotbar6,
+                    KeyboardAction.Hotbar7 => s.Keyboard.Hotbar7,
+                    KeyboardAction.Hotbar8 => s.Keyboard.Hotbar8,
+                    KeyboardAction.Hotbar9 => s.Keyboard.Hotbar9,
+                    KeyboardAction.Scroll => s.Keyboard.Scroll,
+                    _ => s.Keyboard.Forward
+                };
+                if (primary) binding.Primary = normalized;
+                else binding.Secondary = normalized;
+            });
+        }
+
+        private InputBindingSettings GetHotbarBinding(int index)
+        {
+            var keyboard = _settings.Current.Keyboard;
+            return index switch
+            {
+                0 => keyboard.Hotbar1,
+                1 => keyboard.Hotbar2,
+                2 => keyboard.Hotbar3,
+                3 => keyboard.Hotbar4,
+                4 => keyboard.Hotbar5,
+                5 => keyboard.Hotbar6,
+                6 => keyboard.Hotbar7,
+                7 => keyboard.Hotbar8,
+                8 => keyboard.Hotbar9,
+                _ => keyboard.Hotbar1
+            };
+        }
+
+        private static bool IsBindingConfigured(InputBindingSettings binding)
+        {
+            return KeyBindingTokens.Normalize(binding.Primary) != KeyBindingTokens.None ||
+                   KeyBindingTokens.Normalize(binding.Secondary) != KeyBindingTokens.None;
+        }
+
+        private void OpenSettings(SettingsReturnState returnState)
+        {
+            _settingsReturnState = returnState;
+            _state = GameState.Settings;
+            _keyboardTabScrollOffset = 0;
+            _isCapturingBinding = false;
+            _input.ShowCursor();
+        }
+
+        private void ReturnFromSettings()
+        {
+            _state = _settingsReturnState == SettingsReturnState.Paused ? GameState.Paused : GameState.MainMenu;
+            if (_state == GameState.Playing) _input.HideCursor();
+            else _input.ShowCursor();
+        }
+
+        private void ApplySettings(bool initialApply = false)
+        {
+            var settings = _settings.Current;
+            _graphics.SetTargetFps(settings.Graphics.TargetFps);
+
+            if (_isDevelopmentEnvironment)
+            {
+                _showDebugOverlay = settings.Debug.ShowDebugOverlay;
+                _showDebugChunkBounds = settings.Debug.ShowChunkBounds;
+            }
+            else
+            {
+                _showDebugOverlay = false;
+                _showDebugChunkBounds = false;
+            }
+
+            if (!initialApply)
+            {
+                bool shouldBeFullscreen = settings.Graphics.Fullscreen;
+                if (shouldBeFullscreen != _isFullscreenApplied)
+                {
+                    _graphics.ToggleFullscreen();
+                    _isFullscreenApplied = shouldBeFullscreen;
+                }
+            }
+            else
+            {
+                _isFullscreenApplied = false;
+                if (settings.Graphics.Fullscreen)
+                {
+                    _graphics.ToggleFullscreen();
+                    _isFullscreenApplied = true;
+                }
             }
         }
 
