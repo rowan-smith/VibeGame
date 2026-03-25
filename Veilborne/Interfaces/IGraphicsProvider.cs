@@ -22,6 +22,7 @@ namespace Veilborne.Interfaces
         void Clear(Vector3 color);
         void DrawCube(Vector3 position, Vector3 size, Vector3 color);
         void DrawCubeWires(Vector3 position, Vector3 size, Vector3 color);
+        void ToggleFullscreen();
         // Add more drawing methods as needed
     }
 }

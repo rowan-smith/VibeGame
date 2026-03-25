@@ -8,11 +8,13 @@ namespace Veilborne.Core.Ecs.Systems
     {
         private readonly EntityRegistry _entities;
         private readonly IInfiniteTerrain _terrain;
+        private readonly ITerrainRenderer _renderer;
 
-        public TerrainRenderSystem(EntityRegistry entities, IInfiniteTerrain terrain)
+        public TerrainRenderSystem(EntityRegistry entities, IInfiniteTerrain terrain, ITerrainRenderer renderer)
         {
             _entities = entities;
             _terrain = terrain;
+            _renderer = renderer;
         }
 
         public void Draw()
@@ -22,6 +24,7 @@ namespace Veilborne.Core.Ecs.Systems
                 var cam = entity.GetComponent<CameraComponent>();
                 _terrain.Render(cam);
             }
+            _renderer.Flush();
         }
     }
 }

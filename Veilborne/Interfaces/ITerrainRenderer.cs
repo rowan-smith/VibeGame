@@ -14,6 +14,7 @@ namespace Veilborne.Interfaces
 
         // Apply the biome-specific surface texture set prior to rendering
         void ApplyBiomeTextures(BiomeData biome);
+        void ApplyBiomeBlendTextures(BiomeData primary, BiomeData? secondary, float secondaryBlend);
 
         void SetColorTint(Vector4 color);
 
@@ -32,5 +33,8 @@ namespace Veilborne.Interfaces
         // Partially update an already built chunk at originWorld by patching a sub-rectangle [x0..x1], [z0..z1]
         // Coordinates are in local grid indices within the provided heights array.
         void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1);
+
+        // Issue the actual GPU draw for all queued RenderAt calls. Call once per frame after all RenderAt calls.
+        void Flush();
     }
 }

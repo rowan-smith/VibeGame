@@ -1,5 +1,4 @@
 using System.Numerics;
-using ZeroElectric.Vinculum;
 
 namespace Veilborne.Terrain;
 
@@ -79,8 +78,8 @@ public class VoxelChunk
         _dirtyRegion = null;
     }
 
-    public void Render(Camera.Camera camera, Color color)
+    public void Render()
     {
-        // Your renderer’s voxel mesh draw code
+        // Voxel debug rendering is backend-specific and intentionally left as a no-op here.
     }
 }

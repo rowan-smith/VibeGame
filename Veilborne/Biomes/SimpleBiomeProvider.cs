@@ -21,6 +21,8 @@ namespace Veilborne.Biomes
         private readonly float _cellSize;
         // Jitter within a cell [0..1], controls irregular shapes
         private readonly float _jitter;
+        private readonly float _warpFrequency;
+        private readonly float _warpAmplitude;
 
         private readonly ILogger _logger = Log.ForContext<SimpleBiomeProvider>();
 
@@ -30,6 +32,8 @@ namespace Veilborne.Biomes
             _seed = seed;
             _cellSize = MathF.Max(16f, averageCellSize);
             _jitter = Math.Clamp(jitter, 0f, 1f);
+            _warpFrequency = 1f / MathF.Max(32f, _cellSize * 1.35f);
+            _warpAmplitude = _cellSize * 0.38f;
 
             _logger.Debug("Registered {BiomeCount} biomes with avg cell size {CellSize}", _biomes.Count, _cellSize);
         }
@@ -39,9 +43,12 @@ namespace Veilborne.Biomes
             if (_biomes.Count == 0)
                 throw new InvalidOperationException("No biomes registered");
 
-            // Compute nearest Voronoi site among the 3x3 neighborhood of cells
-            int cx = (int)MathF.Floor(worldPos.X / _cellSize);
-            int cy = (int)MathF.Floor(worldPos.Y / _cellSize);
+            var warped = Warp(worldPos);
+
+            // Compute nearest Voronoi site. Use a wider neighborhood because domain warping can
+            // push effective nearest sites across adjacent-cell boundaries.
+            int cx = (int)MathF.Floor(warped.X / _cellSize);
+            int cy = (int)MathF.Floor(warped.Y / _cellSize);
 
             float bestDist = float.MaxValue;
             int bestSX = 0, bestSY = 0;
@@ -49,17 +56,18 @@ namespace Veilborne.Biomes
             // Track second best to derive potential blend (future use)
             float secondDist = float.MaxValue;
 
-            for (int dy = -1; dy <= 1; dy++)
+            const int searchRadius = 2; // 5x5 neighborhood
+            for (int dy = -searchRadius; dy <= searchRadius; dy++)
             {
-                for (int dx = -1; dx <= 1; dx++)
+                for (int dx = -searchRadius; dx <= searchRadius; dx++)
                 {
                     int sx = cx + dx;
                     int sy = cy + dy;
 
                     var site = GetSiteWorldPosition(sx, sy);
 
-                    float dxw = worldPos.X - site.X;
-                    float dyw = worldPos.Y - site.Y;
+                    float dxw = warped.X - site.X;
+                    float dyw = warped.Y - site.Y;
 
                     // Per-cell scale to introduce variable sizes
                     float scale = 0.75f + 0.5f * Hash01(sx, sy, 7919);
@@ -81,6 +89,15 @@ namespace Veilborne.Biomes
             // Map the winning site to a biome index deterministically
             int idx = HashToBiomeIndex(bestSX, bestSY);
             return _biomes[idx];
+        }
+
+        private Vector2 Warp(Vector2 p)
+        {
+            float nx = p.X * _warpFrequency;
+            float ny = p.Y * _warpFrequency;
+            float wx = (HashNoise(nx + 19.31f, ny - 7.73f, 31337) - 0.5f) * 2f;
+            float wy = (HashNoise(nx - 11.07f, ny + 5.41f, 73331) - 0.5f) * 2f;
+            return new Vector2(p.X + wx * _warpAmplitude, p.Y + wy * _warpAmplitude);
         }
 
         private int HashToBiomeIndex(int sx, int sy)
@@ -121,6 +138,31 @@ namespace Veilborne.Biomes
                 uint u = (uint)h;
                 return (u & 0xFFFFFF) / (float)0x1000000; // 24 bits precision
             }
+        }
+
+        private float HashNoise(float x, float y, int salt)
+        {
+            int ix = (int)MathF.Floor(x);
+            int iy = (int)MathF.Floor(y);
+            float tx = x - ix;
+            float ty = y - iy;
+
+            float h00 = Hash01(ix, iy, salt);
+            float h10 = Hash01(ix + 1, iy, salt);
+            float h01 = Hash01(ix, iy + 1, salt);
+            float h11 = Hash01(ix + 1, iy + 1, salt);
+
+            float sx = SmoothStep(tx);
+            float sy = SmoothStep(ty);
+            float nx0 = h00 + (h10 - h00) * sx;
+            float nx1 = h01 + (h11 - h01) * sx;
+            return nx0 + (nx1 - nx0) * sy;
+        }
+
+        private static float SmoothStep(float t)
+        {
+            t = Math.Clamp(t, 0f, 1f);
+            return t * t * (3f - 2f * t);
         }
     }
 }

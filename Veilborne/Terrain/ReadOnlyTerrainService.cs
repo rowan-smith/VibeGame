@@ -5,7 +5,6 @@ using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
 using Veilborne.Interfaces;
 using Veilborne.Objects;
-using ZeroElectric.Vinculum;
 
 namespace Veilborne.Terrain
 {
@@ -24,10 +23,12 @@ namespace Veilborne.Terrain
         // Track loaded chunks and preserve their mesh generation state across frames
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
         private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
+        private readonly Dictionary<(int cx, int cz), BiomeData> _biomeByChunk = new();
 
         // Async generation state
         private readonly HashSet<(int cx, int cz)> _generating = new();
-        private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin, List<SpawnedObject> objects)> _completed = new();
+        private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin, List<SpawnedObject> objects, BiomeData biome)> _completed = new();
+        private int _lastDesiredChunkCount;
 
         public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer, EntityRegistry entityRegistry)
         {
@@ -40,6 +41,9 @@ namespace Veilborne.Terrain
         }
 
         public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
+        public int DesiredChunkCount => _lastDesiredChunkCount;
+        public int LoadedChunkCount => _loadedChunks.Count;
+        public int GeneratingChunkCount => _generating.Count;
 
         public void UpdateAround(Vector3 worldPos, int radiusChunks)
         {
@@ -61,28 +65,24 @@ namespace Veilborne.Terrain
                     _generating.Add(key);
                     _ = Task.Run(() =>
                     {
-                        // Build heights from editable surface so RO ring reflects nearby edits
+                        // Build heights from editable surface so RO ring stays in sync with
+                        // editable/LOD sampling and avoids shape pops when transitioning rings.
                         float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
                         for (int zz = 0; zz <= ChunkSize; zz++)
                         for (int xx = 0; xx <= ChunkSize; xx++)
                         {
                             float wx = origin.X + xx * TileSize;
                             float wz = origin.Y + zz * TileSize;
-                            heights[xx, zz] = _terrainGen.ComputeHeight(wx, wz);
+                            heights[xx, zz] = _editable.SampleHeight(wx, wz);
                         }
 
                         // Spawn world objects for this chunk using biome spawner
-                        var biome = BiomeSampling.GetDominantBiomeForArea(_biomeProvider, _terrainGen, origin, ChunkSize, TileSize, 9, 2f);
+                        var center = new Vector2(
+                            origin.X + ChunkSize * TileSize * 0.5f,
+                            origin.Y + ChunkSize * TileSize * 0.5f);
+                        var biome = BiomeSampling.GetDominantBiomeNearPoint(_biomeProvider, null, center, 96f, 11, 2f);
                         var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
-                        var filtered = new List<SpawnedObject>(raw.Count);
-                        foreach (var obj in raw)
-                        {
-                            var at = _biomeProvider.GetBiomeAt(new Vector2(obj.Position.X, obj.Position.Z), _terrainGen);
-                            if (string.Equals(at.Id, biome.Id, StringComparison.OrdinalIgnoreCase))
-                                filtered.Add(obj);
-                        }
-
-                        _completed.Enqueue((key, heights, origin, filtered));
+                        _completed.Enqueue((key, heights, origin, raw, biome.Data));
                     });
                 }
             }
@@ -94,6 +94,7 @@ namespace Veilborne.Terrain
             foreach (var key in toRemove)
             {
                 _loadedChunks.Remove(key);
+                _biomeByChunk.Remove(key);
                 if (_entitiesByChunk.TryGetValue(key, out var entities))
                 {
                     foreach (var entity in entities)
@@ -101,10 +102,13 @@ namespace Veilborne.Terrain
                     _entitiesByChunk.Remove(key);
                 }
             }
+
+            _lastDesiredChunkCount = desired.Count;
         }
 
-        public async Task PumpAsyncJobs()
+        public async Task PumpAsyncJobs(int maxInstallsPerFrame = int.MaxValue)
         {
+            int installs = 0;
             while (_completed.TryDequeue(out var item))
             {
                 _generating.Remove(item.key);
@@ -116,6 +120,7 @@ namespace Veilborne.Terrain
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
                 };
+                _biomeByChunk[item.key] = item.biome;
                 // Create entities for this chunk
                 var entities = new List<Entity>();
                 if (item.objects != null)
@@ -134,6 +139,7 @@ namespace Veilborne.Terrain
                             ModelPath = obj.ModelPath,
                             ConfigRotationDegrees = obj.ConfigRotationDegrees
                         });
+                        entity.AddComponent(new WorldObjectComponent());
                         entity.AddComponent(new PhysicsComponent
                         {
                             CollisionRadius = obj.CollisionRadius,
@@ -143,6 +149,8 @@ namespace Veilborne.Terrain
                     }
                 }
                 _entitiesByChunk[item.key] = entities;
+                installs++;
+                if (installs >= maxInstallsPerFrame) break;
                 await Task.Yield();
             }
         }
@@ -157,9 +165,10 @@ namespace Veilborne.Terrain
                 if (exclude != null && exclude.Contains(key))
                     continue;
 
-                // Apply biome texture based on dominant biome across this chunk
-                var biome = GetDominantBiomeForChunk(chunk);
-                _renderer.ApplyBiomeTextures(biome.Data);
+                if (_biomeByChunk.TryGetValue(key, out var primaryBiome))
+                    _renderer.ApplyBiomeTextures(primaryBiome);
+                else
+                    _renderer.ApplyBiomeTextures(GetDominantBiomeForChunk(chunk).Data);
 
                 // Render the chunk (meshes are built centrally by TerrainManager.UpdateAround)
                 _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
@@ -168,14 +177,10 @@ namespace Veilborne.Terrain
 
         private IBiome GetDominantBiomeForChunk(TerrainChunk chunk)
         {
-            return BiomeSampling.GetDominantBiomeForArea(
-                _biomeProvider,
-                _terrainGen,
-                chunk.Origin,
-                ChunkSize,
-                TileSize,
-                9,
-                2f);
+            var center = new Vector2(
+                chunk.Origin.X + ChunkSize * TileSize * 0.5f,
+                chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
+            return BiomeSampling.GetDominantBiomeNearPoint(_biomeProvider, null, center, 96f, 11, 2f);
         }
 
         public void Render(CameraComponent camera) => RenderTiles(camera);
@@ -191,11 +196,7 @@ namespace Veilborne.Terrain
 
         public void RenderDebugChunkBounds(CameraComponent camera)
         {
-            foreach (var (cx, cz) in _loadedChunks.Keys)
-            {
-                Vector3 pos = new(cx * ChunkSize * TileSize, 0, cz * ChunkSize * TileSize);
-                Raylib.DrawCubeWires(pos, ChunkSize * TileSize, 0.2f, ChunkSize * TileSize, Raylib.DARKGREEN);
-            }
+            // Debug chunk bounds are backend-specific and currently disabled.
         }
 
         public IEnumerable<(Vector2 center, float radius)> GetNearbyObjectColliders(Vector2 worldPos, float range)

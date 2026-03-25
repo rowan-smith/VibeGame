@@ -7,37 +7,64 @@ namespace Veilborne.Terrain
     {
         public int TerrainSize { get; } = 120;
         public float TileSize { get; } = 1.5f;
-        private const float TerrainAmplitude = 6.0f;
+        private readonly INoiseSource _macroNoise;
+        private readonly INoiseSource _ridgeNoise;
+        private readonly INoiseSource _detailNoise;
+        private readonly INoiseSource _microNoise;
 
         public TerrainGenerator(MultiNoiseConfig? cfg = null)
         {
             int seed = cfg?.Seed ?? 1337;
-            // Initialize noise sources here
+            _macroNoise = new FastNoiseLiteSource(
+                seed + 11,
+                FastNoiseLite.NoiseType.OpenSimplex2S,
+                0.0018f,
+                octaves: 4,
+                lacunarity: 2.0f,
+                gain: 0.52f);
+
+            _ridgeNoise = new FastNoiseLiteSource(
+                seed + 23,
+                FastNoiseLite.NoiseType.OpenSimplex2,
+                0.0045f,
+                octaves: 4,
+                lacunarity: 2.15f,
+                gain: 0.5f);
+
+            _detailNoise = new FastNoiseLiteSource(
+                seed + 37,
+                FastNoiseLite.NoiseType.OpenSimplex2S,
+                0.011f,
+                octaves: 3,
+                lacunarity: 2.2f,
+                gain: 0.48f);
+
+            _microNoise = new FastNoiseLiteSource(
+                seed + 59,
+                FastNoiseLite.NoiseType.OpenSimplex2,
+                0.024f,
+                octaves: 2,
+                lacunarity: 2.0f,
+                gain: 0.45f);
         }
 
         public float ComputeHeight(float worldX, float worldZ)
         {
-            // More mountainous terrain using simple ridged multi-octave functions
-            float nx = worldX * 0.005f;
-            float nz = worldZ * 0.005f;
+            float macro = _macroNoise.GetValue3D(worldX, 0f, worldZ);   // [-1,1]
+            float ridgeRaw = _ridgeNoise.GetValue3D(worldX, 0f, worldZ); // [-1,1]
+            float detail = _detailNoise.GetValue3D(worldX, 0f, worldZ);  // [-1,1]
+            float micro = _microNoise.GetValue3D(worldX, 0f, worldZ);    // [-1,1]
 
-            float Ridge(float x, float z)
-            {
-                // A cheap ridge-like function based on periodic sines
-                float s = MathF.Sin(x) * MathF.Cos(z);
-                return 1f - MathF.Abs(s);
-            }
+            // Ridged transform with sharpening to add more broken terrain and less smooth rolling hills.
+            float ridge = 1f - MathF.Abs(ridgeRaw);
+            ridge = MathF.Pow(Math.Clamp(ridge, 0f, 1f), 1.35f);
 
-            float h = 0f;
-            h += Ridge(nx * 1.1f, nz * 1.1f) * 9.0f;
-            h += Ridge(nx * 2.2f + 12.34f, nz * 2.0f + 45.67f) * 5.5f;
-            h += Ridge(nx * 4.1f + 78.9f, nz * 3.8f + 12.3f) * 3.0f;
-
-            // Broad undulation for large-scale valleys
-            h += (MathF.Sin(worldX * 0.01f) + MathF.Cos(worldZ * 0.008f)) * 2.0f;
-
-            // Raise baseline to keep above zero
-            h += 2.5f;
+            // Keep a stable baseline while layering medium/high-frequency variation.
+            float h = 2.2f;
+            h += (macro * 0.5f + 0.5f) * 8.5f; // large forms
+            h += ridge * 8.0f;                 // mountain ridges
+            h += detail * 2.8f;                // medium breakup
+            h += micro * 1.1f;                 // fine noise
 
             return h;
         }

@@ -6,5 +6,6 @@ namespace Veilborne.Interfaces
         float TotalTime { get; }
         int Fps { get; }
         void Update(float dt);
+        void NotifyFrameRendered();
     }
 }

@@ -1,23 +1,25 @@
 using System.Numerics;
-using ZeroElectric.Vinculum;
 
 namespace Veilborne.Camera
 {
     public class Camera
     {
-        public Camera3D RaylibCamera;
+        public Vector3 Position { get; private set; }
+        public Vector3 Target { get; private set; }
+        public Vector3 Up { get; }
+        public float Fov { get; }
 
         public Camera(Vector3 position, Vector3 target, Vector3 up, float fov = 60f)
         {
-            RaylibCamera = new Camera3D(position, target, up, fov, CameraProjection.CAMERA_PERSPECTIVE);
+            Position = position;
+            Target = target;
+            Up = up;
+            Fov = fov;
         }
 
-        public Vector3 Position => RaylibCamera.position;
-        public Vector3 Target => RaylibCamera.target;
-
-        public void UpdateFromRaylib()
+        public void UpdateFromBackend()
         {
-            Raylib.UpdateCamera(ref RaylibCamera, CameraMode.CAMERA_FIRST_PERSON);
+            // Placeholder for legacy wrapper compatibility.
         }
     }
 }
