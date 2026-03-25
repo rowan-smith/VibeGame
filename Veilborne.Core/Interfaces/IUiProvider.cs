@@ -29,5 +29,8 @@ namespace Veilborne.Interfaces
         void DrawTexture(string key, Rect src, Rect dst, Vector2 origin, float rotation, Vector4 color);
         // Helper for simple texture drawing
         void DrawTexture(string key, int x, int y, float scale, Vector4 color);
+        bool RegisterSvgTexture(string key, string relativeSvgPath, int maxWidth, int maxHeight);
+        bool HasTexture(string key);
+        bool TryGetTextureSize(string key, out int width, out int height);
     }
 }

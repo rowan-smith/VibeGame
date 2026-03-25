@@ -23,6 +23,7 @@ namespace Veilborne.Core.MonoGameImpl
 
         /// <summary>When true, mouse is captured for FPS-style look.</summary>
         public bool MouseLocked { get; set; } = false;
+        public bool IsWindowActive { get; private set; } = true;
 
         public VeilborneGame(int width, int height, string title)
         {
@@ -44,6 +45,7 @@ namespace Veilborne.Core.MonoGameImpl
         protected override void Update(GameTime gameTime)
         {
             if (_shouldExit) { Exit(); return; }
+            IsWindowActive = IsActive;
 
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
             OnUpdate?.Invoke(dt);

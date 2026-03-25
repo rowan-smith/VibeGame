@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne", "Veilborne\Veilborne.csproj", "{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne.Core", "Veilborne.Core\Veilborne.Core.csproj", "{A1AA7E66-1D7A-4B55-8D84-53C14B3C4441}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Veilborne.Desktop", "Veilborne.Desktop\Veilborne.Desktop.csproj", "{6E71E415-52D8-4B0D-A647-4AB7FB6B90F0}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Items", "Items", "{556906A2-F4B2-4066-B200-B0B98E263172}"
 	ProjectSection(SolutionItems) = preProject
@@ -20,9 +22,13 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CBCE2C44-D9DB-48C5-A51A-FAC9D7F43811}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1AA7E66-1D7A-4B55-8D84-53C14B3C4441}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1AA7E66-1D7A-4B55-8D84-53C14B3C4441}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1AA7E66-1D7A-4B55-8D84-53C14B3C4441}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1AA7E66-1D7A-4B55-8D84-53C14B3C4441}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E71E415-52D8-4B0D-A647-4AB7FB6B90F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E71E415-52D8-4B0D-A647-4AB7FB6B90F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E71E415-52D8-4B0D-A647-4AB7FB6B90F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E71E415-52D8-4B0D-A647-4AB7FB6B90F0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

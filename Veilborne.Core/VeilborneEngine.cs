@@ -9,7 +9,7 @@ using Veilborne.Objects;
 
 namespace Veilborne.Core
 {
-    public class VibeGameEngine : IGameEngine
+    public class VeilborneEngine : IGameEngine
     {
         private readonly ICameraController _cameraController;
         private readonly IPhysicsController _physics;
@@ -18,10 +18,10 @@ namespace Veilborne.Core
         private readonly ITimeService _time;
         private readonly EntityRegistry _entities;
         private readonly IGraphicsProvider _graphics;
+        private readonly IGameLoopHost _loopHost;
         private readonly IInputProvider _input;
-        private readonly EcsManager _ecsManager;
+        private readonly IEcsRuntime _ecsRuntime;
         private readonly IGameSettingsService _settings;
-        private readonly bool _isMonoGameBackend;
         private readonly bool _isDevelopmentEnvironment;
 
         // These will be initialized by ECS manager after MonoGame is ready
@@ -81,11 +81,12 @@ namespace Veilborne.Core
         private int _loadingGeneratingChunks;
         private double _loadingCompleteTime;
         private bool _requestedExit;
+        private Task _digTask = Task.CompletedTask;
 
         // Initialization splash timing
         private const double InitDurationSeconds = 0.75;
 
-        public VibeGameEngine(
+        public VeilborneEngine(
             ICameraController cameraController,
             IPhysicsController physics,
             IInfiniteTerrain terrain,
@@ -93,8 +94,9 @@ namespace Veilborne.Core
             ITimeService time,
             EntityRegistry entities,
             IGraphicsProvider graphics,
+            IGameLoopHost loopHost,
             IInputProvider input,
-            EcsManager ecsManager,
+            IEcsRuntime ecsRuntime,
             IGameSettingsService settings)
         {
             _cameraController = cameraController;
@@ -104,10 +106,10 @@ namespace Veilborne.Core
             _time = time;
             _entities = entities;
             _graphics = graphics;
+            _loopHost = loopHost;
             _input = input;
-            _ecsManager = ecsManager;
+            _ecsRuntime = ecsRuntime;
             _settings = settings;
-            _isMonoGameBackend = graphics is MonoGameImpl.MonoGameGraphicsProvider;
             _isDevelopmentEnvironment = RuntimeEnvironment.IsDevelopmentEnvironment;
         }
 
@@ -133,26 +135,17 @@ namespace Veilborne.Core
 
             _state = GameState.MainMenu;
 
-            // Wire up callbacks so MonoGame drives the engine
-            var graphicsProvider = _graphics as MonoGameImpl.MonoGameGraphicsProvider;
-                if (graphicsProvider != null)
-                {
-                    graphicsProvider.SetLoadContentCallback(() =>
-                    {
-                    // Initialize ECS manager once MonoGame's graphics device is ready
-                    _ecsManager.InitializeFromGraphicsProvider(graphicsProvider, _entities, _terrain);
-                    _ui = _ecsManager.GetUiProvider();
-                    _input.ShowCursor();
-                    LoadUiAssets();
-                });
-
-                    graphicsProvider.SetUpdateCallback(dt => UpdateStep(dt));
-                    graphicsProvider.Set3DDrawCallback(() => Draw3DStep());
-                    graphicsProvider.Set2DDrawCallback(() => Draw2DStep());
-
-                    // Blocks until the game window closes
-                    graphicsProvider.RunGameLoop();
-                }
+            _loopHost.SetLoadContentCallback(() =>
+            {
+                _ecsRuntime.Initialize(_entities, _terrain);
+                _ui = _ecsRuntime.GetUiProvider();
+                _input.ShowCursor();
+                LoadUiAssets();
+            });
+            _loopHost.SetUpdateCallback(UpdateStep);
+            _loopHost.Set3DDrawCallback(Draw3DStep);
+            _loopHost.Set2DDrawCallback(Draw2DStep);
+            _loopHost.RunGameLoop();
 
             return Task.CompletedTask;
         }
@@ -170,7 +163,7 @@ namespace Veilborne.Core
 
             if (_state == GameState.Playing)
             {
-                _ecsManager.UpdateSystems(gameDt);
+                _ecsRuntime.UpdateSystems(gameDt);
                 // Process terrain async completions (RO/LOD chunk installs + spawned entities).
                 if (_terrain is TerrainManager tm)
                     tm.PumpAsyncJobs().GetAwaiter().GetResult();
@@ -223,8 +216,8 @@ namespace Veilborne.Core
             {
                 var camera = _playerEntity.GetComponent<CameraComponent>();
                 _graphics.Begin3D(camera);
-                _ecsManager.RenderSystems(_lastGameDt, camera);
-                if (_showDebugChunkBounds && !_isMonoGameBackend) _terrain.RenderDebugChunkBounds(camera);
+                _ecsRuntime.RenderSystems(_lastGameDt, camera);
+                if (_showDebugChunkBounds) _terrain.RenderDebugChunkBounds(camera);
                 _graphics.End3D();
             }
         }
@@ -333,14 +326,14 @@ namespace Veilborne.Core
                     }
 
                     // Example dig action
-                    if (KeyBindingTokens.IsDown(_input, keyboard.DigInteract))
+                    if (KeyBindingTokens.IsPressed(_input, keyboard.DigInteract))
                     {
-                        if (_terrain is IEditableTerrain editable)
+                        if (_terrain is IEditableTerrain editable && _digTask.IsCompleted)
                         {
                             // Only dig if we are looking at the ground in front of us
                             if (TryGetGroundHit(6f, 0.25f, 0.05f, out var hit))
                             {
-                                editable.DigSphereAsync(hit, 1f, 1f, VoxelFalloff.Linear).Wait();
+                                _digTask = editable.DigSphereAsync(hit, 1f, 1f, VoxelFalloff.Linear);
                             }
                         }
                     }
@@ -367,10 +360,7 @@ namespace Veilborne.Core
 
         private void LoadUiAssets()
         {
-            if (_ui is MonoGameImpl.MonoGameUiProvider monoUi)
-            {
-                monoUi.RegisterSvgTexture(SplashTextureKey, "assets\\splash.svg", 2000, 1200);
-            }
+            _ui.RegisterSvgTexture(SplashTextureKey, "assets\\splash.svg", 2000, 1200);
             _graphics.SetWindowIcon("assets\\logo.svg");
         }
 
@@ -405,9 +395,8 @@ namespace Veilborne.Core
             int gap = btnH + 14;
 
             bool drewSplash = false;
-            if (_ui is MonoGameImpl.MonoGameUiProvider monoUi &&
-                monoUi.HasTexture(SplashTextureKey) &&
-                monoUi.TryGetTextureSize(SplashTextureKey, out int texW, out int texH))
+            if (_ui.HasTexture(SplashTextureKey) &&
+                _ui.TryGetTextureSize(SplashTextureKey, out int texW, out int texH))
             {
                 int maxW = Math.Min((int)(w * 0.99f), 2200);
                 int maxH = Math.Min((int)(h * 0.58f), 860);

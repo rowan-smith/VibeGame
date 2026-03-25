@@ -11,7 +11,7 @@ using Veilborne.Interfaces;
 
 namespace Veilborne.Core.MonoGameImpl
 {
-    public class MonoGameGraphicsProvider : IGraphicsProvider
+    public class MonoGameGraphicsProvider : IGraphicsProvider, IGameLoopHost
     {
         private readonly ILogger _logger = Log.ForContext<MonoGameGraphicsProvider>();
         private VeilborneGame? _game;

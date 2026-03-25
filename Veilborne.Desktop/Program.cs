@@ -47,7 +47,9 @@ internal static class Program
         // Core providers (no MonoGame dependencies)
         builder.Services.AddSingleton<IInputProvider, MonoGameInputProvider>();
         builder.Services.AddSingleton<ITimeService, MonoGameTimeService>();
-        builder.Services.AddSingleton<IGraphicsProvider, MonoGameGraphicsProvider>();
+        builder.Services.AddSingleton<MonoGameGraphicsProvider>();
+        builder.Services.AddSingleton<IGraphicsProvider>(sp => sp.GetRequiredService<MonoGameGraphicsProvider>());
+        builder.Services.AddSingleton<IGameLoopHost>(sp => sp.GetRequiredService<MonoGameGraphicsProvider>());
         // UI provider will be initialized after MonoGame is ready
 
         // Core terrain & environment — proxy renderer: starts as stub, swapped to real MonoGame renderer after graphics init
@@ -60,6 +62,7 @@ internal static class Program
         builder.Services.AddSingleton<PlayerSystem>();
         builder.Services.AddSingleton<TerrainUpdateSystem>();
         builder.Services.AddSingleton<EcsManager>();
+        builder.Services.AddSingleton<IEcsRuntime>(sp => sp.GetRequiredService<EcsManager>());
 
         builder.Services.AddSingleton<ITreesRegistry, TreesRegistry>();
         builder.Services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
@@ -118,7 +121,7 @@ internal static class Program
             sp.GetRequiredService<EntityRegistry>()));
 
         builder.Services.AddHostedService<Entry>();
-        builder.Services.AddTransient<IGameEngine, VibeGameEngine>();
+        builder.Services.AddTransient<IGameEngine, VeilborneEngine>();
 
         var host = builder.Build();
         await host.StartAsync();

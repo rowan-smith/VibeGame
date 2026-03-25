@@ -10,11 +10,15 @@ namespace Veilborne.Camera
     {
         private float _verticalVelocity = 0f;
         private bool _isGrounded = false;
+        private float _jumpBufferTimer = 0f;
+        private float _coyoteTimer = 0f;
         private readonly float _gravity;
         private readonly float _jumpSpeed;
         private readonly float _eyeHeight;
         private readonly IInputProvider _input;
         private readonly IGameSettingsService _settings;
+        private const float JumpBufferSeconds = 0.12f;
+        private const float CoyoteSeconds = 0.10f;
 
         public SimplePhysicsController(IInputProvider input, IGameSettingsService settings, float gravity = -20f, float jumpSpeed = 8.5f, float eyeHeight = 1.7f)
         {
@@ -36,11 +40,22 @@ namespace Veilborne.Camera
             // Ground height under current position (eye height applied after sampling)
             float groundY = groundHeightFunc(camera.Position.X, camera.Position.Z) + _eyeHeight;
 
-            // Jump input only when grounded
-            if (_isGrounded && KeyBindingTokens.IsPressed(_input, _settings.Current.Keyboard.Jump))
+            if (KeyBindingTokens.IsPressed(_input, _settings.Current.Keyboard.Jump))
+                _jumpBufferTimer = JumpBufferSeconds;
+            else
+                _jumpBufferTimer = MathF.Max(0f, _jumpBufferTimer - dt);
+
+            if (_isGrounded)
+                _coyoteTimer = CoyoteSeconds;
+            else
+                _coyoteTimer = MathF.Max(0f, _coyoteTimer - dt);
+
+            if (_jumpBufferTimer > 0f && _coyoteTimer > 0f)
             {
                 _verticalVelocity = _jumpSpeed;
                 _isGrounded = false;
+                _jumpBufferTimer = 0f;
+                _coyoteTimer = 0f;
             }
 
             // Integrate vertical velocity

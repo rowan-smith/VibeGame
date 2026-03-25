@@ -11,13 +11,14 @@ using Veilborne.Interfaces;
 using Veilborne.Objects;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 namespace Veilborne.Core.Ecs
 {
     /// <summary>
     /// Manages ECS systems initialization after MonoGame dependencies are available
     /// </summary>
-    public class EcsManager
+    public class EcsManager : IEcsRuntime
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly List<ISystem> _systems = new();
@@ -56,34 +57,35 @@ namespace Veilborne.Core.Ecs
             _renderSystems.Add(_worldObjectRenderer as IRenderSystem);
         }
 
-        public void InitializeFromGraphicsProvider(MonoGameGraphicsProvider graphicsProvider, EntityRegistry entityRegistry, IInfiniteTerrain terrain)
+        public void Initialize(EntityRegistry entityRegistry, IInfiniteTerrain terrain)
         {
-            var graphicsDevice = graphicsProvider.GetGraphicsDevice();
-            var spriteBatch = graphicsProvider.GetSpriteBatch();
-            var game = graphicsProvider.GetGame();
+            var graphicsProvider = _serviceProvider.GetRequiredService<IGraphicsProvider>();
+            if (graphicsProvider is not MonoGameGraphicsProvider monoGameProvider)
+                throw new InvalidOperationException("ECS requires a MonoGameGraphicsProvider for initialization.");
+            var graphicsDevice = monoGameProvider.GetGraphicsDevice() ?? throw new InvalidOperationException("GraphicsDevice is not available; MonoGame may not be initialized yet.");
+            var spriteBatch = monoGameProvider.GetSpriteBatch();
+            var game = monoGameProvider.GetGame();
 
             // Wire up input provider to the game so ShowCursor/HideCursor work
             if (game != null && _serviceProvider.GetService<IInputProvider>() is MonoGameInputProvider monoInput)
                 monoInput.SetGame(game);
 
-            if (graphicsDevice != null)
+            // Use the game's built-in Content manager when available
+            if (game?.Content != null)
             {
-                // Use the game's built-in Content manager
-                if (game?.Content != null)
-                {
-                    Initialize(graphicsDevice, game.Content, entityRegistry, terrain);
-                }
-                else
-                {
-                    // Skip content manager for now - create without it
-                    InitializeWithoutContent(graphicsDevice, entityRegistry, terrain);
-                }
+                Initialize(graphicsDevice, game.Content, entityRegistry, terrain);
+            }
+            else
+            {
+                InitializeWithoutContent(graphicsDevice, entityRegistry, terrain);
+            }
 
-                // Wire up the UI provider with the game's SpriteBatch so draw calls work
-                if (spriteBatch != null && _uiProvider is MonoGameUiProvider uiProvider)
-                {
-                    uiProvider.Initialize(spriteBatch, graphicsDevice);
-                }
+            // Wire up the UI provider with the game's SpriteBatch so draw calls work
+            if (spriteBatch == null)
+                throw new InvalidOperationException("SpriteBatch is not initialized; UI cannot be constructed.");
+            if (_uiProvider is MonoGameUiProvider uiProvider)
+            {
+                uiProvider.Initialize(spriteBatch, graphicsDevice);
             }
         }
 

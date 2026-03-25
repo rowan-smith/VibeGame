@@ -43,6 +43,12 @@ namespace Veilborne.Core.MonoGameImpl
             var state = _currMouseState;
             if (_game != null && _game.MouseLocked)
             {
+                if (!_game.IsWindowActive)
+                {
+                    _firstLockedDelta = true;
+                    return Vector2.Zero;
+                }
+
                 int cx = _game.GraphicsDevice.Viewport.Width / 2;
                 int cy = _game.GraphicsDevice.Viewport.Height / 2;
                 var delta = new Vector2(state.X - cx, state.Y - cy);
