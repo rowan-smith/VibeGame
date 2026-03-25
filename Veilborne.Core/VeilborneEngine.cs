@@ -326,12 +326,12 @@ namespace Veilborne.Core
                     }
 
                     // Example dig action
-                    if (KeyBindingTokens.IsDown(_input, keyboard.DigInteract))
+                    if (KeyBindingTokens.IsPressed(_input, keyboard.DigInteract))
                     {
-                        if (_terrain is IEditableTerrain editable)
+                        if (_terrain is IEditableTerrain editable && _digTask.IsCompleted)
                         {
                             // Only dig if we are looking at the ground in front of us
-                            if (_digTask.IsCompleted && TryGetGroundHit(6f, 0.25f, 0.05f, out var hit))
+                            if (TryGetGroundHit(6f, 0.25f, 0.05f, out var hit))
                             {
                                 _digTask = editable.DigSphereAsync(hit, 1f, 1f, VoxelFalloff.Linear);
                             }
