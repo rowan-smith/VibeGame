@@ -285,9 +285,8 @@ namespace Veilborne.Terrain
             };
         }
 
-        public async Task DigSphereAsync(Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff)
+        public Task DigSphereAsync(Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff)
         {
-            await Task.Yield();
             lock (_lock)
             {
                 float minX = worldCenter.X - radius;
@@ -339,11 +338,11 @@ namespace Veilborne.Terrain
                     chunk.Version++;
                 }
             }
+            return Task.CompletedTask;
         }
 
-        public async Task PlaceSphereAsync(Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff)
+        public Task PlaceSphereAsync(Vector3 worldCenter, float radius, float strength, VoxelFalloff falloff)
         {
-            await Task.Yield();
             lock (_lock)
             {
                 float minX = worldCenter.X - radius;
@@ -395,6 +394,7 @@ namespace Veilborne.Terrain
                     chunk.Version++;
                 }
             }
+            return Task.CompletedTask;
         }
 
         public int GetMaxVersionForBounds(float minX, float minZ, float maxX, float maxZ)

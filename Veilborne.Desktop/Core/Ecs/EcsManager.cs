@@ -17,7 +17,7 @@ namespace Veilborne.Core.Ecs
     /// <summary>
     /// Manages ECS systems initialization after MonoGame dependencies are available
     /// </summary>
-    public class EcsManager
+    public class EcsManager : IEcsRuntime
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly List<ISystem> _systems = new();
@@ -56,8 +56,10 @@ namespace Veilborne.Core.Ecs
             _renderSystems.Add(_worldObjectRenderer as IRenderSystem);
         }
 
-        public void InitializeFromGraphicsProvider(MonoGameGraphicsProvider graphicsProvider, EntityRegistry entityRegistry, IInfiniteTerrain terrain)
+        public void Initialize(EntityRegistry entityRegistry, IInfiniteTerrain terrain)
         {
+            var graphicsProvider = _serviceProvider.GetRequiredService<IGraphicsProvider>() as MonoGameGraphicsProvider;
+            if (graphicsProvider == null) return;
             var graphicsDevice = graphicsProvider.GetGraphicsDevice();
             var spriteBatch = graphicsProvider.GetSpriteBatch();
             var game = graphicsProvider.GetGame();
