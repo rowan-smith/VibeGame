@@ -20,7 +20,7 @@ namespace Veilborne.Camera
             _moveSpeed = moveSpeed;
         }
 
-        public Vector3 UpdateAndGetHorizontalMove(CameraComponent camera, float dt)
+        public Vector3 UpdateAndGetHorizontalMove(ref CameraComponent camera, float dt)
         {
             // Mouse look
             Vector2 mouseDelta = _input.GetMouseDelta();

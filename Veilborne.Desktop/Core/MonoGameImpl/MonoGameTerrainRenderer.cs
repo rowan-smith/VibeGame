@@ -13,9 +13,11 @@ namespace Veilborne.Core.MonoGameImpl
     using Microsoft.Xna.Framework.Graphics;
     using System.Numerics;
     using System.Collections.Generic;
+    using System.Linq;
 using Veilborne.Biomes;
 using Veilborne.Core.Settings;
 using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Sky;
     using SixLabors.ImageSharp.PixelFormats;
     using SixLabors.ImageSharp.Processing;
 
@@ -28,25 +30,43 @@ using Veilborne.Core.Ecs.Components;
         private readonly ILogger _log = Log.ForContext<MonoGameTerrainRenderer>();
         private readonly IBiomeProvider? _biomeProvider;
         private readonly IGameSettingsService _settings;
+        private readonly ISkyLightingService _sky;
         private Texture2D? _fallbackTerrainTexture;
 
         private const int MaxTexSize = 512; // downscale 4K textures to avoid hitching
-        private const float MaxTerrainDrawDistance = 1100f;
+        private const float MaxTerrainDrawDistance = 1300f;
         private static readonly string[] FallbackTextureIds = { "brown_mud_leaves", "aerial_rocks", "lichen_rock", "snow" };
 
         private struct ChunkData
         {
+            public enum LayerBlendMode
+            {
+                None = 0,
+                SurfaceToSubsurface = 1,
+                SubsurfaceToDeep = 2
+            }
+
             public VertexBuffer Vb;
             public IndexBuffer Ib;
             public int IndexCount;
-            public Texture2D? Texture;
+            public Texture2D? PrimaryTexture;
+            public Texture2D? SecondaryTexture;
             public XnaColor Tint;
             public string BiomeId;   // dominant biome — rebuild key
+            public string SecondaryBiomeId;
+            public float SecondaryBlend;
+            public float PrimaryLightingModifier;
+            public float SecondaryLightingModifier;
             public float OriginX;
             public float OriginZ;
             public float WorldSize;
             public float MinY;
             public float MaxY;
+            public float[,]? CurrentHeights;
+            public float[,]? BaseHeights;
+            public TerrainLayerConfig? LayerConfig;
+            public Vector4[,]? Splatmap;
+            public LayerBlendMode LayerMode;
         }
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
@@ -55,12 +75,16 @@ using Veilborne.Core.Ecs.Components;
         private readonly HashSet<(float x, float z, float tile)> _queuedBuildKeys = new();
         private readonly HashSet<(float x, float z, float tile)> _dirtyKeys = new();
         private BiomeData? _activeBiome;
-        private CameraComponent? _pendingCamera;  // Deferred draw — render once per frame after all RenderAt calls
+        private BiomeData? _activeSecondaryBiome;
+        private float _activeSecondaryBlend;
+        private CameraComponent _pendingCamera;  // Deferred draw — render once per frame after all RenderAt calls
+        private bool _hasPendingCamera;
 
-        public MonoGameTerrainRenderer(GraphicsDevice graphicsDevice, IGameSettingsService settings, IBiomeProvider? biomeProvider = null)
+        public MonoGameTerrainRenderer(GraphicsDevice graphicsDevice, IGameSettingsService settings, ISkyLightingService sky, IBiomeProvider? biomeProvider = null)
         {
             _graphicsDevice = graphicsDevice;
             _settings = settings;
+            _sky = sky;
             _biomeProvider = biomeProvider;
             _basicEffect = new BasicEffect(graphicsDevice) { LightingEnabled = false };
             _wireframeRasterizer = new RasterizerState { FillMode = FillMode.WireFrame, CullMode = CullMode.CullCounterClockwiseFace };
@@ -69,11 +93,15 @@ using Veilborne.Core.Ecs.Components;
         public void ApplyBiomeTextures(BiomeData biome)
         {
             _activeBiome = biome;
+            _activeSecondaryBiome = null;
+            _activeSecondaryBlend = 0f;
         }
 
         public void ApplyBiomeBlendTextures(BiomeData primary, BiomeData? secondary, float secondaryBlend)
         {
             _activeBiome = primary;
+            _activeSecondaryBiome = secondary;
+            _activeSecondaryBlend = Math.Clamp(secondaryBlend, 0f, 1f);
         }
 
         public void SetColorTint(System.Numerics.Vector4 color)
@@ -89,10 +117,10 @@ using Veilborne.Core.Ecs.Components;
         /// <summary>Call once per frame after all RenderAt calls to issue the actual draw.</summary>
         public void Flush()
         {
-            if (_pendingCamera != null)
+            if (_hasPendingCamera)
             {
                 DrawChunks(_pendingCamera);
-                _pendingCamera = null;
+                _hasPendingCamera = false;
             }
             _activeChunkKeys.Clear();
         }
@@ -105,10 +133,52 @@ using Veilborne.Core.Ecs.Components;
                 BuildChunkMesh(heights, tileSize, originWorld);
             if (_chunks.TryGetValue(key, out var existing))
             {
-                ApplyChunkVisual(ref existing, _activeBiome);
+                existing.CurrentHeights = heights;
+                bool allowBlendVisuals = _settings.Current.Graphics.BiomeTextureCrossfade;
+                string primaryId = _activeBiome?.Id ?? string.Empty;
+                string secondaryId = allowBlendVisuals ? (_activeSecondaryBiome?.Id ?? string.Empty) : string.Empty;
+                float blend = allowBlendVisuals ? _activeSecondaryBlend : 0f;
+                var desiredLayerMode = DetermineLayerBlendMode(existing.BaseHeights, heights, existing.LayerConfig, existing.Splatmap);
+                bool visualsMatch =
+                    string.Equals(existing.BiomeId, primaryId, StringComparison.Ordinal) &&
+                    string.Equals(existing.SecondaryBiomeId, secondaryId, StringComparison.Ordinal) &&
+                    MathF.Abs(existing.SecondaryBlend - blend) < 0.001f &&
+                    existing.LayerMode == desiredLayerMode;
+                if (!visualsMatch)
+                    ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, blend, allowBlendVisuals);
                 _chunks[key] = existing;
             }
             _pendingCamera = camera;  // Accumulate — actual draw happens via Flush()
+            _hasPendingCamera = true;
+        }
+
+        public void RenderAt(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig)
+        {
+            RenderAt(heights, tileSize, originWorld, camera, baseHeights, layerConfig, null);
+        }
+
+        public void RenderAt(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig, Vector4[,]? splatmap)
+        {
+            RenderAt(heights, tileSize, originWorld, camera);
+            var key = (originWorld.X, originWorld.Y, tileSize);
+            if (_chunks.TryGetValue(key, out var existing))
+            {
+                bool hadLayerData = existing.BaseHeights != null && existing.LayerConfig != null;
+                bool hadSplatmap = existing.Splatmap != null;
+                existing.BaseHeights = baseHeights;
+                existing.LayerConfig = layerConfig;
+                existing.Splatmap = splatmap;
+                existing.LayerMode = DetermineLayerBlendMode(baseHeights, heights, layerConfig, splatmap);
+                _chunks[key] = existing;
+
+                bool allowBlendVisuals = _settings.Current.Graphics.BiomeTextureCrossfade;
+                ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, allowBlendVisuals ? _activeSecondaryBlend : 0f, allowBlendVisuals);
+                _chunks[key] = existing;
+
+                // First time we receive layer data for a chunk, rebuild once so per-vertex layer blend is populated.
+                if ((!hadLayerData && baseHeights != null && layerConfig != null) || (!hadSplatmap && splatmap != null))
+                    EnqueueBuild(heights, tileSize, originWorld);
+            }
         }
 
         public void BuildChunks(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld) =>
@@ -161,6 +231,22 @@ using Veilborne.Core.Ecs.Components;
             int depth = heights.GetLength(1);
             float minY = float.PositiveInfinity;
             float maxY = float.NegativeInfinity;
+            byte biomeBlendAlpha = 0;
+            var key = (origin.X, origin.Y, tileSize);
+            _chunks.TryGetValue(key, out var prevChunk);
+            var baseHeights = prevChunk.BaseHeights;
+            var layerConfig = prevChunk.LayerConfig;
+            var splatmap = prevChunk.Splatmap;
+            var layerMode = DetermineLayerBlendMode(baseHeights, heights, layerConfig, splatmap);
+
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                // PERF: sample biome blend once at chunk center instead of per-vertex.
+                float centerX = origin.X + ((width - 1) * tileSize * 0.5f);
+                float centerZ = origin.Y + ((depth - 1) * tileSize * 0.5f);
+                var (_, _, blend) = simple.GetBiomeBlendAt(new System.Numerics.Vector2(centerX, centerZ), null!);
+                biomeBlendAlpha = (byte)Math.Clamp((int)(blend * 255f), 0, 255);
+            }
 
             // UV: repeat texture every 8 world-units so it tiles naturally
             const float texWorldRepeat = 8f;
@@ -175,7 +261,19 @@ using Veilborne.Core.Ecs.Components;
                 if (y < minY) minY = y;
                 if (y > maxY) maxY = y;
 
-                XnaColor vertexColor = XnaColor.White;
+                byte blendAlpha = biomeBlendAlpha;
+                if (splatmap != null && x < splatmap.GetLength(0) && z < splatmap.GetLength(1))
+                {
+                    var sw = splatmap[x, z];
+                    float alpha = ComputeLayerBlendAlphaFromSplat(sw, layerMode);
+                    blendAlpha = (byte)Math.Clamp((int)(alpha * 255f), 0, 255);
+                }
+                else if (baseHeights != null && layerConfig != null)
+                {
+                    float depthDelta = MathF.Max(0f, baseHeights[x, z] - y);
+                    blendAlpha = (byte)Math.Clamp((int)(ComputeLayerBlendAlpha(depthDelta, layerConfig, layerMode) * 255f), 0, 255);
+                }
+                XnaColor vertexColor = new XnaColor((byte)255, (byte)255, (byte)255, blendAlpha);
 
                 var uv = new XnaVector2(worldX / texWorldRepeat, worldZ / texWorldRepeat);
                 vertices[z * width + x] = new VertexPositionColorTexture(
@@ -210,7 +308,6 @@ using Veilborne.Core.Ecs.Components;
                 ib.SetData(indices.ToArray());
             }
 
-            var key = (origin.X, origin.Y, tileSize);
             if (_chunks.TryGetValue(key, out var old))
             {
                 old.Vb.Dispose();
@@ -221,33 +318,217 @@ using Veilborne.Core.Ecs.Components;
                 Vb = vb,
                 Ib = ib,
                 IndexCount = indices.Count,
-                Texture = null,
+                PrimaryTexture = null,
+                SecondaryTexture = null,
                 Tint = XnaColor.White,
                 BiomeId = "",
+                SecondaryBiomeId = "",
+                SecondaryBlend = 0f,
+                PrimaryLightingModifier = 1f,
+                SecondaryLightingModifier = 1f,
                 OriginX = origin.X,
                 OriginZ = origin.Y,
                 WorldSize = MathF.Max(1f, MathF.Max((width - 1) * tileSize, (depth - 1) * tileSize)),
                 MinY = float.IsFinite(minY) ? minY : 0f,
-                MaxY = float.IsFinite(maxY) ? maxY : 0f
+                MaxY = float.IsFinite(maxY) ? maxY : 0f,
+                CurrentHeights = heights,
+                BaseHeights = baseHeights,
+                LayerConfig = layerConfig,
+                Splatmap = splatmap,
+                LayerMode = layerMode
             };
         }
 
-        private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome)
+        private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome, BiomeData? secondaryBiome, float secondaryBlend, bool allowBlendVisuals)
         {
+            if (!allowBlendVisuals)
+            {
+                secondaryBiome = null;
+                secondaryBlend = 0f;
+            }
+
             if (biome == null)
             {
                 chunk.BiomeId = "";
+                chunk.SecondaryBiomeId = "";
+                chunk.SecondaryBlend = 0f;
+                chunk.PrimaryLightingModifier = 1f;
+                chunk.SecondaryLightingModifier = 1f;
                 chunk.Tint = XnaColor.White;
-                chunk.Texture = GetFallbackTexture();
+                chunk.PrimaryTexture = GetFallbackTexture();
+                chunk.SecondaryTexture = null;
                 return;
             }
 
             chunk.BiomeId = biome.Id;
+            chunk.SecondaryBiomeId = secondaryBiome?.Id ?? string.Empty;
+            chunk.SecondaryBlend = secondaryBlend;
+            chunk.PrimaryLightingModifier = Math.Clamp(biome.LightingModifier ?? 1f, 0.5f, 1.6f);
+            chunk.SecondaryLightingModifier = Math.Clamp(secondaryBiome?.LightingModifier ?? 1f, 0.5f, 1.6f);
             chunk.Tint = ComputeStableTerrainTint(biome);
-            Texture2D? texture = null;
+
+            // Layered terrain mode: use per-vertex alpha as splat weight between material pairs.
+            if (chunk.BaseHeights != null && chunk.LayerConfig != null)
+            {
+                var lc = chunk.LayerConfig;
+                chunk.LayerMode = DetermineLayerBlendMode(chunk.BaseHeights, chunk.CurrentHeights, lc, chunk.Splatmap);
+                if (chunk.LayerMode == ChunkData.LayerBlendMode.SubsurfaceToDeep)
+                {
+                    chunk.PrimaryTexture = LoadTexture(lc.SubsurfaceTextureId) ?? GetFallbackTexture();
+                    chunk.SecondaryTexture = LoadTexture(lc.DeepTextureId);
+                }
+                else
+                {
+                    chunk.PrimaryTexture = LoadTexture(lc.SurfaceTextureId) ?? GetFallbackTexture();
+                    chunk.SecondaryTexture = LoadTexture(lc.SubsurfaceTextureId);
+                }
+                return;
+            }
+
+            Texture2D? primary = null;
+            var primaryTextureId = SelectTextureForChunk(biome, chunk);
+            if (!string.IsNullOrWhiteSpace(primaryTextureId))
+                primary = LoadTexture(primaryTextureId);
+            chunk.PrimaryTexture = primary ?? GetFallbackTexture();
+
+            Texture2D? secondary = null;
+            if (allowBlendVisuals && secondaryBiome is not null && secondaryBlend > 0.03f)
+            {
+                var secondaryTextureId = SelectTextureForChunk(secondaryBiome, chunk);
+                if (!string.IsNullOrWhiteSpace(secondaryTextureId))
+                    secondary = LoadTexture(secondaryTextureId);
+            }
+            chunk.SecondaryTexture = secondary;
+        }
+
+        private static string? SelectTextureForChunk(BiomeData biome, ChunkData chunk)
+        {
+            if (biome.TextureRules is { Count: > 0 })
+            {
+                float altitude = chunk.MaxY;
+                foreach (var kv in biome.TextureRules)
+                {
+                    var rule = kv.Value;
+                    if (rule == null) continue;
+                    if (rule.MinAltitude.HasValue && altitude < rule.MinAltitude.Value) continue;
+                    if (rule.MaxAltitude.HasValue && altitude > rule.MaxAltitude.Value) continue;
+                    return kv.Key;
+                }
+            }
+
             if (biome.SurfaceTextures?.Count > 0)
-                texture = LoadTexture(biome.SurfaceTextures[0].TextureId);
-            chunk.Texture = texture ?? GetFallbackTexture();
+                return biome.SurfaceTextures[0].TextureId;
+            return null;
+        }
+
+        private static (float avgDepth, float maxDepth) EstimateDigDepth(ChunkData chunk)
+        {
+            if (chunk.BaseHeights == null || chunk.CurrentHeights == null) return (0f, 0f);
+            int w = Math.Min(chunk.BaseHeights.GetLength(0), chunk.CurrentHeights.GetLength(0));
+            int h = Math.Min(chunk.BaseHeights.GetLength(1), chunk.CurrentHeights.GetLength(1));
+            if (w == 0 || h == 0) return (0f, 0f);
+            float sum = 0f;
+            float maxDepth = 0f;
+            int count = 0;
+            int sx = Math.Max(1, w / 8);
+            int sz = Math.Max(1, h / 8);
+            for (int z = 0; z < h; z += sz)
+            for (int x = 0; x < w; x += sx)
+            {
+                float baseH = chunk.BaseHeights[x, z];
+                float curH = chunk.CurrentHeights[x, z];
+                float depth = MathF.Max(0f, baseH - curH);
+                sum += depth;
+                if (depth > maxDepth) maxDepth = depth;
+                count++;
+            }
+            return count > 0 ? (sum / count, maxDepth) : (0f, 0f);
+        }
+
+        private static ChunkData.LayerBlendMode DetermineLayerBlendMode(float[,]? baseHeights, float[,]? currentHeights, TerrainLayerConfig? config, Vector4[,]? splatmap)
+        {
+            if (splatmap != null)
+            {
+                int sw = splatmap.GetLength(0);
+                int sh = splatmap.GetLength(1);
+                if (sw > 0 && sh > 0)
+                {
+                    int stepX = Math.Max(1, sw / 8);
+                    int stepZ = Math.Max(1, sh / 8);
+                    float deep = 0f;
+                    float sub = 0f;
+                    int deepCoverage = 0;
+                    int sampleCount = 0;
+                    for (int z = 0; z < sh; z += stepZ)
+                    for (int x = 0; x < sw; x += stepX)
+                    {
+                        var v = splatmap[x, z];
+                        float deepSample = MathF.Max(0f, v.Z + v.W);
+                        deep += deepSample;
+                        sub += MathF.Max(0f, v.Y);
+                        if (deepSample > 0.6f) deepCoverage++;
+                        sampleCount++;
+                    }
+                    float deepCoverageRatio = sampleCount > 0 ? deepCoverage / (float)sampleCount : 0f;
+                    if (sampleCount > 0 && (deepCoverageRatio > 0.30f || deep > sub * 0.95f))
+                        return ChunkData.LayerBlendMode.SubsurfaceToDeep;
+                    if (sampleCount > 0 && (deep > 0f || sub > 0f))
+                        return ChunkData.LayerBlendMode.SurfaceToSubsurface;
+                }
+            }
+
+            if (baseHeights == null || currentHeights == null || config == null)
+                return ChunkData.LayerBlendMode.None;
+
+            int w = Math.Min(baseHeights.GetLength(0), currentHeights.GetLength(0));
+            int h = Math.Min(baseHeights.GetLength(1), currentHeights.GetLength(1));
+            if (w == 0 || h == 0) return ChunkData.LayerBlendMode.None;
+
+            int sx = Math.Max(1, w / 8);
+            int sz = Math.Max(1, h / 8);
+            float deepPresence = 0f;
+            int count = 0;
+            float denom = MathF.Max(0.05f, config.DeepDepth - config.SubsurfaceDepth);
+            for (int z = 0; z < h; z += sz)
+            for (int x = 0; x < w; x += sx)
+            {
+                float depth = MathF.Max(0f, baseHeights[x, z] - currentHeights[x, z]);
+                float deep = Math.Clamp((depth - config.SubsurfaceDepth) / denom, 0f, 1f);
+                deepPresence += deep;
+                count++;
+            }
+
+            float avgDeep = count > 0 ? deepPresence / count : 0f;
+            return avgDeep > 0.08f
+                ? ChunkData.LayerBlendMode.SubsurfaceToDeep
+                : ChunkData.LayerBlendMode.SurfaceToSubsurface;
+        }
+
+        private static float ComputeLayerBlendAlpha(float depth, TerrainLayerConfig config, ChunkData.LayerBlendMode mode)
+        {
+            if (mode == ChunkData.LayerBlendMode.SubsurfaceToDeep)
+            {
+                float denom = MathF.Max(0.05f, config.DeepDepth - config.SubsurfaceDepth);
+                return Math.Clamp((depth - config.SubsurfaceDepth) / denom, 0f, 1f);
+            }
+
+            return Math.Clamp(depth / MathF.Max(0.05f, config.SubsurfaceDepth), 0f, 1f);
+        }
+
+        private static float ComputeLayerBlendAlphaFromSplat(Vector4 splat, ChunkData.LayerBlendMode mode)
+        {
+            if (mode == ChunkData.LayerBlendMode.SubsurfaceToDeep)
+            {
+                float deep = MathF.Max(0f, splat.Z + splat.W);
+                float sub = MathF.Max(0f, splat.Y);
+                float denom = deep + sub;
+                return denom > 1e-5f ? Math.Clamp(deep / denom, 0f, 1f) : 0f;
+            }
+
+            float surface = MathF.Max(0f, splat.X);
+            float subsurface = MathF.Max(0f, splat.Y);
+            float total = surface + subsurface;
+            return total > 1e-5f ? Math.Clamp(subsurface / total, 0f, 1f) : 0f;
         }
 
         private static XnaColor ComputeStableTerrainTint(BiomeData biome)
@@ -294,6 +575,7 @@ using Veilborne.Core.Ecs.Components;
             float brightness = graphics.Brightness / 100f;
             float drawDistance = MaxTerrainDrawDistance * renderDistanceScale;
             float maxDistSq = drawDistance * drawDistance;
+            bool crossfadeEnabled = graphics.BiomeTextureCrossfade;
 
             var prevDepth = _graphicsDevice.DepthStencilState;
             var prevRaster = _graphicsDevice.RasterizerState;
@@ -317,19 +599,27 @@ using Veilborne.Core.Ecs.Components;
                 var sphere = new XnaBoundingSphere(center, radius);
 
                 var camDelta = center - pos;
-                if (camDelta.LengthSquared() > maxDistSq) continue;
+                float distanceSq = camDelta.LengthSquared();
+                float chunkDistanceLimit = drawDistance + chunk.WorldSize * 0.75f;
+                if (distanceSq > chunkDistanceLimit * chunkDistanceLimit) continue;
                 if (!frustum.Intersects(sphere)) continue;
 
                 _graphicsDevice.SetVertexBuffer(chunk.Vb);
                 _graphicsDevice.Indices = chunk.Ib;
+                bool isLayeredChunk = chunk.LayerMode != ChunkData.LayerBlendMode.None;
 
-                if (chunk.Texture != null)
+                if (chunk.PrimaryTexture != null)
                 {
                     _basicEffect.TextureEnabled = true;
                     _basicEffect.VertexColorEnabled = true;
-                    _basicEffect.Texture = chunk.Texture;
+                    _basicEffect.Texture = chunk.PrimaryTexture;
                     _basicEffect.Alpha = 1f;
-                    _basicEffect.DiffuseColor = new XnaVector3(brightness);
+                    var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.45f;
+                    float primaryLightMod = isLayeredChunk ? 1f : chunk.PrimaryLightingModifier;
+                    _basicEffect.DiffuseColor = new XnaVector3(
+                        Math.Clamp(lit.X * primaryLightMod, 0.20f, 1f) * brightness,
+                        Math.Clamp(lit.Y * primaryLightMod, 0.20f, 1f) * brightness,
+                        Math.Clamp(lit.Z * primaryLightMod, 0.20f, 1f) * brightness);
                 }
                 else
                 {
@@ -342,6 +632,33 @@ using Veilborne.Core.Ecs.Components;
                 {
                     pass.Apply();
                     _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
+                }
+
+                // Only spend the second terrain pass when near enough for visible benefit.
+                float secondaryPassDistance = isLayeredChunk ? drawDistance : drawDistance * 0.72f;
+                bool shouldDrawSecondary = chunk.SecondaryTexture != null &&
+                                           distanceSq <= secondaryPassDistance * secondaryPassDistance &&
+                                           (isLayeredChunk || crossfadeEnabled);
+                if (shouldDrawSecondary)
+                {
+                    var prevChunkBlend = _graphicsDevice.BlendState;
+                    _graphicsDevice.BlendState = BlendState.AlphaBlend;
+                    _basicEffect.TextureEnabled = true;
+                    _basicEffect.VertexColorEnabled = true;
+                    _basicEffect.Texture = chunk.SecondaryTexture;
+                    _basicEffect.Alpha = 1f;
+                    var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.45f;
+                    float secondaryLightMod = isLayeredChunk ? 1f : chunk.SecondaryLightingModifier;
+                    _basicEffect.DiffuseColor = new XnaVector3(
+                        Math.Clamp(lit.X * secondaryLightMod, 0.20f, 1f) * brightness,
+                        Math.Clamp(lit.Y * secondaryLightMod, 0.20f, 1f) * brightness,
+                        Math.Clamp(lit.Z * secondaryLightMod, 0.20f, 1f) * brightness);
+                    foreach (var pass in _basicEffect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+                        _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
+                    }
+                    _graphicsDevice.BlendState = prevChunkBlend;
                 }
 
             }
@@ -368,23 +685,43 @@ using Veilborne.Core.Ecs.Components;
 
             // Find the diffuse/albedo file
             string? file = null;
-            foreach (var f in System.IO.Directory.GetFiles(dir, "*.png"))
+            var imageFiles = System.IO.Directory
+                .EnumerateFiles(dir)
+                .Where(f =>
+                {
+                    var ext = System.IO.Path.GetExtension(f).ToLowerInvariant();
+                    return ext is ".png" or ".jpg" or ".jpeg";
+                })
+                .ToArray();
+
+            foreach (var f in imageFiles)
             {
                 var name = System.IO.Path.GetFileName(f).ToLower();
-                if (name.Contains("_diff_") || name.Contains("_albedo_") || name.Contains("_col_"))
+                if (name.Contains("_diff_") || name.Contains("_albedo_") || name.Contains("_col_") || name.Contains("basecolor") || name.Contains("color"))
                 { file = f; break; }
             }
 
             if (file == null)
             {
-                _log.Warning("No diffuse PNG found in terrain texture dir: {Dir}", dir);
+                file = imageFiles.FirstOrDefault(f =>
+                {
+                    var n = System.IO.Path.GetFileName(f).ToLowerInvariant();
+                    return !(n.Contains("_nor_") || n.Contains("normal") || n.Contains("_rough_") || n.Contains("rough")
+                        || n.Contains("_ao_") || n.Contains("ambientocclusion") || n.Contains("_metal_") || n.Contains("metallic")
+                        || n.Contains("_disp_") || n.Contains("height"));
+                }) ?? imageFiles.FirstOrDefault();
+            }
+
+            if (file == null)
+            {
+                _log.Warning("No terrain image found in terrain texture dir: {Dir}", dir);
                 _textureCache[textureId] = null;
                 return null;
             }
 
             try
             {
-                _log.Information("Loading terrain texture: {File}", System.IO.Path.GetFileName(file));
+                _log.Debug("Loading terrain texture: {File}", System.IO.Path.GetFileName(file));
                 using var img = SixLabors.ImageSharp.Image.Load<Rgba32>(file);
 
                 // Downscale large textures to avoid hitching and excess VRAM use
@@ -410,7 +747,7 @@ using Veilborne.Core.Ecs.Components;
                 });
                 var tex = new Texture2D(_graphicsDevice, tw, th, false, SurfaceFormat.Color);
                 tex.SetData(data);
-                _log.Information("Terrain texture loaded: {Id} ({W}x{H})", textureId, tw, th);
+                _log.Debug("Terrain texture loaded: {Id} ({W}x{H})", textureId, tw, th);
                 _textureCache[textureId] = tex;
                 return tex;
             }

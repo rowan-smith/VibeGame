@@ -1,0 +1,28 @@
+{
+  "WorldSeed": 0,
+  "EditableRadius": 3,
+  "ReadOnlyRadius": 6,
+  "LowLodRadius": 12,
+  "MaxActiveVoxelChunks": 128,
+  "Noise": {
+    "Seed": 12345,
+    "TemperatureFrequency": 0.0055,
+    "MoistureFrequency": 0.0060,
+    "FertilityFrequency": 0.0070,
+    "WarpAmount": 36.0,
+    "WarpFrequency": 0.0035,
+    "ElevationMin": 0.0,
+    "ElevationMax": 12.0,
+    "WeightTemperature": 1.0,
+    "WeightMoisture": 1.0,
+    "WeightElevation": 1.2,
+    "WeightFertility": 0.8
+  },
+  "BiomeProvider": {
+    "AverageCellSize": 300.0,
+    "Jitter": 0.85,
+    "WarpFrequencyScale": 1.0,
+    "WarpAmplitudeScale": 1.0,
+    "BlendWidthWorld": 90.0
+  }
+}

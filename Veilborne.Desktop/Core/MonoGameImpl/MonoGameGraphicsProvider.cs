@@ -220,6 +220,16 @@ namespace Veilborne.Core.MonoGameImpl
                 _game.ClearColor = _clearColor;
         }
 
+        public void SetSkyClearColor(System.Numerics.Vector3 color)
+        {
+            _clearColor = new Color(
+                Math.Clamp(color.X, 0f, 1f),
+                Math.Clamp(color.Y, 0f, 1f),
+                Math.Clamp(color.Z, 0f, 1f));
+            if (_game != null)
+                _game.ClearColor = _clearColor;
+        }
+
         public void ToggleBorderless()
         {
             if (_game != null)

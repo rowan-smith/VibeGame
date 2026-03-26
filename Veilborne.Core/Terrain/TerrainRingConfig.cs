@@ -4,20 +4,20 @@ namespace Veilborne.Terrain
     {
         // Base radii (starting point)
         public int EditableRadius { get; set; } = 1;
-        public int ReadOnlyRadius { get; set; } = 3;
-        public int LowLodRadius { get; set; } = 8;
+        public int ReadOnlyRadius { get; set; } = 2;
+        public int LowLodRadius { get; set; } = 4;
 
         // Min/Max caps for adaptive sizing
         public int MinEditable { get; set; } = 1;
         public int MaxEditable { get; set; } = 2;
         public int MinReadOnly { get; set; } = 2;
-        public int MaxReadOnly { get; set; } = 8;
-        public int MinLowLod { get; set; } = 6;
-        public int MaxLowLod { get; set; } = 24;
+        public int MaxReadOnly { get; set; } = 4;
+        public int MinLowLod { get; set; } = 3;
+        public int MaxLowLod { get; set; } = 8;
 
         // Update pacing (in frames)
         // ReadOnly ring updates every N frames; LowLod updates every N*2 frames.
-        public int ReadOnlyUpdateInterval { get; set; } = 2;
+        public int ReadOnlyUpdateInterval { get; set; } = 4;
 
         // Tuning multipliers
         public float SpeedScale { get; set; } = 0.15f;    // chunks per m/s
@@ -25,13 +25,15 @@ namespace Veilborne.Terrain
         public float FpsTarget { get; set; } = 60f;       // target framerate for budget heuristic
 
         // Mesh build throttling
-        public int MaxMeshBuildsPerFrame { get; set; } = 3;
+        public int MaxMeshBuildsPerFrame { get; set; } = 2;
 
         // Chunk update/install throttling to smooth movement spikes
         public int MaxEditableRebuildsPerFrame { get; set; } = 1;
-        public int MaxReadOnlyChunkUpdatesPerFrame { get; set; } = 2;
+        public int MaxReadOnlyChunkUpdatesPerFrame { get; set; } = 1;
         public int MaxLowLodChunkUpdatesPerFrame { get; set; } = 1;
         public int MaxReadOnlyInstallsPerFrame { get; set; } = 1;
         public int MaxLowLodInstallsPerFrame { get; set; } = 1;
+        public int MaxReadOnlyConcurrentJobs { get; set; } = 8;
+        public int MaxLowLodConcurrentJobs { get; set; } = 8;
     }
 }

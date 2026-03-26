@@ -1,0 +1,67 @@
+{
+  "WorldSeed": 0,
+  "EditableRadius": 3,
+  "ReadOnlyRadius": 6,
+  "LowLodRadius": 12,
+  "MaxActiveVoxelChunks": 128,
+  "DigRadius": 1.1,
+  "DigStrength": 1.0,
+  "DigFalloff": "Linear",
+  "DigMaxDepth": 2.2,
+  "DigSmoothness": 0.28,
+  "TerrainLoadQueueRadius": 4,
+  "TerrainLayers": {
+    "SurfaceTextureId": "brown_mud_leaves",
+    "SubsurfaceTextureId": "brown_mud",
+    "DeepTextureId": "rock_3",
+    "SubsurfaceDepth": 0.25,
+    "DeepDepth": 0.90
+  },
+  "BiomeMining": {
+    "aetherwild_grove": {
+      "OreType": "coal",
+      "OreNoiseFrequency": 6.0,
+      "OreThreshold": 0.70,
+      "OreMinDepth": 0.30,
+      "OreMaxDepth": 1.10,
+      "OreSpawnChance": 0.12
+    },
+    "mistral_dunes": {
+      "OreType": "copper",
+      "OreNoiseFrequency": 8.0,
+      "OreThreshold": 0.75,
+      "OreMinDepth": 0.35,
+      "OreMaxDepth": 1.20,
+      "OreSpawnChance": 0.09
+    },
+    "frostveil_tundra": {
+      "OreType": "iron",
+      "OreNoiseFrequency": 7.0,
+      "OreThreshold": 0.73,
+      "OreMinDepth": 0.40,
+      "OreMaxDepth": 1.35,
+      "OreSpawnChance": 0.10
+    }
+  },
+  "Noise": {
+    "Seed": 12345,
+    "TemperatureFrequency": 0.0055,
+    "MoistureFrequency": 0.0060,
+    "FertilityFrequency": 0.0070,
+    "WarpAmount": 36.0,
+    "WarpFrequency": 0.0035,
+    "ElevationMin": 0.0,
+    "ElevationMax": 12.0,
+    "WeightTemperature": 1.0,
+    "WeightMoisture": 1.0,
+    "WeightElevation": 1.2,
+    "WeightFertility": 0.8
+  },
+  "BiomeProvider": {
+    "AverageCellSize": 300.0,
+    "Jitter": 0.85,
+    "WarpFrequencyScale": 1.0,
+    "WarpAmplitudeScale": 1.0,
+    "BlendWidthWorld": 90.0
+  }
+}

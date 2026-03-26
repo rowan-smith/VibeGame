@@ -5,7 +5,9 @@ using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
 using Veilborne.Core.Items;
 using Veilborne.Core.Settings;
+using Veilborne.Core.Sky;
 using Veilborne.Objects;
+using Serilog;
 
 namespace Veilborne.Core
 {
@@ -22,7 +24,9 @@ namespace Veilborne.Core
         private readonly IInputProvider _input;
         private readonly IEcsRuntime _ecsRuntime;
         private readonly IGameSettingsService _settings;
+        private readonly ISkyLightingService _sky;
         private readonly bool _isDevelopmentEnvironment;
+        private readonly ILogger _log = Log.ForContext<VeilborneEngine>();
 
         // These will be initialized by ECS manager after MonoGame is ready
         private IUiProvider _ui;
@@ -30,9 +34,12 @@ namespace Veilborne.Core
 
         private bool _showDebugOverlay;
         private bool _showDebugChunkBounds;
+        private bool _showColliderRadii;
         private bool _isFullscreenApplied;
         private int _selectedHotbarSlot = 0;
         private Entity _playerEntity = default!;
+        private Entity _uiCanvasEntity = default!;
+        private Entity _crosshairEntity = default!;
         private float _lastGameDt;
 
         // Simple UI state machine
@@ -79,9 +86,12 @@ namespace Veilborne.Core
         private int _loadingLoadedChunks;
         private int _loadingDesiredChunks;
         private int _loadingGeneratingChunks;
+        private int _loadingEntities;
         private double _loadingCompleteTime;
         private bool _requestedExit;
-        private Task _digTask = Task.CompletedTask;
+        private GameState _lastLoggedState = (GameState)(-1);
+        private bool _uiLeftReleaseThisFrame;
+        private bool _uiLeftReleaseConsumed;
 
         // Initialization splash timing
         private const double InitDurationSeconds = 0.75;
@@ -97,7 +107,8 @@ namespace Veilborne.Core
             IGameLoopHost loopHost,
             IInputProvider input,
             IEcsRuntime ecsRuntime,
-            IGameSettingsService settings)
+            IGameSettingsService settings,
+            ISkyLightingService sky)
         {
             _cameraController = cameraController;
             _physics = physics;
@@ -110,6 +121,7 @@ namespace Veilborne.Core
             _input = input;
             _ecsRuntime = ecsRuntime;
             _settings = settings;
+            _sky = sky;
             _isDevelopmentEnvironment = RuntimeEnvironment.IsDevelopmentEnvironment;
         }
 
@@ -123,7 +135,58 @@ namespace Veilborne.Core
             _playerEntity.AddComponent(new PlayerComponent());
             var transform = new TransformComponent { Position = new Vector3(0, 5, -10) };
             _playerEntity.AddComponent(transform);
-            _playerEntity.AddComponent(new PhysicsComponent { CollisionRadius = 0.5f, IsStatic = false });
+            _playerEntity.AddComponent(new ColliderComponent { Radius = 0.5f });
+            _playerEntity.AddComponent(new CollisionFilterComponent
+            {
+                Layer = CollisionLayer.Player,
+                CollidesWith = CollisionLayer.WorldStatic
+            });
+            _playerEntity.AddComponent(new VelocityComponent { Linear = Vector3.Zero });
+            _playerEntity.AddComponent(new VerticalVelocityComponent { Value = 0f });
+            _playerEntity.AddComponent(new AccelerationComponent { Value = Vector3.Zero });
+            _playerEntity.AddComponent(new ForceComponent { Value = Vector3.Zero });
+            _playerEntity.AddComponent(new DragComponent { Linear = 0f, Angular = 0f });
+            _playerEntity.AddComponent(new MassComponent { Value = 1f, IsKinematic = false });
+            _playerEntity.AddComponent(new RigidbodyComponent { IsKinematic = false, IsSleeping = false });
+            _playerEntity.AddComponent(new GravityComponent { Direction = new Vector3(0f, -20f, 0f) });
+            _playerEntity.AddComponent(new HealthComponent { Current = 100f, Max = 100f });
+            _playerEntity.AddComponent(new TeamComponent { Id = 1 });
+            _playerEntity.AddComponent(new NameComponent { Value = "Player" });
+            _playerEntity.AddComponent(new TagComponent { Name = "Player" });
+            _playerEntity.AddComponent(new ParentComponent { EntityId = -1 });
+            _playerEntity.AddComponent(new ChildrenComponent { EntityIds = [] });
+            _playerEntity.AddComponent(new LifetimeComponent { RemainingSeconds = 0f });
+            _playerEntity.AddComponent(new DirtyComponent { NeedsUpdate = false });
+            _playerEntity.AddComponent(new BillboardComponent { FaceCamera = false });
+            _playerEntity.AddComponent(new ShadowCasterComponent { CastsShadows = true });
+            _playerEntity.AddComponent(new MaterialComponent { ShaderId = string.Empty, Tint = Vector4.One });
+            _playerEntity.AddComponent(new JumpComponent
+            {
+                JumpSpeed = 8.5f,
+                JumpBufferSeconds = 0.12f,
+                CoyoteSeconds = 0.10f,
+                JumpBufferTimer = 0f,
+                CoyoteTimer = 0f,
+                IsGrounded = false
+            });
+            _playerEntity.AddComponent(new MoveInputComponent { HorizontalDisplacement = Vector3.Zero });
+            _playerEntity.AddComponent(new DigInteractionComponent
+            {
+                IsDigHeld = false,
+                HasGroundHit = false,
+                GroundHit = Vector3.Zero,
+                ProbeMaxDistance = 6f,
+                ProbeStep = 0.25f,
+                ProbeEpsilon = 0.05f,
+                ToolBreakSpeedMultiplier = 1f,
+                ToolStaminaCost = 0
+            });
+            _playerEntity.AddComponent(new MiningHitComponent
+            {
+                HasHit = false,
+                HitPosition = Vector3.Zero,
+                BlockType = Terrain.ResourceBlockType.None
+            });
             var cameraComp = new CameraComponent
             {
                 Position = transform.Position,
@@ -133,7 +196,29 @@ namespace Veilborne.Core
             };
             _playerEntity.AddComponent(cameraComp);
 
+            // ECS UI canvas + crosshair element
+            _uiCanvasEntity = _entities.CreateEntity();
+            _uiCanvasEntity.AddComponent(new CanvasComponent
+            {
+                TargetCameraEntityId = _playerEntity.Id,
+                Visible = true
+            });
+
+            _crosshairEntity = _entities.CreateEntity();
+            _crosshairEntity.AddComponent(new UIElementKindComponent { Kind = "Crosshair" });
+            _crosshairEntity.AddComponent(new UIElementComponent
+            {
+                Bounds = new Rect(0, 0, 0, 0),
+                Text = "idle"
+            });
+            _crosshairEntity.AddComponent(new RenderComponent
+            {
+                Visible = true,
+                ModelPath = string.Empty
+            });
+
             _state = GameState.MainMenu;
+            LogBindings();
 
             _loopHost.SetLoadContentCallback(() =>
             {
@@ -156,17 +241,17 @@ namespace Veilborne.Core
 
             _input.UpdateStates();
             _time.Update(dt);
+            _sky.Update(dt);
+            _graphics.SetSkyClearColor(_sky.SkyColor);
             float gameDt = _time.DeltaTime;
             _lastGameDt = gameDt;
 
             HandleInput(gameDt);
+            LogStateTransition();
 
             if (_state == GameState.Playing)
             {
                 _ecsRuntime.UpdateSystems(gameDt);
-                // Process terrain async completions (RO/LOD chunk installs + spawned entities).
-                if (_terrain is TerrainManager tm)
-                    tm.PumpAsyncJobs().GetAwaiter().GetResult();
             }
             else if (_state == GameState.Initialization)
             {
@@ -175,9 +260,10 @@ namespace Veilborne.Core
             else if (_state == GameState.Loading)
             {
                 var cam = _playerEntity.GetComponent<CameraComponent>();
-                _terrain.UpdateCenter(cam.Position);
                 if (_terrain is TerrainManager tm)
                 {
+                    tm.SetWarmupMode(true);
+                    tm.UpdateAround(cam.Position, 0);
                     tm.PumpAsyncJobs().GetAwaiter().GetResult();
                     var loading = tm.GetLoadingProgress();
                     _loadingProgress = loading.Progress01;
@@ -185,6 +271,7 @@ namespace Veilborne.Core
                     _loadingDesiredChunks = loading.DesiredChunks;
                     _loadingLoadedChunks = loading.LoadedChunks;
                     _loadingGeneratingChunks = loading.GeneratingChunks;
+                    _loadingEntities = loading.LoadedEntities;
                 }
                 else
                 {
@@ -193,6 +280,7 @@ namespace Veilborne.Core
                     _loadingDesiredChunks = 0;
                     _loadingLoadedChunks = 0;
                     _loadingGeneratingChunks = 0;
+                    _loadingEntities = 0;
                 }
 
                 if (_loadingProgress >= 0.999f && _loadingGeneratingChunks == 0)
@@ -202,11 +290,16 @@ namespace Veilborne.Core
 
                 if (_loadingCompleteTime >= 0.2)
                 {
+                    if (_terrain is TerrainManager readyTm)
+                        readyTm.SetWarmupMode(false);
                     _state = GameState.Playing;
                     _loadingCompleteTime = 0;
                     _loadingProgress = 0;
                     _input.HideCursor();
+                    _log.Debug("Entered Playing: cursor hidden and mouse lock requested.");
                 }
+
+                _playerEntity.SetComponent(cam);
             }
         }
 
@@ -217,7 +310,6 @@ namespace Veilborne.Core
                 var camera = _playerEntity.GetComponent<CameraComponent>();
                 _graphics.Begin3D(camera);
                 _ecsRuntime.RenderSystems(_lastGameDt, camera);
-                if (_showDebugChunkBounds) _terrain.RenderDebugChunkBounds(camera);
                 _graphics.End3D();
             }
         }
@@ -233,6 +325,8 @@ namespace Veilborne.Core
                 case GameState.Loading: DrawLoadingScreen(); break;
                 case GameState.Playing:
                     if (_showDebugOverlay) DrawDebugOverlay();
+                    if (_showDebugChunkBounds) DrawChunkBoundsOverlay();
+                    if (_showColliderRadii) DrawColliderRadiiOverlay();
                     if (_settings.Current.General.ShowCrosshair) DrawCrosshair();
                     DrawHotbar();
                     break;
@@ -245,6 +339,9 @@ namespace Veilborne.Core
 
         private void HandleInput(float dt)
         {
+            _uiLeftReleaseThisFrame = _input.IsMouseButtonReleased(InputKeys.MOUSE_BUTTON_LEFT);
+            _uiLeftReleaseConsumed = false;
+
             if (_captureIgnoreFrames > 0)
                 _captureIgnoreFrames--;
 
@@ -261,10 +358,13 @@ namespace Veilborne.Core
             {
                 if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay)) _showDebugOverlay = !_showDebugOverlay;
                 if (_input.IsKeyPressed(InputKeys.KEY_F2)) _showDebugChunkBounds = !_showDebugChunkBounds;
+                if (_input.IsKeyPressed(InputKeys.KEY_F3)) _showColliderRadii = !_showColliderRadii;
                 if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay))
                     _settings.Update(s => s.Debug.ShowDebugOverlay = _showDebugOverlay);
                 if (_input.IsKeyPressed(InputKeys.KEY_F2))
                     _settings.Update(s => s.Debug.ShowChunkBounds = _showDebugChunkBounds);
+                if (_input.IsKeyPressed(InputKeys.KEY_F3))
+                    _settings.Update(s => s.Debug.ShowColliderRadii = _showColliderRadii);
             }
 
             // Toggle fullscreen on bound key press
@@ -287,6 +387,8 @@ namespace Veilborne.Core
                     // Allow cancel back to menu if needed
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
                     {
+                        if (_terrain is TerrainManager cancelTm)
+                            cancelTm.SetWarmupMode(false);
                         _state = GameState.MainMenu;
                         _loadingCompleteTime = 0;
                         _loadingProgress = 0;
@@ -294,6 +396,7 @@ namespace Veilborne.Core
                         _loadingLoadedChunks = 0;
                         _loadingDesiredChunks = 0;
                         _loadingGeneratingChunks = 0;
+                        _loadingEntities = 0;
                         _input.ShowCursor();
                     }
                     break;
@@ -325,18 +428,8 @@ namespace Veilborne.Core
                             _selectedHotbarSlot = i;
                     }
 
-                    // Example dig action
-                    if (KeyBindingTokens.IsPressed(_input, keyboard.DigInteract))
-                    {
-                        if (_terrain is IEditableTerrain editable && _digTask.IsCompleted)
-                        {
-                            // Only dig if we are looking at the ground in front of us
-                            if (TryGetGroundHit(6f, 0.25f, 0.05f, out var hit))
-                            {
-                                _digTask = editable.DigSphereAsync(hit, 1f, 1f, VoxelFalloff.Linear);
-                            }
-                        }
-                    }
+                    ApplySelectedToolToDig();
+
                     break;
 
                 case GameState.Paused:
@@ -369,15 +462,38 @@ namespace Veilborne.Core
             var cam = _playerEntity.GetComponent<CameraComponent>();
             cam.Position = new Vector3(0, 5, -10);
             cam.Target = Vector3.Zero;
+            _playerEntity.SetComponent(cam);
 
             // Begin loading/warmup
             _state = GameState.Loading;
+            if (_terrain is TerrainManager tm)
+                tm.SetWarmupMode(true);
+            _log.Debug("State transition requested: {State}", _state);
             _loadingProgress = 0;
             _loadingStageText = "Preparing world";
             _loadingLoadedChunks = 0;
             _loadingDesiredChunks = 0;
             _loadingGeneratingChunks = 0;
+            _loadingEntities = 0;
             _loadingCompleteTime = 0;
+        }
+
+        private void LogBindings()
+        {
+            var k = _settings.Current.Keyboard;
+            _log.Debug(
+                "Effective movement bindings: Fwd=[{F1},{F2}] Back=[{B1},{B2}] Left=[{L1},{L2}] Right=[{R1},{R2}]",
+                k.Forward.Primary, k.Forward.Secondary,
+                k.Backward.Primary, k.Backward.Secondary,
+                k.Left.Primary, k.Left.Secondary,
+                k.Right.Primary, k.Right.Secondary);
+        }
+
+        private void LogStateTransition()
+        {
+            if (_state == _lastLoggedState) return;
+            _lastLoggedState = _state;
+            _log.Debug("Game state: {State}", _state);
         }
 
         private void DrawMainMenu()
@@ -460,6 +576,10 @@ namespace Veilborne.Core
                 : "Chunks: preparing";
             int ctw = _ui.MeasureText(chunkText, 18);
             _ui.DrawText(chunkText, w / 2 - ctw / 2, y + barH + 36, 18, new Vector4(0.82f, 0.88f, 0.95f, 1f));
+
+            string entityText = $"Entities/POIs: {_loadingEntities}";
+            int etw = _ui.MeasureText(entityText, 18);
+            _ui.DrawText(entityText, w / 2 - etw / 2, y + barH + 58, 18, new Vector4(0.82f, 0.88f, 0.95f, 1f));
 
             int ptw = _ui.MeasureText(progressText, 20);
             _ui.DrawText(progressText, w / 2 - ptw / 2, y - 30, 20, Vector4.One);
@@ -602,6 +722,8 @@ namespace Veilborne.Core
                 {
                     _ui.DrawText("General", contentX, contentY, 28, Vector4.One);
                     contentY += 46;
+                    _ui.DrawText("Input", contentX, contentY, 20, new Vector4(0.75f, 0.9f, 1f, 1f));
+                    contentY += 30;
                     DrawLabeledOption("Mouse Sensitivity", $"{settings.General.MouseSensitivity:0.0000}", contentX, contentY);
                     if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
                     {
@@ -633,6 +755,8 @@ namespace Veilborne.Core
                 {
                     _ui.DrawText("Graphics", contentX, contentY, 28, Vector4.One);
                     contentY += 46;
+                    _ui.DrawText("Display", contentX, contentY, 20, new Vector4(0.75f, 0.9f, 1f, 1f));
+                    contentY += 30;
 
                     DrawLabeledOption("Target FPS", $"{settings.Graphics.TargetFps}", contentX, contentY);
                     if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
@@ -679,12 +803,29 @@ namespace Veilborne.Core
                         _settings.Update(s => s.Graphics.Brightness = Math.Min(150, s.Graphics.Brightness + 5));
                         ApplySettings();
                     }
+                    contentY += lineH;
+
+                    DrawLabeledOption("Biome Crossfade", settings.Graphics.BiomeTextureCrossfade ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Graphics.BiomeTextureCrossfade = !s.Graphics.BiomeTextureCrossfade);
+                        ApplySettings();
+                    }
                     break;
                 }
                 case SettingsTab.Debug:
                 {
                     _ui.DrawText("Debug", contentX, contentY, 28, Vector4.One);
                     contentY += 46;
+                    int maxContentY = panelY + panelH - 120;
+                    int compactLineH = 28;
+                    bool compact = contentY + 14 * compactLineH > maxContentY;
+                    if (compact)
+                    {
+                        lineH = compactLineH;
+                    }
+                    _ui.DrawText("Overlays", contentX, contentY, 20, new Vector4(0.75f, 0.9f, 1f, 1f));
+                    contentY += compact ? 16 : 30;
 
                     DrawLabeledOption("Debug Overlay (F1)", settings.Debug.ShowDebugOverlay ? "On" : "Off", contentX, contentY);
                     if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
@@ -702,6 +843,16 @@ namespace Veilborne.Core
                     }
                     contentY += lineH;
 
+                    DrawLabeledOption("Collider Radii (F3)", settings.Debug.ShowColliderRadii ? "On" : "Off", contentX, contentY);
+                    if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
+                    {
+                        _settings.Update(s => s.Debug.ShowColliderRadii = !s.Debug.ShowColliderRadii);
+                        ApplySettings();
+                    }
+                    contentY += lineH;
+
+                    _ui.DrawText("Rendering & Rings", contentX, contentY, 20, new Vector4(0.75f, 0.9f, 1f, 1f));
+                    contentY += compact ? 16 : 30;
                     DrawLabeledOption("Wireframe", settings.Debug.Wireframe ? "On" : "Off", contentX, contentY);
                     if (Button("Toggle", new Rect(contentX + 360, contentY - 4, 92, 32), 18))
                     {
@@ -734,6 +885,8 @@ namespace Veilborne.Core
                     }
                     contentY += lineH;
 
+                    _ui.DrawText("Gameplay", contentX, contentY, 20, new Vector4(0.75f, 0.9f, 1f, 1f));
+                    contentY += compact ? 16 : 30;
                     DrawLabeledOption("Run Speed Multiplier", $"{settings.Debug.RunSpeedMultiplier}%", contentX, contentY);
                     if (Button("-", new Rect(contentX + 360, contentY - 4, 42, 32), 22))
                     {
@@ -1077,11 +1230,13 @@ namespace Veilborne.Core
             {
                 _showDebugOverlay = settings.Debug.ShowDebugOverlay;
                 _showDebugChunkBounds = settings.Debug.ShowChunkBounds;
+                _showColliderRadii = settings.Debug.ShowColliderRadii;
             }
             else
             {
                 _showDebugOverlay = false;
                 _showDebugChunkBounds = false;
+                _showColliderRadii = false;
             }
 
             if (!initialApply)
@@ -1109,7 +1264,9 @@ namespace Veilborne.Core
             Vector2 mouse = _input.GetMousePosition();
             bool hover = mouse.X >= rect.X && mouse.X <= rect.X + rect.Width &&
                          mouse.Y >= rect.Y && mouse.Y <= rect.Y + rect.Height;
-            bool click = hover && _input.IsMouseButtonReleased(InputKeys.MOUSE_BUTTON_LEFT);
+            bool click = hover && _uiLeftReleaseThisFrame && !_uiLeftReleaseConsumed;
+            if (click)
+                _uiLeftReleaseConsumed = true;
 
             Vector4 bg = hover ? new Vector4(60 / 255f, 70 / 255f, 85 / 255f, 1.0f) : new Vector4(40 / 255f, 46 / 255f, 56 / 255f, 1.0f);
             Vector4 fg = Vector4.One; // white
@@ -1127,23 +1284,178 @@ namespace Veilborne.Core
         private void DrawDebugOverlay()
         {
             int fps = _time.Fps;
+            int ups = _time.Ups;
             var cam = _playerEntity.GetComponent<CameraComponent>();
             var pos = cam.Position;
             int x = 10;
             int y = 10;
-            _ui.DrawText($"FPS: {fps}", x, y, 20, new Vector4(0, 1, 0, 1));
+            _ui.DrawText($"FPS: {fps}  UPS: {ups}", x, y, 20, new Vector4(0, 1, 0, 1));
             _ui.DrawText($"Pos: {pos.X:0.0}, {pos.Y:0.0}, {pos.Z:0.0}", x, y + 22, 20, Vector4.One);
+            int hours = (int)MathF.Floor(_sky.TimeOfDayHours24) % 24;
+            int minutes = (int)MathF.Floor((_sky.TimeOfDayHours24 - hours) * 60f) % 60;
+            _ui.DrawText($"Time: {hours:00}:{minutes:00}", x, y + 44, 20, new Vector4(0.95f, 0.9f, 0.7f, 1f));
 
             if (_terrain is IDebugTerrain dbg)
             {
                 var info = dbg.GetDebugInfo(pos);
-                int line = y + 44;
+                int line = y + 66;
                 _ui.DrawText($"Chunk: ({info.ChunkX}, {info.ChunkZ})", x, line, 20, Vector4.One);
                 line += 22;
                 _ui.DrawText($"Local: ({info.LocalX}, {info.LocalZ}) of {info.ChunkSize} (tile {info.TileSize:0.##}m)", x, line, 20, Vector4.One);
                 line += 22;
                 _ui.DrawText($"Biome: {info.BiomeId}", x, line, 20, Vector4.One);
             }
+        }
+
+        private void DrawChunkBoundsOverlay()
+        {
+            if (_terrain is not IDebugTerrain debugTerrain) return;
+            if (!_playerEntity.TryGetComponent<CameraComponent>(out var camera)) return;
+
+            var cam = _playerEntity.GetComponent<CameraComponent>();
+            var info = debugTerrain.GetDebugInfo(cam.Position);
+            float chunkWorld = info.ChunkSize * info.TileSize;
+            float yBase = 0f;
+            float yTop = 24f;
+
+            for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int cx = info.ChunkX + dx;
+                int cz = info.ChunkZ + dz;
+                var center = new Vector3(
+                    (cx + 0.5f) * chunkWorld,
+                    yBase,
+                    (cz + 0.5f) * chunkWorld);
+
+                Vector4 boxColor = (dx == 0 && dz == 0)
+                    ? new Vector4(0.2f, 0.95f, 0.2f, 1f)
+                    : new Vector4(0.2f, 0.6f, 1f, 1f);
+
+                DrawProjectedBoundsRectangle(center, new Vector3(chunkWorld, yTop, chunkWorld), boxColor, camera);
+                DrawChunkAxesGizmo(center, chunkWorld * 0.2f, camera);
+            }
+        }
+
+        private void DrawColliderRadiiOverlay()
+        {
+            if (!_playerEntity.TryGetComponent<CameraComponent>(out var camera)) return;
+
+            foreach (var entity in _entities.GetEntitiesWith<WorldObjectComponent, TransformComponent>())
+            {
+                if (!entity.TryGetComponent<ColliderComponent>(out var collider) || collider.Radius <= 0.01f)
+                    continue;
+
+                var t = entity.GetComponent<TransformComponent>();
+                var toCamera = t.Position - camera.Position;
+                if (toCamera.LengthSquared() > 120f * 120f)
+                    continue;
+                if (!TryProjectWorldToScreen(t.Position, camera, out var center2d)) continue;
+                if (!TryProjectWorldToScreen(t.Position + Vector3.UnitX * collider.Radius, camera, out var edge2d)) continue;
+
+                float radiusPx = Vector2.Distance(center2d, edge2d);
+                if (radiusPx < 2f || radiusPx > 600f) continue;
+
+                var color = new Vector4(1f, 0.42f, 0.2f, 0.9f);
+                if (entity.TryGetComponent<CollisionFilterComponent>(out var filter) && filter.Layer == CollisionLayer.Foliage)
+                    color = new Vector4(0.2f, 0.9f, 0.3f, 0.9f);
+                DrawCircle(center2d, radiusPx, color, 20);
+            }
+        }
+
+        private void DrawProjectedBoundsRectangle(Vector3 center, Vector3 size, Vector4 color, CameraComponent camera)
+        {
+            float hx = size.X * 0.5f;
+            float hz = size.Z * 0.5f;
+            Vector3[] corners =
+            [
+                new(center.X - hx, center.Y, center.Z - hz),
+                new(center.X + hx, center.Y, center.Z - hz),
+                new(center.X + hx, center.Y, center.Z + hz),
+                new(center.X - hx, center.Y, center.Z + hz)
+            ];
+
+            Span<Vector2> projected = stackalloc Vector2[4];
+            for (int i = 0; i < corners.Length; i++)
+            {
+                if (!TryProjectWorldToScreen(corners[i], camera, out projected[i]))
+                    return;
+            }
+
+            for (int i = 0; i < 4; i++)
+            {
+                var a = projected[i];
+                var b = projected[(i + 1) % 4];
+                _ui.DrawLine((int)a.X, (int)a.Y, (int)b.X, (int)b.Y, color);
+            }
+        }
+
+        private void DrawCircle(Vector2 center, float radius, Vector4 color, int segments)
+        {
+            if (segments < 6) segments = 6;
+            float step = (2f * MathF.PI) / segments;
+            Vector2 prev = center + new Vector2(radius, 0f);
+            for (int i = 1; i <= segments; i++)
+            {
+                float angle = i * step;
+                Vector2 next = center + new Vector2(MathF.Cos(angle) * radius, MathF.Sin(angle) * radius);
+                _ui.DrawLine((int)prev.X, (int)prev.Y, (int)next.X, (int)next.Y, color);
+                prev = next;
+            }
+        }
+
+        private void DrawChunkAxesGizmo(Vector3 center, float axisLen, CameraComponent camera)
+        {
+            var origin = new Vector3(center.X, center.Y + 1f, center.Z);
+            DrawProjectedLine(origin, origin + Vector3.UnitX * axisLen, new Vector4(1f, 0.25f, 0.25f, 1f), camera); // X
+            DrawProjectedLine(origin, origin + Vector3.UnitY * axisLen, new Vector4(0.25f, 1f, 0.25f, 1f), camera); // Y
+            DrawProjectedLine(origin, origin + Vector3.UnitZ * axisLen, new Vector4(0.25f, 0.6f, 1f, 1f), camera); // Z
+        }
+
+        private void DrawProjectedLine(Vector3 aWorld, Vector3 bWorld, Vector4 color, CameraComponent camera)
+        {
+            if (!TryProjectWorldToScreen(aWorld, camera, out var a)) return;
+            if (!TryProjectWorldToScreen(bWorld, camera, out var b)) return;
+            _ui.DrawLine((int)a.X, (int)a.Y, (int)b.X, (int)b.Y, color);
+        }
+
+        private bool TryProjectWorldToScreen(Vector3 world, CameraComponent camera, out Vector2 screen)
+        {
+            var forward = Vector3.Normalize(camera.Target - camera.Position);
+            var right = Vector3.Normalize(Vector3.Cross(forward, camera.Up));
+            var up = Vector3.Normalize(Vector3.Cross(right, forward));
+
+            var rel = world - camera.Position;
+            float xView = Vector3.Dot(rel, right);
+            float yView = Vector3.Dot(rel, up);
+            float zView = Vector3.Dot(rel, forward);
+            if (zView <= 0.05f)
+            {
+                screen = Vector2.Zero;
+                return false;
+            }
+
+            float aspect = Math.Max(1f, _graphics.ScreenWidth) / Math.Max(1f, _graphics.ScreenHeight);
+            float fovRad = camera.FovY * (MathF.PI / 180f);
+            float tanHalf = MathF.Tan(fovRad * 0.5f);
+            if (tanHalf <= 1e-5f)
+            {
+                screen = Vector2.Zero;
+                return false;
+            }
+
+            float xNdc = xView / (zView * tanHalf * aspect);
+            float yNdc = yView / (zView * tanHalf);
+            if (xNdc < -1.5f || xNdc > 1.5f || yNdc < -1.5f || yNdc > 1.5f)
+            {
+                screen = Vector2.Zero;
+                return false;
+            }
+
+            float sx = (xNdc * 0.5f + 0.5f) * _graphics.ScreenWidth;
+            float sy = (1f - (yNdc * 0.5f + 0.5f)) * _graphics.ScreenHeight;
+            screen = new Vector2(sx, sy);
+            return true;
         }
 
         private void DrawHotbar()
@@ -1169,53 +1481,34 @@ namespace Veilborne.Core
             }
         }
 
+        private void ApplySelectedToolToDig()
+        {
+            if (!_playerEntity.TryGetComponent<DigInteractionComponent>(out var dig))
+                return;
+
+            var item = _items.GetItemInSlot(_selectedHotbarSlot);
+            dig.ToolBreakSpeedMultiplier = Math.Clamp(item?.BreakSpeedMultiplier ?? 1f, 0.1f, 5f);
+            dig.ToolStaminaCost = Math.Max(0, item?.StaminaCost ?? 0);
+            _playerEntity.SetComponent(dig);
+        }
+
         private void DrawCrosshair()
         {
+            Vector4 color = new Vector4(0.9f, 0.9f, 0.9f, 1.0f);
+            if (_crosshairEntity.TryGetComponent<UIElementComponent>(out var uiElement))
+            {
+                uiElement.Bounds = new Rect(_graphics.ScreenWidth / 2f, _graphics.ScreenHeight / 2f, 6f, 6f);
+                _crosshairEntity.SetComponent(uiElement);
+                if (uiElement.Text == "hit")
+                    color = new Vector4(0, 1, 0, 1);
+            }
+
             int cx = _graphics.ScreenWidth / 2;
             int cy = _graphics.ScreenHeight / 2;
             int size = 6;
-
-            // Determine color based on whether we are aiming at diggable ground
-            Vector4 color = new Vector4(0.9f, 0.9f, 0.9f, 1.0f);
-            if (_state == GameState.Playing && TryGetGroundHit(6f, 0.25f, 0.05f, out _))
-            {
-                color = new Vector4(0, 1, 0, 1);
-            }
-
             _ui.DrawLine(cx - size, cy, cx + size, cy, color);
             _ui.DrawLine(cx, cy - size, cx, cy + size, color);
         }
 
-        private bool TryGetGroundHit(float maxDistance, float step, float epsilon, out Vector3 hit)
-        {
-            hit = default;
-            var cam = _playerEntity.GetComponent<CameraComponent>();
-
-            // Forward direction of camera
-            Vector3 dir = Vector3.Normalize(cam.Target - cam.Position);
-
-            // Require some downward component to be considered "looking at the ground"
-            float downDot = Vector3.Dot(dir, Vector3.UnitY);
-            if (downDot > -0.15f) // not looking down enough
-            {
-                return false;
-            }
-
-            float traveled = 0f;
-            Vector3 p = cam.Position;
-            while (traveled <= maxDistance)
-            {
-                p += dir * step;
-                traveled += step;
-
-                float groundY = _terrain.SampleHeight(new Vector3(p.X, 0, p.Z));
-                if (p.Y <= groundY + epsilon)
-                {
-                    hit = new Vector3(p.X, groundY, p.Z);
-                    return true;
-                }
-            }
-            return false;
-        }
     }
 }

@@ -23,17 +23,26 @@ namespace Veilborne.Biomes
         private readonly float _jitter;
         private readonly float _warpFrequency;
         private readonly float _warpAmplitude;
+        private readonly float _blendWidthWorld;
 
         private readonly ILogger _logger = Log.ForContext<SimpleBiomeProvider>();
 
-        public SimpleBiomeProvider(IEnumerable<IBiome> biomes, float averageCellSize = 180f, int seed = 1337, float jitter = 0.85f)
+        public SimpleBiomeProvider(
+            IEnumerable<IBiome> biomes,
+            float averageCellSize = 180f,
+            int seed = 1337,
+            float jitter = 0.85f,
+            float warpFrequencyScale = 1f,
+            float warpAmplitudeScale = 1f,
+            float blendWidthWorld = 90f)
         {
             _biomes = new List<IBiome>(biomes);
             _seed = seed;
             _cellSize = MathF.Max(16f, averageCellSize);
             _jitter = Math.Clamp(jitter, 0f, 1f);
-            _warpFrequency = 1f / MathF.Max(32f, _cellSize * 1.35f);
-            _warpAmplitude = _cellSize * 0.38f;
+            _warpFrequency = (1f / MathF.Max(32f, _cellSize * 1.35f)) * MathF.Max(0.1f, warpFrequencyScale);
+            _warpAmplitude = (_cellSize * 0.38f) * MathF.Max(0f, warpAmplitudeScale);
+            _blendWidthWorld = MathF.Max(1f, blendWidthWorld);
 
             _logger.Debug("Registered {BiomeCount} biomes with avg cell size {CellSize}", _biomes.Count, _cellSize);
         }
@@ -89,6 +98,62 @@ namespace Veilborne.Biomes
             // Map the winning site to a biome index deterministically
             int idx = HashToBiomeIndex(bestSX, bestSY);
             return _biomes[idx];
+        }
+
+        public (IBiome primary, IBiome? secondary, float secondaryBlend) GetBiomeBlendAt(Vector2 worldPos, ITerrainGenerator terrain)
+        {
+            if (_biomes.Count == 0)
+                throw new InvalidOperationException("No biomes registered");
+
+            var warped = Warp(worldPos);
+            int cx = (int)MathF.Floor(warped.X / _cellSize);
+            int cy = (int)MathF.Floor(warped.Y / _cellSize);
+
+            float bestDist = float.MaxValue;
+            float secondDist = float.MaxValue;
+            int bestSX = 0, bestSY = 0;
+            int secondSX = 0, secondSY = 0;
+
+            const int searchRadius = 2;
+            for (int dy = -searchRadius; dy <= searchRadius; dy++)
+            for (int dx = -searchRadius; dx <= searchRadius; dx++)
+            {
+                int sx = cx + dx;
+                int sy = cy + dy;
+                var site = GetSiteWorldPosition(sx, sy);
+                float dxw = warped.X - site.X;
+                float dyw = warped.Y - site.Y;
+                float scale = 0.75f + 0.5f * Hash01(sx, sy, 7919);
+                float dist = MathF.Sqrt((dxw * dxw + dyw * dyw) * (scale * scale));
+
+                if (dist < bestDist)
+                {
+                    secondDist = bestDist;
+                    secondSX = bestSX; secondSY = bestSY;
+                    bestDist = dist;
+                    bestSX = sx; bestSY = sy;
+                }
+                else if (dist < secondDist)
+                {
+                    secondDist = dist;
+                    secondSX = sx; secondSY = sy;
+                }
+            }
+
+            var primary = _biomes[HashToBiomeIndex(bestSX, bestSY)];
+            IBiome? secondary = null;
+            float blend = 0f;
+            if (secondDist < float.MaxValue && secondDist > bestDist)
+            {
+                secondary = _biomes[HashToBiomeIndex(secondSX, secondSY)];
+                float delta = secondDist - bestDist;
+                blend = 1f - Math.Clamp(delta / _blendWidthWorld, 0f, 1f);
+                blend = SmoothStep(blend) * 0.49f;
+            }
+
+            if (secondary is null || string.Equals(secondary.Id, primary.Id, StringComparison.OrdinalIgnoreCase))
+                return (primary, null, 0f);
+            return (primary, secondary, blend);
         }
 
         private Vector2 Warp(Vector2 p)

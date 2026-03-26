@@ -20,6 +20,7 @@ namespace Veilborne.Core.MonoGameImpl
         private Microsoft.Xna.Framework.Input.MouseState _prevMouseState;
         private VeilborneGame? _game;
         private bool _firstLockedDelta = true;
+        private bool _forceLockedRecentering = true;
 
         /// <summary>Wire up so ShowCursor/HideCursor and mouse locking work.</summary>
         public void SetGame(VeilborneGame game) => _game = game;
@@ -46,11 +47,21 @@ namespace Veilborne.Core.MonoGameImpl
                 if (!_game.IsWindowActive)
                 {
                     _firstLockedDelta = true;
+                    _forceLockedRecentering = true;
                     return Vector2.Zero;
                 }
 
                 int cx = _game.GraphicsDevice.Viewport.Width / 2;
                 int cy = _game.GraphicsDevice.Viewport.Height / 2;
+
+                if (_forceLockedRecentering)
+                {
+                    Microsoft.Xna.Framework.Input.Mouse.SetPosition(cx, cy);
+                    _forceLockedRecentering = false;
+                    _firstLockedDelta = false;
+                    return Vector2.Zero;
+                }
+
                 var delta = new Vector2(state.X - cx, state.Y - cy);
                 Microsoft.Xna.Framework.Input.Mouse.SetPosition(cx, cy);
                 if (_firstLockedDelta)
@@ -61,6 +72,7 @@ namespace Veilborne.Core.MonoGameImpl
                 return delta;
             }
             _firstLockedDelta = true;
+            _forceLockedRecentering = true;
             // Free cursor mode — delta from previous position
             var prev = new Vector2(_prevMouseState.X, _prevMouseState.Y);
             return new Vector2(state.X, state.Y) - prev;
@@ -147,6 +159,7 @@ namespace Veilborne.Core.MonoGameImpl
         {
             if (_game != null) { _game.IsMouseVisible = true; _game.MouseLocked = false; }
             _firstLockedDelta = true;
+            _forceLockedRecentering = true;
             UpdateStates();
         }
 
@@ -161,6 +174,7 @@ namespace Veilborne.Core.MonoGameImpl
                 Microsoft.Xna.Framework.Input.Mouse.SetPosition(cx, cy);
             }
             _firstLockedDelta = true;
+            _forceLockedRecentering = true;
             UpdateStates();
         }
     }

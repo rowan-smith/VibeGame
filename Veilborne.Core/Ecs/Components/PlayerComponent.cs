@@ -1,4 +1,9 @@
 namespace Veilborne.Core.Ecs.Components
 {
-    public class PlayerComponent : IComponent;
+/// <summary>
+/// Tags an entity as the player-controlled actor.
+/// </summary>
+ public struct PlayerComponent : IComponent;
 }
+
+

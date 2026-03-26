@@ -21,14 +21,16 @@ namespace Veilborne.Core.Settings
     {
         public int TargetFps { get; set; } = 60;
         public bool Fullscreen { get; set; } = false;
-        public int RenderDistance { get; set; } = 100;
+        public int RenderDistance { get; set; } = 70;
         public int Brightness { get; set; } = 100;
+        public bool BiomeTextureCrossfade { get; set; } = true;
     }
 
     public sealed class DebugSettings
     {
         public bool ShowDebugOverlay { get; set; } = false;
         public bool ShowChunkBounds { get; set; } = false;
+        public bool ShowColliderRadii { get; set; } = false;
         public bool Wireframe { get; set; } = false;
         public bool ShowEditableRing { get; set; } = true;
         public bool ShowReadOnlyRing { get; set; } = true;
@@ -46,8 +48,8 @@ namespace Veilborne.Core.Settings
     {
         public InputBindingSettings Forward { get; set; } = new() { Primary = KeyBindingTokens.KeyUp, Secondary = KeyBindingTokens.KeyW };
         public InputBindingSettings Backward { get; set; } = new() { Primary = KeyBindingTokens.KeyDown, Secondary = KeyBindingTokens.KeyS };
-        public InputBindingSettings Left { get; set; } = new() { Primary = KeyBindingTokens.KeyLeft, Secondary = KeyBindingTokens.KeyD };
-        public InputBindingSettings Right { get; set; } = new() { Primary = KeyBindingTokens.KeyRight, Secondary = KeyBindingTokens.KeyA };
+        public InputBindingSettings Left { get; set; } = new() { Primary = KeyBindingTokens.KeyLeft, Secondary = KeyBindingTokens.KeyA };
+        public InputBindingSettings Right { get; set; } = new() { Primary = KeyBindingTokens.KeyRight, Secondary = KeyBindingTokens.KeyD };
         public InputBindingSettings Jump { get; set; } = new() { Primary = KeyBindingTokens.KeySpace, Secondary = KeyBindingTokens.None };
         public InputBindingSettings DigInteract { get; set; } = new() { Primary = KeyBindingTokens.MouseLeft, Secondary = KeyBindingTokens.None };
         public InputBindingSettings DebugOverlay { get; set; } = new() { Primary = KeyBindingTokens.KeyF1, Secondary = KeyBindingTokens.None };
@@ -176,6 +178,7 @@ namespace Veilborne.Core.Settings
             NormalizeBinding(settings.Keyboard.Backward);
             NormalizeBinding(settings.Keyboard.Left);
             NormalizeBinding(settings.Keyboard.Right);
+            MigrateLegacyLeftRightSwap(settings.Keyboard);
             NormalizeBinding(settings.Keyboard.Jump);
             NormalizeBinding(settings.Keyboard.DigInteract);
             NormalizeBinding(settings.Keyboard.DebugOverlay);
@@ -196,6 +199,19 @@ namespace Veilborne.Core.Settings
         {
             binding.Primary = KeyBindingTokens.Normalize(binding.Primary);
             binding.Secondary = KeyBindingTokens.Normalize(binding.Secondary);
+        }
+
+        private static void MigrateLegacyLeftRightSwap(KeyboardSettings keyboard)
+        {
+            // One-time migration for an older default where left/right WASD secondaries were swapped.
+            if (keyboard.Left.Primary == KeyBindingTokens.KeyLeft &&
+                keyboard.Right.Primary == KeyBindingTokens.KeyRight &&
+                keyboard.Left.Secondary == KeyBindingTokens.KeyD &&
+                keyboard.Right.Secondary == KeyBindingTokens.KeyA)
+            {
+                keyboard.Left.Secondary = KeyBindingTokens.KeyA;
+                keyboard.Right.Secondary = KeyBindingTokens.KeyD;
+            }
         }
     }
 }

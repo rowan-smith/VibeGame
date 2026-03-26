@@ -4,9 +4,7 @@ namespace Veilborne.Biomes
     {
         public float? SlopeMin { get; set; }  // minimum slope in degrees
         public float? SlopeMax { get; set; }  // maximum slope in degrees
-
-        // Optionally, you can add altitude or other rules here
-        // public float? AltitudeMin { get; set; }
-        // public float? AltitudeMax { get; set; }
+        public float? MinAltitude { get; set; }
+        public float? MaxAltitude { get; set; }
     }
 }

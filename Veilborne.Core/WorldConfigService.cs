@@ -30,9 +30,12 @@ namespace Veilborne.Core
         private void Initialize()
         {
             var baseDir = AppContext.BaseDirectory;
+            var coreConfigPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "world.json"));
             var path1 = Path.Combine(baseDir, "assets", "config", "world.json");
             var path2 = Path.Combine(baseDir, "assets", "config", "terrain", "world.json");
-            string? path = File.Exists(path1) ? path1 : (File.Exists(path2) ? path2 : null);
+            string? path = File.Exists(coreConfigPath)
+                ? coreConfigPath
+                : (File.Exists(path1) ? path1 : (File.Exists(path2) ? path2 : null));
 
             if (path != null)
             {
@@ -50,10 +53,16 @@ namespace Veilborne.Core
                 EditableRadius = Config.EditableRadius,
                 ReadOnlyRadius = Config.ReadOnlyRadius,
                 LowLodRadius = Config.LowLodRadius,
+                MaxEditable = Math.Max(1, Config.EditableRadius + 1),
+                MaxReadOnly = Math.Max(2, Config.ReadOnlyRadius + 2),
+                MaxLowLod = Math.Max(3, Config.LowLodRadius + 4),
             };
 
-            NoiseConfig = new MultiNoiseConfig { Seed = Seed };
-            BiomeProviderConfig = new BiomeProviderConfig { Seed = Seed };
+            NoiseConfig = Config.Noise ?? new MultiNoiseConfig();
+            NoiseConfig.Seed = Seed;
+
+            BiomeProviderConfig = Config.BiomeProvider ?? new BiomeProviderConfig();
+            BiomeProviderConfig.Seed = Seed;
         }
     }
 }

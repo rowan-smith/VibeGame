@@ -21,6 +21,10 @@ namespace Veilborne.Core.MonoGameImpl
 
         public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera) =>
             _inner.RenderAt(heights, tileSize, originWorld, camera);
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig) =>
+            _inner.RenderAt(heights, tileSize, originWorld, camera, baseHeights, layerConfig);
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig, Vector4[,]? splatmap) =>
+            _inner.RenderAt(heights, tileSize, originWorld, camera, baseHeights, layerConfig, splatmap);
 
         public void ApplyBiomeTextures(BiomeData biome) => _inner.ApplyBiomeTextures(biome);
         public void ApplyBiomeBlendTextures(BiomeData primary, BiomeData? secondary, float secondaryBlend) => _inner.ApplyBiomeBlendTextures(primary, secondary, secondaryBlend);

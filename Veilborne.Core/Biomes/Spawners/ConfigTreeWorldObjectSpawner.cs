@@ -10,18 +10,18 @@ namespace Veilborne.Biomes.Spawners
 {
     /// <summary>
     /// Config-driven spawner for trees as world objects.
-    /// Uses TreesRegistry and biome AllowedObjects (if provided) or falls back to SpawnRules.BiomeIds.
+    /// Uses WorldObjectRegistry and biome AllowedObjects (if provided) or falls back to SpawnRules.BiomeIds.
     /// Supports per-model rotation.
     /// </summary>
     public sealed class ConfigTreeWorldObjectSpawner : IWorldObjectSpawner
     {
-        private readonly ITreesRegistry _trees;
+        private readonly IWorldObjectRegistry _trees;
         private readonly IEnvironmentSampler _sampler;
         private readonly ITerrainGenerator _envTerrain;
         private readonly IWorldConfigService _config;
         private readonly IReadOnlyList<string>? _allowedIds;
 
-        public ConfigTreeWorldObjectSpawner(ITreesRegistry trees, IEnvironmentSampler sampler, ITerrainGenerator envTerrain, IWorldConfigService config, IReadOnlyList<string>? allowedObjectIds = null)
+        public ConfigTreeWorldObjectSpawner(IWorldObjectRegistry trees, IEnvironmentSampler sampler, ITerrainGenerator envTerrain, IWorldConfigService config, IReadOnlyList<string>? allowedObjectIds = null)
         {
             _trees = trees;
             _sampler = sampler;
@@ -46,7 +46,7 @@ namespace Veilborne.Biomes.Spawners
             float maxZ = originWorld.Y + chunkWorldSize - margin;
 
             // Build candidate tree list
-            List<TreeObjectConfig> candidateDefs = new();
+            List<WorldObjectConfig> candidateDefs = new();
             if (_allowedIds != null && _allowedIds.Count > 0)
             {
                 foreach (var id in _allowedIds)

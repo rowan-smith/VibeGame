@@ -9,11 +9,11 @@ namespace Veilborne.Biomes.Spawners
 {
     public sealed class AllowedObjectsTreeSpawner : ITreeSpawner
     {
-        private readonly ITreesRegistry _trees;
+        private readonly IWorldObjectRegistry _trees;
         private readonly IEnvironmentSampler _sampler;
         private readonly IReadOnlyList<string> _allowedIds;
 
-        public AllowedObjectsTreeSpawner(IReadOnlyList<string> allowedObjectIds, ITreesRegistry trees, IEnvironmentSampler sampler)
+        public AllowedObjectsTreeSpawner(IReadOnlyList<string> allowedObjectIds, IWorldObjectRegistry trees, IEnvironmentSampler sampler)
         {
             _allowedIds = allowedObjectIds ?? [];
             _trees = trees;

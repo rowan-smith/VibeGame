@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using Veilborne.Biomes;
+using Veilborne.Core;
 using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
 using Veilborne.Interfaces;
 using Veilborne.Objects;
+using Vector4 = System.Numerics.Vector4;
 
 namespace Veilborne.Terrain
 {
@@ -12,6 +14,7 @@ namespace Veilborne.Terrain
     {
         public float TileSize { get; } = 2.0f;
         public int ChunkSize { get; } = 64;
+        public int MaxConcurrentJobs { get; set; } = 8;
 
         private readonly IBiomeProvider _biomeProvider;
         private readonly ITerrainRenderer _renderer;
@@ -19,18 +22,20 @@ namespace Veilborne.Terrain
         private readonly ITerrainGenerator _terrainGen;
         private readonly IWorldObjectRenderer _worldObjectRenderer;
         private readonly EntityRegistry _entityRegistry;
+        private readonly IWorldConfigService _config;
 
         // Track loaded chunks and preserve their mesh generation state across frames
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
         private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
         private readonly Dictionary<(int cx, int cz), BiomeData> _biomeByChunk = new();
+        private readonly Dictionary<(int cx, int cz), (BiomeData? secondary, float blend)> _biomeBlendByChunk = new();
 
         // Async generation state
         private readonly HashSet<(int cx, int cz)> _generating = new();
         private readonly ConcurrentQueue<((int cx, int cz) key, float[,] heights, Vector2 origin, List<SpawnedObject> objects, BiomeData biome)> _completed = new();
         private int _lastDesiredChunkCount;
 
-        public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer, EntityRegistry entityRegistry)
+        public ReadOnlyTerrainService(EditableTerrainService editable, IBiomeProvider biomeProvider, ITerrainRenderer renderer, ITerrainGenerator terrainGen, IWorldObjectRenderer worldObjectRenderer, EntityRegistry entityRegistry, IWorldConfigService config)
         {
             _editable = editable;
             _biomeProvider = biomeProvider;
@@ -38,12 +43,23 @@ namespace Veilborne.Terrain
             _terrainGen = terrainGen;
             _worldObjectRenderer = worldObjectRenderer;
             _entityRegistry = entityRegistry;
+            _config = config;
         }
 
         public Dictionary<(int cx, int cz), TerrainChunk> GetLoadedChunks() => _loadedChunks;
         public int DesiredChunkCount => _lastDesiredChunkCount;
         public int LoadedChunkCount => _loadedChunks.Count;
         public int GeneratingChunkCount => _generating.Count;
+        public int LoadedEntityCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (var entities in _entitiesByChunk.Values)
+                    count += entities.Count;
+                return count;
+            }
+        }
 
         public void UpdateAround(Vector3 worldPos, int radiusChunks)
         {
@@ -59,6 +75,8 @@ namespace Veilborne.Terrain
                 desired.Add(key);
                 if (!_loadedChunks.ContainsKey(key) && !_generating.Contains(key))
                 {
+                    if (_generating.Count >= System.Math.Max(1, MaxConcurrentJobs))
+                        continue;
                     var origin = new Vector2(key.Item1 * ChunkSize * TileSize, key.Item2 * ChunkSize * TileSize);
 
                     // Off-thread height sampling from editable ring
@@ -80,9 +98,11 @@ namespace Veilborne.Terrain
                         var center = new Vector2(
                             origin.X + ChunkSize * TileSize * 0.5f,
                             origin.Y + ChunkSize * TileSize * 0.5f);
-                        var biome = BiomeSampling.GetDominantBiomeNearPoint(_biomeProvider, null, center, 96f, 11, 2f);
+                        var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
                         var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
                         _completed.Enqueue((key, heights, origin, raw, biome.Data));
+                        lock (_biomeBlendByChunk)
+                            _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
                     });
                 }
             }
@@ -95,6 +115,8 @@ namespace Veilborne.Terrain
             {
                 _loadedChunks.Remove(key);
                 _biomeByChunk.Remove(key);
+                lock (_biomeBlendByChunk)
+                    _biomeBlendByChunk.Remove(key);
                 if (_entitiesByChunk.TryGetValue(key, out var entities))
                 {
                     foreach (var entity in entities)
@@ -116,6 +138,8 @@ namespace Veilborne.Terrain
                 _loadedChunks[item.key] = new TerrainChunk
                 {
                     Heights = item.heights,
+                    BaseHeights = (float[,])item.heights.Clone(),
+                    Splatmap = BuildSplatmap(item.heights),
                     Origin = item.origin,
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
@@ -140,10 +164,38 @@ namespace Veilborne.Terrain
                             ConfigRotationDegrees = obj.ConfigRotationDegrees
                         });
                         entity.AddComponent(new WorldObjectComponent());
-                        entity.AddComponent(new PhysicsComponent
+                        entity.AddComponent(new TagComponent { Name = "WorldObject" });
+                        entity.AddComponent(new TeamComponent { Id = 0 });
+                        entity.AddComponent(new NameComponent { Value = obj.ModelPath });
+                        entity.AddComponent(new ParentComponent { EntityId = -1 });
+                        entity.AddComponent(new DirtyComponent { NeedsUpdate = false });
+                        entity.AddComponent(new LifetimeComponent { RemainingSeconds = 0f });
+                        entity.AddComponent(new BillboardComponent { FaceCamera = false });
+                        entity.AddComponent(new ShadowCasterComponent { CastsShadows = true });
+                        entity.AddComponent(new MaterialComponent { ShaderId = string.Empty, Tint = Vector4.One });
+                        entity.AddComponent(new ColliderComponent
                         {
-                            CollisionRadius = obj.CollisionRadius,
-                            IsStatic = true
+                            Radius = WorldObjectCollisionRules.ComputeColliderRadius(obj)
+                        });
+                        entity.AddComponent(WorldObjectCollisionRules.GetFilter(obj));
+                        entity.AddComponent(new RigidbodyComponent
+                        {
+                            IsKinematic = true,
+                            IsSleeping = false
+                        });
+                        entity.AddComponent(new TerrainChunkComponent
+                        {
+                            ChunkX = item.key.Item1,
+                            ChunkZ = item.key.Item2,
+                            LodLevel = 1
+                        });
+                        entity.AddComponent(new LodComponent
+                        {
+                            Level = 1
+                        });
+                        entity.AddComponent(new BiomeComponent
+                        {
+                            BiomeId = item.biome.Id
                         });
                         entities.Add(entity);
                     }
@@ -165,13 +217,19 @@ namespace Veilborne.Terrain
                 if (exclude != null && exclude.Contains(key))
                     continue;
 
-                if (_biomeByChunk.TryGetValue(key, out var primaryBiome))
-                    _renderer.ApplyBiomeTextures(primaryBiome);
+                BiomeData primaryBiome;
+                if (_biomeByChunk.TryGetValue(key, out var cachedPrimary))
+                    primaryBiome = cachedPrimary;
                 else
-                    _renderer.ApplyBiomeTextures(GetDominantBiomeForChunk(chunk).Data);
+                    primaryBiome = GetDominantBiomeForChunk(chunk).Data;
+
+                (BiomeData? secondary, float blend) blendInfo;
+                lock (_biomeBlendByChunk)
+                    blendInfo = _biomeBlendByChunk.TryGetValue(key, out var info) ? info : (null, 0f);
+                _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
 
                 // Render the chunk (meshes are built centrally by TerrainManager.UpdateAround)
-                _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera);
+                _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, _config.Config.TerrainLayers, chunk.Splatmap);
             }
         }
 
@@ -180,7 +238,16 @@ namespace Veilborne.Terrain
             var center = new Vector2(
                 chunk.Origin.X + ChunkSize * TileSize * 0.5f,
                 chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
-            return BiomeSampling.GetDominantBiomeNearPoint(_biomeProvider, null, center, 96f, 11, 2f);
+            return ResolveBiomeBlend(center).primary;
+        }
+
+        private (IBiome primary, IBiome? secondary, float blend) ResolveBiomeBlend(Vector2 centerWorld)
+        {
+            if (_biomeProvider is SimpleBiomeProvider simple)
+                return simple.GetBiomeBlendAt(centerWorld, _terrainGen);
+
+            var primary = _biomeProvider.GetBiomeAt(centerWorld, _terrainGen);
+            return (primary, null, 0f);
         }
 
         public void Render(CameraComponent camera) => RenderTiles(camera);
@@ -196,13 +263,57 @@ namespace Veilborne.Terrain
 
         public void RenderDebugChunkBounds(CameraComponent camera)
         {
-            // Debug chunk bounds are backend-specific and currently disabled.
+            // Debug chunk bounds are drawn by VeilborneEngine as projected 2D overlays.
+        }
+
+        public IEnumerable<(Vector3 center, Vector3 size)> EnumerateChunkBounds()
+        {
+            foreach (var chunk in _loadedChunks.Values)
+            {
+                float worldSize = ChunkSize * TileSize;
+                yield return (
+                    new Vector3(chunk.Origin.X + worldSize * 0.5f, 0f, chunk.Origin.Y + worldSize * 0.5f),
+                    new Vector3(worldSize, 2f, worldSize));
+            }
         }
 
         public IEnumerable<(Vector2 center, float radius)> GetNearbyObjectColliders(Vector2 worldPos, float range)
         {
             yield return (worldPos + new Vector2(10, 0), 5);
             yield return (worldPos + new Vector2(-8, 7), 3);
+        }
+
+        private Vector4[,] BuildSplatmap(float[,] heights)
+        {
+            int w = heights.GetLength(0);
+            int h = heights.GetLength(1);
+            var splat = new Vector4[w, h];
+            for (int z = 0; z < h; z++)
+            for (int x = 0; x < w; x++)
+            {
+                float slope = EstimateSlope(heights, x, z);
+                float top = Math.Clamp(1f - slope * 1.3f, 0f, 1f);
+                float dirt = Math.Clamp(1f - top, 0f, 1f);
+                float rock = Math.Clamp((slope - 0.45f) / 0.55f, 0f, 1f);
+                float sum = top + dirt + rock;
+                splat[x, z] = sum > 1e-5f
+                    ? new Vector4(top / sum, dirt / sum, rock / sum, 0f)
+                    : new Vector4(1f, 0f, 0f, 0f);
+            }
+            return splat;
+        }
+
+        private static float EstimateSlope(float[,] heights, int x, int z)
+        {
+            int w = heights.GetLength(0);
+            int h = heights.GetLength(1);
+            int x0 = Math.Clamp(x - 1, 0, w - 1);
+            int x1 = Math.Clamp(x + 1, 0, w - 1);
+            int z0 = Math.Clamp(z - 1, 0, h - 1);
+            int z1 = Math.Clamp(z + 1, 0, h - 1);
+            float dx = heights[x1, z] - heights[x0, z];
+            float dz = heights[x, z1] - heights[x, z0];
+            return MathF.Min(1f, MathF.Sqrt(dx * dx + dz * dz) * 0.5f);
         }
     }
 }

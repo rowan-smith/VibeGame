@@ -7,6 +7,7 @@ using Veilborne.Core.Ecs.Components;
 using Veilborne.Core.Ecs.Systems;
 using Veilborne.Core.MonoGameImpl;
 using Veilborne.Core.Settings;
+using Veilborne.Core.Sky;
 using Veilborne.Interfaces;
 using Veilborne.Objects;
 using System.Collections.Generic;
@@ -39,22 +40,55 @@ namespace Veilborne.Core.Ecs
         {
             var biomeProvider = _serviceProvider.GetService<IBiomeProvider>();
             var settings = _serviceProvider.GetRequiredService<IGameSettingsService>();
-            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, biomeProvider);
+            var sky = _serviceProvider.GetRequiredService<ISkyLightingService>();
+            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, sky, biomeProvider);
             _terrainRenderer = realRenderer;
 
             // Swap the DI proxy renderer to the real implementation
             var proxy = _serviceProvider.GetService<ProxyTerrainRenderer>();
             proxy?.SetInner(realRenderer);
 
-            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, contentManager, Matrix.Identity, Matrix.Identity);
+            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, sky, contentManager, Matrix.Identity, Matrix.Identity);
             _uiProvider = new MonoGameUiProvider();
 
-            _systems.Add(_serviceProvider.GetRequiredService<PlayerSystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<TerrainUpdateSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CleanupSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DependencySystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<InputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DigInputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DigProbeSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<VoxelRaycastSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DepleteSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DigExecutionSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<PatchRegenSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CameraSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<PlayerInputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AISystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AnimationSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ParticleSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<BiomeDiscoverySystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AssetLoadSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<BiomePrepSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ForceSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<IntegrationSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CollisionDetectionSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CollisionResolutionSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ConstraintSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<TerrainLoadQueueSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<TerrainLoadSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<TerrainGenSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<VegetationSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AssetUnloadSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ShadowMapSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<EffectSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<FrustumCullSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<SortSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<UISystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DebugDrawSystem>());
 
             _terrainRenderSystem = new TerrainRenderSystem(entityRegistry, terrain, realRenderer);
             _renderSystems.Add(_terrainRenderSystem);
             _renderSystems.Add(_worldObjectRenderer as IRenderSystem);
+            _renderSystems.Add(_serviceProvider.GetRequiredService<CompositeRenderSystem>());
         }
 
         public void Initialize(EntityRegistry entityRegistry, IInfiniteTerrain terrain)
@@ -93,20 +127,53 @@ namespace Veilborne.Core.Ecs
         {
             var biomeProvider = _serviceProvider.GetService<IBiomeProvider>();
             var settings = _serviceProvider.GetRequiredService<IGameSettingsService>();
-            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, biomeProvider);
+            var sky = _serviceProvider.GetRequiredService<ISkyLightingService>();
+            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, sky, biomeProvider);
             _terrainRenderer = realRenderer;
 
             var proxy = _serviceProvider.GetService<ProxyTerrainRenderer>();
             proxy?.SetInner(realRenderer);
 
-            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, null, Matrix.Identity, Matrix.Identity);
+            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, sky, null, Matrix.Identity, Matrix.Identity);
             _uiProvider = new MonoGameUiProvider();
-            _systems.Add(_serviceProvider.GetRequiredService<PlayerSystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<TerrainUpdateSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CleanupSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DependencySystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<InputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DigInputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DigProbeSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<VoxelRaycastSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DepleteSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DigExecutionSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<PatchRegenSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CameraSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<PlayerInputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AISystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AnimationSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ParticleSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<BiomeDiscoverySystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AssetLoadSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<BiomePrepSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ForceSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<IntegrationSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CollisionDetectionSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CollisionResolutionSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ConstraintSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<TerrainLoadQueueSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<TerrainLoadSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<TerrainGenSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<VegetationSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<AssetUnloadSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<ShadowMapSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<EffectSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<FrustumCullSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<SortSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<UISystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<DebugDrawSystem>());
 
             _terrainRenderSystem = new TerrainRenderSystem(entityRegistry, terrain, realRenderer);
             _renderSystems.Add(_terrainRenderSystem);
             _renderSystems.Add(_worldObjectRenderer as IRenderSystem);
+            _renderSystems.Add(_serviceProvider.GetRequiredService<CompositeRenderSystem>());
         }
 
         public void UpdateSystems(float deltaTime)

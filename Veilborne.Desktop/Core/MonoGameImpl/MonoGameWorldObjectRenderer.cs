@@ -7,6 +7,7 @@ using SharpGLTF.Schema2;
 using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
 using Veilborne.Core.Settings;
+using Veilborne.Core.Sky;
 using Veilborne.Objects;
 using Quaternion = System.Numerics.Quaternion;
 using Matrix4x4 = System.Numerics.Matrix4x4;
@@ -27,9 +28,17 @@ namespace Veilborne.Core.MonoGameImpl
         private readonly BasicEffect _effect;
         private readonly RasterizerState _wireframeRasterizer;
         private readonly IGameSettingsService _settings;
+        private readonly ISkyLightingService _sky;
         private readonly ILogger _log = Log.ForContext<MonoGameWorldObjectRenderer>();
-        private const float MaxTreeDrawDistance = 180f;
-        private const int MaxDetailedTreesPerFrame = 80;
+        private const float MaxTreeDrawDistance = 120f;
+        private const int MaxDetailedTreesPerFrame = 400;
+        private const float MaxLowLodDrawDistance = 60f;
+        private const int MaxNewModelLoadsPerFrame = 1;
+        private const float FrustumCullingDistance = 80f;
+        private const float MovementFrameBudgetScale = 0.70f;
+        private int _newModelLoadsThisFrame;
+        private CameraComponent _lastCamera;
+        private bool _hasLastCamera;
 
         private class GlbMesh
         {
@@ -51,26 +60,30 @@ namespace Veilborne.Core.MonoGameImpl
         }
         private readonly Dictionary<string, ModelBounds> _boundsCache = new();
 
-        public MonoGameWorldObjectRenderer(EntityRegistry entities, GraphicsDevice graphicsDevice, IGameSettingsService settings,
+        public MonoGameWorldObjectRenderer(EntityRegistry entities, GraphicsDevice graphicsDevice, IGameSettingsService settings, ISkyLightingService sky,
             ContentManager? _ignored, XnaMatrix _v, XnaMatrix _p)
         {
             _entities = entities;
             _graphicsDevice = graphicsDevice;
             _settings = settings;
+            _sky = sky;
             _effect = new BasicEffect(graphicsDevice);
             _wireframeRasterizer = new RasterizerState { FillMode = FillMode.WireFrame, CullMode = CullMode.CullCounterClockwiseFace };
         }
 
         public void Draw()
         {
+            _newModelLoadsThisFrame = 0;
             // Find a player camera for view/projection
-            CameraComponent? cam = null;
-            foreach (var e in _entities.GetEntitiesWith<PlayerComponent, CameraComponent>())
+            CameraComponent cam = default;
+            bool hasCamera = false;
+            foreach (var e in _entities.GetEntitiesWith<CameraComponent>())
             {
                 cam = e.GetComponent<CameraComponent>();
+                hasCamera = true;
                 break;
             }
-            if (cam == null) return;
+            if (!hasCamera) return;
 
             var pos    = new XnaVec3(cam.Position.X, cam.Position.Y, cam.Position.Z);
             var target = new XnaVec3(cam.Target.X,   cam.Target.Y,   cam.Target.Z);
@@ -89,31 +102,48 @@ namespace Veilborne.Core.MonoGameImpl
             bool wireframe = RuntimeEnvironment.IsDevelopmentEnvironment && _settings.Current.Debug.Wireframe;
             var graphics = _settings.Current.Graphics;
             float renderDistanceScale = graphics.RenderDistance / 100f;
+            float drawDistance = MaxTreeDrawDistance * renderDistanceScale;
+            float lowLodDistance = MaxLowLodDrawDistance * renderDistanceScale;
+            float maxDrawDistanceSq = drawDistance * drawDistance;
+            float maxLowLodDistanceSq = lowLodDistance * lowLodDistance;
+            float frustumCullingDistanceSq = FrustumCullingDistance * FrustumCullingDistance;
+            bool cameraMoving = _hasLastCamera &&
+                                Vector3.DistanceSquared(cam.Position, _lastCamera.Position) > (0.025f * 0.025f);
+            int frameTreeBudget = cameraMoving
+                ? (int)MathF.Max(120, MaxDetailedTreesPerFrame * MovementFrameBudgetScale)
+                : MaxDetailedTreesPerFrame;
+            _lastCamera = cam;
+            _hasLastCamera = true;
             _graphicsDevice.RasterizerState = wireframe
                 ? _wireframeRasterizer
                 : RasterizerState.CullCounterClockwise;
             int detailedDrawn = 0;
 
-            foreach (var entity in _entities.GetEntitiesWith<RenderComponent, WorldObjectComponent>())
+            _entities.ForEachWith<RenderComponent, WorldObjectComponent>(entity =>
             {
-                if (!entity.TryGetComponent<TransformComponent>(out var transform)) continue;
-                if (!entity.TryGetComponent<RenderComponent>(out var render)) continue;
-                if (!render.Visible) continue;
+                if (!entity.TryGetComponent<TransformComponent>(out var transform)) return;
+                if (!entity.TryGetComponent<RenderComponent>(out var render)) return;
+                if (!render.Visible) return;
 
                 var dp = transform.Position - cam.Position;
                 var distSq = dp.LengthSquared();
-                float drawDistance = MaxTreeDrawDistance * renderDistanceScale;
-                if (distSq > drawDistance * drawDistance) continue;
+                if (distSq > maxDrawDistanceSq) return;
+
+                if (entity.TryGetComponent<LodComponent>(out var lod) && lod.Level > 0)
+                {
+                    if (distSq > maxLowLodDistanceSq) return;
+                }
 
                 string normalizedPath = NormalizeModelPath(render.ModelPath);
-                if (TryGetBoundsSphere(normalizedPath, transform.Position, transform.Scale, out var sphere) &&
+                if (distSq <= frustumCullingDistanceSq &&
+                    TryGetBoundsSphere(normalizedPath, transform.Position, transform.Scale, out var sphere) &&
                     !frustum.Intersects(sphere))
-                    continue;
+                    return;
 
-                if (detailedDrawn >= MaxDetailedTreesPerFrame) continue;
+                if (detailedDrawn >= frameTreeBudget) return;
                 DrawModel(render.ModelPath, transform.Position, transform.Rotation, transform.Scale, view, proj);
                 detailedDrawn++;
-            }
+            });
 
             _graphicsDevice.DepthStencilState = prevDepth;
             _graphicsDevice.RasterizerState   = prevRaster;
@@ -133,7 +163,12 @@ namespace Veilborne.Core.MonoGameImpl
 
             string normalizedPath = NormalizeModelPath(modelPath);
             if (!_modelCache.TryGetValue(normalizedPath, out var model))
+            {
+                if (_newModelLoadsThisFrame >= MaxNewModelLoadsPerFrame)
+                    return;
                 model = LoadGlb(normalizedPath);
+                _newModelLoadsThisFrame++;
+            }
 
             if (model == null || model.Meshes.Count == 0) return;
 
@@ -153,12 +188,15 @@ namespace Veilborne.Core.MonoGameImpl
             _effect.LightingEnabled = true;
             _effect.PreferPerPixelLighting = false;
             _effect.EnableDefaultLighting();
-            _effect.DirectionalLight0.Direction = new XnaVec3(-0.45f, -1f, -0.3f);
+            var sunDir = _sky.SunDirection;
+            _effect.DirectionalLight0.Direction = new XnaVec3(sunDir.X, sunDir.Y, sunDir.Z);
             _effect.DirectionalLight1.Enabled = false;
             _effect.DirectionalLight2.Enabled = false;
             float brightness = _settings.Current.Graphics.Brightness / 100f;
-            _effect.AmbientLightColor = new XnaVec3(0.45f, 0.45f, 0.47f) * brightness;
-            _effect.DirectionalLight0.DiffuseColor = new XnaVec3(0.80f, 0.80f, 0.82f) * brightness;
+            var ambient = _sky.AmbientColor;
+            var sun = _sky.SunColor * _sky.SunIntensity;
+            _effect.AmbientLightColor = new XnaVec3(ambient.X, ambient.Y, ambient.Z) * brightness;
+            _effect.DirectionalLight0.DiffuseColor = new XnaVec3(sun.X, sun.Y, sun.Z) * brightness;
             _effect.DirectionalLight0.SpecularColor = new XnaVec3(0.10f, 0.10f, 0.10f);
             _effect.VertexColorEnabled  = false;
 
@@ -330,7 +368,7 @@ namespace Veilborne.Core.MonoGameImpl
                     }
                 }
 
-                _log.Information("Loaded GLB '{Path}': {MeshCount} meshes", relativePath, glbModel.Meshes.Count);
+                _log.Debug("Loaded GLB '{Path}': {MeshCount} meshes", relativePath, glbModel.Meshes.Count);
                 _modelCache[relativePath] = glbModel;
                 _boundsCache[relativePath] = b;
                 return glbModel;
