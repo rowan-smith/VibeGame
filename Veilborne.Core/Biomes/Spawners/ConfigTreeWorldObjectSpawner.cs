@@ -123,9 +123,11 @@ namespace Veilborne.Biomes.Spawners
                     Vector3 baseScale = def.Visual?.BaseScale?.Length >= 3
                         ? new Vector3(def.Visual.BaseScale[0], def.Visual.BaseScale[1], def.Visual.BaseScale[2])
                         : Vector3.One;
+                    baseScale = SanitizeScale(baseScale);
                     float variance = MathF.Abs(def.Visual?.ScaleVariance ?? 0f);
                     float varT = HashToRange(seed * 419 + 101, -variance, variance);
                     Vector3 scale = baseScale * (1.0f + varT);
+                    scale = SanitizeScale(scale);
 
                     // Rotation: use explicit model Rotation if provided; otherwise keep identity (no auto/random rotation)
                     Quaternion rot = Quaternion.Identity;
@@ -176,6 +178,7 @@ namespace Veilborne.Biomes.Spawners
                     Vector3 baseScale = def.Visual?.BaseScale?.Length >= 3
                         ? new Vector3(def.Visual.BaseScale[0], def.Visual.BaseScale[1], def.Visual.BaseScale[2])
                         : Vector3.One;
+                    baseScale = SanitizeScale(baseScale);
 
                     results.Add(new SpawnedObject
                     {
@@ -259,6 +262,15 @@ namespace Veilborne.Biomes.Spawners
             if (string.IsNullOrWhiteSpace(path)) return string.Empty;
             if (Path.IsPathRooted(path)) return path;
             return Path.Combine(AppContext.BaseDirectory, "assets", path.Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        private static Vector3 SanitizeScale(Vector3 scale)
+        {
+            // Hard safety rail against bad config values (e.g. 100x) that can tank FPS.
+            float x = Math.Clamp(scale.X, 0.01f, 4.0f);
+            float y = Math.Clamp(scale.Y, 0.01f, 4.0f);
+            float z = Math.Clamp(scale.Z, 0.01f, 4.0f);
+            return new Vector3(x, y, z);
         }
         #endregion
     }

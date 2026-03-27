@@ -117,10 +117,10 @@ namespace Veilborne.Terrain
             lock (_lock)
             {
                 var desired = new HashSet<(int cx, int cz)>();
-                for (int z = -radiusChunks; z <= radiusChunks; z++)
-                for (int x = -radiusChunks; x <= radiusChunks; x++)
+                var nearby = TerrainChunkSpatialHash.GetChunksAround(centerX, centerZ, radiusChunks);
+                for (int i = 0; i < nearby.Length; i++)
                 {
-                    var key = (centerX + x, centerZ + z);
+                    var key = nearby[i];
                     desired.Add(key);
                     if (!_loadedChunks.ContainsKey(key))
                     {
@@ -408,13 +408,13 @@ namespace Veilborne.Terrain
                         float d = Vector2.Distance(new Vector2(wx, wz), new Vector2(worldCenter.X, worldCenter.Z));
                         if (d > radius) continue;
                         float t = d / radius;
-                        float delta = strength * EvalFalloff(t, falloff);
+                        float delta = strength * EvalFalloff(t, falloff) * 0.16f;
                         float floor = chunk.BaseHeights != null ? chunk.BaseHeights[ix, iz] - maxDepth : float.NegativeInfinity;
                         float next = chunk.Heights[ix, iz] - delta;
                         chunk.Heights[ix, iz] = MathF.Max(floor, next); // dig lowers terrain with finite depth cap
                     }
 
-                    if (smoothness > 0.001f)
+                    if (smoothness > 0.001f && falloff != VoxelFalloff.Exponential)
                         SmoothPatch(chunk, x0, z0, x1, z1, maxDepth, smoothness);
                     RecomputeSplatmapForChunk(key, ref chunk);
 

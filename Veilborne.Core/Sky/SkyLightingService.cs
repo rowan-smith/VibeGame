@@ -14,6 +14,7 @@ namespace Veilborne.Core.Sky
         public Vector3 SunColor { get; private set; } = new(0.95f, 0.92f, 0.85f);
         public Vector3 SunDirection { get; private set; } = Vector3.Normalize(new Vector3(-0.35f, -1f, -0.25f));
         public float SunIntensity { get; private set; } = 1f;
+        public float ShadowStrength { get; private set; } = 0.55f;
 
         public void Update(float deltaSeconds)
         {
@@ -45,7 +46,9 @@ namespace Veilborne.Core.Sky
             Vector3 daySun = new(0.98f, 0.94f, 0.86f);
             SunColor = Vector3.Lerp(nightSun, daySun, daylight);
 
-            SunIntensity = 0.25f + (1.0f - 0.25f) * daylight;
+            SunIntensity = 0.18f + (1.15f - 0.18f) * daylight;
+            // Stronger, cleaner daytime shadows; soft at dusk/night.
+            ShadowStrength = 0.20f + 0.70f * daylight;
         }
 
         private static float Smooth01(float t)

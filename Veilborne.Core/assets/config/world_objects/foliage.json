@@ -32,8 +32,8 @@
           "Autumn": [0.95, 0.9, 0.75],
           "Winter": [0.85, 0.9, 0.85]
         },
-        "BaseScale": [0.5, 0.5, 0.5],
-        "ScaleVariance": 0.15,
+        "BaseScale": [2.2, 2.2, 2.2],
+        "ScaleVariance": 0.35,
         "RandomRotationY": true
       }
     },

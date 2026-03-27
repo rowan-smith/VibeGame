@@ -17,6 +17,7 @@ using Veilborne.Core.Ecs.Systems;
 using Veilborne.Core.Items;
 using Veilborne.Core.Settings;
 using Veilborne.Core.TerrainTexture;
+using Veilborne.Core.UI;
 using Veilborne.Core.WorldObjects;
 using Veilborne.Core.Sky;
 using Veilborne.Interfaces;
@@ -60,6 +61,7 @@ internal static class Program
         builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
         builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
         builder.Services.AddSingleton<ISkyLightingService, SkyLightingService>();
+        builder.Services.AddSingleton<IShadowMapService, CpuShadowMapService>();
         // ECS Systems (will be initialized manually after MonoGame is ready)
         builder.Services.AddSingleton<CleanupSystem>();
         builder.Services.AddSingleton<DependencySystem>();
@@ -71,6 +73,7 @@ internal static class Program
         builder.Services.AddSingleton<PatchRegenSystem>();
         builder.Services.AddSingleton<DigExecutionSystem>();
         builder.Services.AddSingleton<CameraSystem>();
+        builder.Services.AddSingleton<HotbarSelectionSystem>();
         builder.Services.AddSingleton<PlayerSystem>(); // still used as implementation detail
         builder.Services.AddSingleton<PlayerInputSystem>();
         builder.Services.AddSingleton<AISystem>();
@@ -150,6 +153,8 @@ internal static class Program
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
         builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
         builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
+        builder.Services.AddSingleton<HudUiController>();
+        builder.Services.AddSingleton<DebugOverlayUiController>();
 
         builder.Services.AddSingleton(sp => new ObjectSpawner(
             sp.GetRequiredService<IWorldConfigService>().Seed,

@@ -31,7 +31,9 @@ namespace Veilborne.Core.MonoGameImpl
             _graphics.PreferredBackBufferWidth = width;
             _graphics.PreferredBackBufferHeight = height;
             _graphics.HardwareModeSwitch = true; // prefer true fullscreen over borderless fake fullscreen
+            _graphics.SynchronizeWithVerticalRetrace = true;
             Content.RootDirectory = "Content";
+            IsFixedTimeStep = true;
             IsMouseVisible = true;
             Window.Title = title;
         }

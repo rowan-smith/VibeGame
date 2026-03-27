@@ -5,17 +5,17 @@
   "LowLodRadius": 12,
   "MaxActiveVoxelChunks": 128,
   "DigRadius": 1.1,
-  "DigStrength": 1.0,
-  "DigFalloff": "Linear",
-  "DigMaxDepth": 2.2,
-  "DigSmoothness": 0.28,
+  "DigStrength": 2.8,
+  "DigFalloff": "Exponential",
+  "DigMaxDepth": 6.0,
+  "DigSmoothness": 0.08,
   "TerrainLoadQueueRadius": 4,
   "TerrainLayers": {
     "SurfaceTextureId": "brown_mud_leaves",
     "SubsurfaceTextureId": "brown_mud",
     "DeepTextureId": "rock_3",
-    "SubsurfaceDepth": 0.25,
-    "DeepDepth": 0.90
+    "SubsurfaceDepth": 0.35,
+    "DeepDepth": 1.20
   },
   "BiomeMining": {
     "aetherwild_grove": {

@@ -29,13 +29,17 @@ namespace Veilborne.Core.MonoGameImpl
         private readonly RasterizerState _wireframeRasterizer;
         private readonly IGameSettingsService _settings;
         private readonly ISkyLightingService _sky;
+        private readonly IShadowMapService _shadowMap;
         private readonly ILogger _log = Log.ForContext<MonoGameWorldObjectRenderer>();
-        private const float MaxTreeDrawDistance = 120f;
-        private const int MaxDetailedTreesPerFrame = 400;
-        private const float MaxLowLodDrawDistance = 60f;
+        private const float MaxTreeDrawDistance = 90f;
+        private const int MaxDetailedTreesPerFrame = 600;
         private const int MaxNewModelLoadsPerFrame = 1;
-        private const float FrustumCullingDistance = 80f;
+        private const float FrustumCullingDistance = 1f;
         private const float MovementFrameBudgetScale = 0.70f;
+        private const float MaxReasonableModelDimension = 25f;
+        private const float AutoNormalizedTargetDimension = 6f;
+        private const float MaxBaseLiftMeters = 12f;
+        private const float MaxFinalWorldObjectDimension = 14f;
         private int _newModelLoadsThisFrame;
         private CameraComponent _lastCamera;
         private bool _hasLastCamera;
@@ -59,14 +63,33 @@ namespace Veilborne.Core.MonoGameImpl
             public bool Valid;
         }
         private readonly Dictionary<string, ModelBounds> _boundsCache = new();
+        private readonly Dictionary<string, float> _autoScaleCache = new();
+        private readonly struct DrawCandidate
+        {
+            public DrawCandidate(string modelPath, Vector3 position, Quaternion rotation, Vector3 scale, float distanceSq)
+            {
+                ModelPath = modelPath;
+                Position = position;
+                Rotation = rotation;
+                Scale = scale;
+                DistanceSq = distanceSq;
+            }
 
-        public MonoGameWorldObjectRenderer(EntityRegistry entities, GraphicsDevice graphicsDevice, IGameSettingsService settings, ISkyLightingService sky,
+            public string ModelPath { get; }
+            public Vector3 Position { get; }
+            public Quaternion Rotation { get; }
+            public Vector3 Scale { get; }
+            public float DistanceSq { get; }
+        }
+
+        public MonoGameWorldObjectRenderer(EntityRegistry entities, GraphicsDevice graphicsDevice, IGameSettingsService settings, ISkyLightingService sky, IShadowMapService shadowMap,
             ContentManager? _ignored, XnaMatrix _v, XnaMatrix _p)
         {
             _entities = entities;
             _graphicsDevice = graphicsDevice;
             _settings = settings;
             _sky = sky;
+            _shadowMap = shadowMap;
             _effect = new BasicEffect(graphicsDevice);
             _wireframeRasterizer = new RasterizerState { FillMode = FillMode.WireFrame, CullMode = CullMode.CullCounterClockwiseFace };
         }
@@ -103,9 +126,7 @@ namespace Veilborne.Core.MonoGameImpl
             var graphics = _settings.Current.Graphics;
             float renderDistanceScale = graphics.RenderDistance / 100f;
             float drawDistance = MaxTreeDrawDistance * renderDistanceScale;
-            float lowLodDistance = MaxLowLodDrawDistance * renderDistanceScale;
             float maxDrawDistanceSq = drawDistance * drawDistance;
-            float maxLowLodDistanceSq = lowLodDistance * lowLodDistance;
             float frustumCullingDistanceSq = FrustumCullingDistance * FrustumCullingDistance;
             bool cameraMoving = _hasLastCamera &&
                                 Vector3.DistanceSquared(cam.Position, _lastCamera.Position) > (0.025f * 0.025f);
@@ -117,33 +138,40 @@ namespace Veilborne.Core.MonoGameImpl
             _graphicsDevice.RasterizerState = wireframe
                 ? _wireframeRasterizer
                 : RasterizerState.CullCounterClockwise;
-            int detailedDrawn = 0;
-
-            _entities.ForEachWith<RenderComponent, WorldObjectComponent>(entity =>
+            var candidates = new List<DrawCandidate>(512);
+            foreach (var entity in _entities.GetEntitiesWith<RenderComponent, WorldObjectComponent>())
             {
-                if (!entity.TryGetComponent<TransformComponent>(out var transform)) return;
-                if (!entity.TryGetComponent<RenderComponent>(out var render)) return;
-                if (!render.Visible) return;
+                if (!entity.TryGetComponent<TransformComponent>(out var transform)) continue;
+                if (!entity.TryGetComponent<RenderComponent>(out var render)) continue;
+                if (!render.Visible || string.IsNullOrWhiteSpace(render.ModelPath)) continue;
 
                 var dp = transform.Position - cam.Position;
                 var distSq = dp.LengthSquared();
-                if (distSq > maxDrawDistanceSq) return;
-
-                if (entity.TryGetComponent<LodComponent>(out var lod) && lod.Level > 0)
-                {
-                    if (distSq > maxLowLodDistanceSq) return;
-                }
+                if (distSq > maxDrawDistanceSq) continue;
 
                 string normalizedPath = NormalizeModelPath(render.ModelPath);
-                if (distSq <= frustumCullingDistanceSq &&
-                    TryGetBoundsSphere(normalizedPath, transform.Position, transform.Scale, out var sphere) &&
+                float autoScale = GetAutoScale(normalizedPath);
+                var effectiveScale = ClampScaleToWorldExtent(normalizedPath, SanitizeScale(transform.Scale * autoScale));
+                if (distSq >= frustumCullingDistanceSq &&
+                    TryGetBoundsSphere(normalizedPath, transform.Position, effectiveScale, out var sphere) &&
                     !frustum.Intersects(sphere))
-                    return;
+                    continue;
 
-                if (detailedDrawn >= frameTreeBudget) return;
-                DrawModel(render.ModelPath, transform.Position, transform.Rotation, transform.Scale, view, proj);
-                detailedDrawn++;
-            });
+                candidates.Add(new DrawCandidate(
+                    render.ModelPath,
+                    transform.Position,
+                    transform.Rotation,
+                    effectiveScale,
+                    distSq));
+            }
+
+            candidates.Sort(static (a, b) => a.DistanceSq.CompareTo(b.DistanceSq));
+            int drawCount = Math.Min(frameTreeBudget, candidates.Count);
+            for (int i = 0; i < drawCount; i++)
+            {
+                var c = candidates[i];
+                DrawModel(c.ModelPath, c.Position, c.Rotation, c.Scale, view, proj);
+            }
 
             _graphicsDevice.DepthStencilState = prevDepth;
             _graphicsDevice.RasterizerState   = prevRaster;
@@ -171,6 +199,7 @@ namespace Veilborne.Core.MonoGameImpl
             }
 
             if (model == null || model.Meshes.Count == 0) return;
+            if (!IsFinite(scale)) return;
 
             var qCorrection = GetAxisCorrection(normalizedPath, scale);
             var qFinal = Quaternion.Normalize(Quaternion.Concatenate(rot, qCorrection));
@@ -195,7 +224,9 @@ namespace Veilborne.Core.MonoGameImpl
             float brightness = _settings.Current.Graphics.Brightness / 100f;
             var ambient = _sky.AmbientColor;
             var sun = _sky.SunColor * _sky.SunIntensity;
-            _effect.AmbientLightColor = new XnaVec3(ambient.X, ambient.Y, ambient.Z) * brightness;
+            float shadowSample = _shadowMap.IsReady ? _shadowMap.SampleShadow(pos) : 1f;
+            float shadowTerm = Math.Clamp(1f - _sky.ShadowStrength * 0.60f * (1f - shadowSample), 0.30f, 1f);
+            _effect.AmbientLightColor = new XnaVec3(ambient.X, ambient.Y, ambient.Z) * brightness * shadowTerm;
             _effect.DirectionalLight0.DiffuseColor = new XnaVec3(sun.X, sun.Y, sun.Z) * brightness;
             _effect.DirectionalLight0.SpecularColor = new XnaVec3(0.10f, 0.10f, 0.10f);
             _effect.VertexColorEnabled  = false;
@@ -371,6 +402,7 @@ namespace Veilborne.Core.MonoGameImpl
                 _log.Debug("Loaded GLB '{Path}': {MeshCount} meshes", relativePath, glbModel.Meshes.Count);
                 _modelCache[relativePath] = glbModel;
                 _boundsCache[relativePath] = b;
+                _autoScaleCache[relativePath] = ComputeAutoScale(b, relativePath);
                 return glbModel;
             }
             catch (Exception ex)
@@ -418,7 +450,7 @@ namespace Veilborne.Core.MonoGameImpl
             if (!_boundsCache.TryGetValue(key, out var bounds) || !bounds.Valid)
                 return 0f;
             EvalYExtent(bounds, scale, q, out float minY);
-            return -minY;
+            return Math.Clamp(-minY, -MaxBaseLiftMeters, MaxBaseLiftMeters);
         }
 
         private bool TryGetBoundsSphere(string key, Vector3 position, Vector3 scale, out BoundingSphere sphere)
@@ -432,6 +464,59 @@ namespace Veilborne.Core.MonoGameImpl
             var radius = MathF.Max(1f, baseRadius * MathF.Max(0.001f, s));
             sphere = new BoundingSphere(new XnaVec3(position.X, position.Y, position.Z), radius);
             return true;
+        }
+
+        private float GetAutoScale(string key)
+        {
+            if (_autoScaleCache.TryGetValue(key, out var scale))
+                return scale;
+            return 1f;
+        }
+
+        private float ComputeAutoScale(ModelBounds bounds, string modelKey)
+        {
+            if (!bounds.Valid) return 1f;
+            float dx = MathF.Abs(bounds.Max.X - bounds.Min.X);
+            float dy = MathF.Abs(bounds.Max.Y - bounds.Min.Y);
+            float dz = MathF.Abs(bounds.Max.Z - bounds.Min.Z);
+            float maxDim = MathF.Max(dx, MathF.Max(dy, dz));
+            if (maxDim <= MaxReasonableModelDimension)
+                return 1f;
+
+            float scale = Math.Clamp(AutoNormalizedTargetDimension / MathF.Max(0.01f, maxDim), 0.02f, 1f);
+            _log.Warning(
+                "Auto-normalized oversized world model {Model} (maxDim={MaxDim:0.##}) with scale {Scale:0.###}",
+                modelKey, maxDim, scale);
+            return scale;
+        }
+
+        private static Vector3 SanitizeScale(Vector3 scale)
+        {
+            float x = Math.Clamp(float.IsFinite(scale.X) ? scale.X : 1f, 0.005f, 8f);
+            float y = Math.Clamp(float.IsFinite(scale.Y) ? scale.Y : 1f, 0.005f, 8f);
+            float z = Math.Clamp(float.IsFinite(scale.Z) ? scale.Z : 1f, 0.005f, 8f);
+            return new Vector3(x, y, z);
+        }
+
+        private Vector3 ClampScaleToWorldExtent(string key, Vector3 scale)
+        {
+            if (!_boundsCache.TryGetValue(key, out var bounds) || !bounds.Valid)
+                return scale;
+
+            float dx = MathF.Abs(bounds.Max.X - bounds.Min.X) * MathF.Abs(scale.X);
+            float dy = MathF.Abs(bounds.Max.Y - bounds.Min.Y) * MathF.Abs(scale.Y);
+            float dz = MathF.Abs(bounds.Max.Z - bounds.Min.Z) * MathF.Abs(scale.Z);
+            float maxDim = MathF.Max(dx, MathF.Max(dy, dz));
+            if (maxDim <= MaxFinalWorldObjectDimension || maxDim <= 1e-4f)
+                return scale;
+
+            float down = Math.Clamp(MaxFinalWorldObjectDimension / maxDim, 0.02f, 1f);
+            return new Vector3(scale.X * down, scale.Y * down, scale.Z * down);
+        }
+
+        private static bool IsFinite(Vector3 v)
+        {
+            return float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
         }
 
         private static float EvalYExtent(ModelBounds bounds, Vector3 scale, Quaternion q, out float minY)

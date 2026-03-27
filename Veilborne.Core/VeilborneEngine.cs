@@ -3,20 +3,16 @@ using Veilborne.Interfaces;
 using Veilborne.Terrain;
 using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Items;
 using Veilborne.Core.Settings;
 using Veilborne.Core.Sky;
-using Veilborne.Objects;
+using Veilborne.Core.UI;
 using Serilog;
 
 namespace Veilborne.Core
 {
     public class VeilborneEngine : IGameEngine
     {
-        private readonly ICameraController _cameraController;
-        private readonly IPhysicsController _physics;
         private readonly IInfiniteTerrain _terrain;
-        private readonly IItemRegistry _items;
         private readonly ITimeService _time;
         private readonly EntityRegistry _entities;
         private readonly IGraphicsProvider _graphics;
@@ -25,18 +21,18 @@ namespace Veilborne.Core
         private readonly IEcsRuntime _ecsRuntime;
         private readonly IGameSettingsService _settings;
         private readonly ISkyLightingService _sky;
+        private readonly HudUiController _hudUi;
+        private readonly DebugOverlayUiController _debugOverlayUi;
         private readonly bool _isDevelopmentEnvironment;
         private readonly ILogger _log = Log.ForContext<VeilborneEngine>();
 
         // These will be initialized by ECS manager after MonoGame is ready
         private IUiProvider _ui;
-        private IWorldObjectRenderer _worldObjectRenderer;
 
         private bool _showDebugOverlay;
         private bool _showDebugChunkBounds;
         private bool _showColliderRadii;
         private bool _isFullscreenApplied;
-        private int _selectedHotbarSlot = 0;
         private Entity _playerEntity = default!;
         private Entity _uiCanvasEntity = default!;
         private Entity _crosshairEntity = default!;
@@ -97,10 +93,7 @@ namespace Veilborne.Core
         private const double InitDurationSeconds = 0.75;
 
         public VeilborneEngine(
-            ICameraController cameraController,
-            IPhysicsController physics,
             IInfiniteTerrain terrain,
-            IItemRegistry items,
             ITimeService time,
             EntityRegistry entities,
             IGraphicsProvider graphics,
@@ -108,12 +101,11 @@ namespace Veilborne.Core
             IInputProvider input,
             IEcsRuntime ecsRuntime,
             IGameSettingsService settings,
-            ISkyLightingService sky)
+            ISkyLightingService sky,
+            HudUiController hudUi,
+            DebugOverlayUiController debugOverlayUi)
         {
-            _cameraController = cameraController;
-            _physics = physics;
             _terrain = terrain;
-            _items = items;
             _time = time;
             _entities = entities;
             _graphics = graphics;
@@ -122,6 +114,8 @@ namespace Veilborne.Core
             _ecsRuntime = ecsRuntime;
             _settings = settings;
             _sky = sky;
+            _hudUi = hudUi;
+            _debugOverlayUi = debugOverlayUi;
             _isDevelopmentEnvironment = RuntimeEnvironment.IsDevelopmentEnvironment;
         }
 
@@ -170,6 +164,7 @@ namespace Veilborne.Core
                 IsGrounded = false
             });
             _playerEntity.AddComponent(new MoveInputComponent { HorizontalDisplacement = Vector3.Zero });
+            _playerEntity.AddComponent(new HotbarSelectionComponent { SelectedSlot = 0 });
             _playerEntity.AddComponent(new DigInteractionComponent
             {
                 IsDigHeld = false,
@@ -354,18 +349,15 @@ namespace Veilborne.Core
             var keyboard = _settings.Current.Keyboard;
 
             // Global toggles (available in all states)
-            if (_isDevelopmentEnvironment)
-            {
-                if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay)) _showDebugOverlay = !_showDebugOverlay;
-                if (_input.IsKeyPressed(InputKeys.KEY_F2)) _showDebugChunkBounds = !_showDebugChunkBounds;
-                if (_input.IsKeyPressed(InputKeys.KEY_F3)) _showColliderRadii = !_showColliderRadii;
-                if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay))
-                    _settings.Update(s => s.Debug.ShowDebugOverlay = _showDebugOverlay);
-                if (_input.IsKeyPressed(InputKeys.KEY_F2))
-                    _settings.Update(s => s.Debug.ShowChunkBounds = _showDebugChunkBounds);
-                if (_input.IsKeyPressed(InputKeys.KEY_F3))
-                    _settings.Update(s => s.Debug.ShowColliderRadii = _showColliderRadii);
-            }
+            if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay)) _showDebugOverlay = !_showDebugOverlay;
+            if (_input.IsKeyPressed(InputKeys.KEY_F2)) _showDebugChunkBounds = !_showDebugChunkBounds;
+            if (_input.IsKeyPressed(InputKeys.KEY_F3)) _showColliderRadii = !_showColliderRadii;
+            if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay))
+                _settings.Update(s => s.Debug.ShowDebugOverlay = _showDebugOverlay);
+            if (_input.IsKeyPressed(InputKeys.KEY_F2))
+                _settings.Update(s => s.Debug.ShowChunkBounds = _showDebugChunkBounds);
+            if (_input.IsKeyPressed(InputKeys.KEY_F3))
+                _settings.Update(s => s.Debug.ShowColliderRadii = _showColliderRadii);
 
             // Toggle fullscreen on bound key press
             if (KeyBindingTokens.IsPressed(_input, keyboard.Fullscreen))
@@ -408,28 +400,6 @@ namespace Veilborne.Core
                         _input.ShowCursor();
                         break;
                     }
-
-                    // Mouse wheel hotbar scroll
-                    float wheel = _input.GetMouseWheelMove();
-                    if (wheel != 0 && IsBindingConfigured(keyboard.Scroll))
-                    {
-                        int delta = wheel > 0 ? -1 : 1;
-                        _selectedHotbarSlot = ((_selectedHotbarSlot + delta) % 9 + 9) % 9;
-                    }
-                    else if (KeyBindingTokens.IsPressed(_input, keyboard.Scroll))
-                    {
-                        _selectedHotbarSlot = (_selectedHotbarSlot + 1) % 9;
-                    }
-
-                    // Hotbar selection 1-9
-                    for (int i = 0; i < 9; i++)
-                    {
-                        if (KeyBindingTokens.IsPressed(_input, GetHotbarBinding(i)))
-                            _selectedHotbarSlot = i;
-                    }
-
-                    ApplySelectedToolToDig();
-
                     break;
 
                 case GameState.Paused:
@@ -1181,24 +1151,6 @@ namespace Veilborne.Core
             });
         }
 
-        private InputBindingSettings GetHotbarBinding(int index)
-        {
-            var keyboard = _settings.Current.Keyboard;
-            return index switch
-            {
-                0 => keyboard.Hotbar1,
-                1 => keyboard.Hotbar2,
-                2 => keyboard.Hotbar3,
-                3 => keyboard.Hotbar4,
-                4 => keyboard.Hotbar5,
-                5 => keyboard.Hotbar6,
-                6 => keyboard.Hotbar7,
-                7 => keyboard.Hotbar8,
-                8 => keyboard.Hotbar9,
-                _ => keyboard.Hotbar1
-            };
-        }
-
         private static bool IsBindingConfigured(InputBindingSettings binding)
         {
             return KeyBindingTokens.Normalize(binding.Primary) != KeyBindingTokens.None ||
@@ -1226,18 +1178,9 @@ namespace Veilborne.Core
             var settings = _settings.Current;
             _graphics.SetTargetFps(settings.Graphics.TargetFps);
 
-            if (_isDevelopmentEnvironment)
-            {
-                _showDebugOverlay = settings.Debug.ShowDebugOverlay;
-                _showDebugChunkBounds = settings.Debug.ShowChunkBounds;
-                _showColliderRadii = settings.Debug.ShowColliderRadii;
-            }
-            else
-            {
-                _showDebugOverlay = false;
-                _showDebugChunkBounds = false;
-                _showColliderRadii = false;
-            }
+            _showDebugOverlay = settings.Debug.ShowDebugOverlay;
+            _showDebugChunkBounds = settings.Debug.ShowChunkBounds;
+            _showColliderRadii = settings.Debug.ShowColliderRadii;
 
             if (!initialApply)
             {
@@ -1283,28 +1226,8 @@ namespace Veilborne.Core
 
         private void DrawDebugOverlay()
         {
-            int fps = _time.Fps;
-            int ups = _time.Ups;
             var cam = _playerEntity.GetComponent<CameraComponent>();
-            var pos = cam.Position;
-            int x = 10;
-            int y = 10;
-            _ui.DrawText($"FPS: {fps}  UPS: {ups}", x, y, 20, new Vector4(0, 1, 0, 1));
-            _ui.DrawText($"Pos: {pos.X:0.0}, {pos.Y:0.0}, {pos.Z:0.0}", x, y + 22, 20, Vector4.One);
-            int hours = (int)MathF.Floor(_sky.TimeOfDayHours24) % 24;
-            int minutes = (int)MathF.Floor((_sky.TimeOfDayHours24 - hours) * 60f) % 60;
-            _ui.DrawText($"Time: {hours:00}:{minutes:00}", x, y + 44, 20, new Vector4(0.95f, 0.9f, 0.7f, 1f));
-
-            if (_terrain is IDebugTerrain dbg)
-            {
-                var info = dbg.GetDebugInfo(pos);
-                int line = y + 66;
-                _ui.DrawText($"Chunk: ({info.ChunkX}, {info.ChunkZ})", x, line, 20, Vector4.One);
-                line += 22;
-                _ui.DrawText($"Local: ({info.LocalX}, {info.LocalZ}) of {info.ChunkSize} (tile {info.TileSize:0.##}m)", x, line, 20, Vector4.One);
-                line += 22;
-                _ui.DrawText($"Biome: {info.BiomeId}", x, line, 20, Vector4.One);
-            }
+            _debugOverlayUi.Draw(_ui, cam);
         }
 
         private void DrawChunkBoundsOverlay()
@@ -1315,26 +1238,116 @@ namespace Veilborne.Core
             var cam = _playerEntity.GetComponent<CameraComponent>();
             var info = debugTerrain.GetDebugInfo(cam.Position);
             float chunkWorld = info.ChunkSize * info.TileSize;
-            float yBase = 0f;
-            float yTop = 24f;
+            float chunkMinX = info.ChunkX * chunkWorld;
+            float chunkMinZ = info.ChunkZ * chunkWorld;
+            float chunkMaxX = chunkMinX + chunkWorld;
+            float chunkMaxZ = chunkMinZ + chunkWorld;
 
-            for (int dz = -1; dz <= 1; dz++)
-            for (int dx = -1; dx <= 1; dx++)
+            // Sample terrain within the current chunk so the debug box hugs ground elevation.
+            float minY = float.PositiveInfinity;
+            float maxY = float.NegativeInfinity;
+            const int samplesPerAxis = 5;
+            for (int z = 0; z < samplesPerAxis; z++)
+            for (int x = 0; x < samplesPerAxis; x++)
             {
-                int cx = info.ChunkX + dx;
-                int cz = info.ChunkZ + dz;
-                var center = new Vector3(
-                    (cx + 0.5f) * chunkWorld,
-                    yBase,
-                    (cz + 0.5f) * chunkWorld);
-
-                Vector4 boxColor = (dx == 0 && dz == 0)
-                    ? new Vector4(0.2f, 0.95f, 0.2f, 1f)
-                    : new Vector4(0.2f, 0.6f, 1f, 1f);
-
-                DrawProjectedBoundsRectangle(center, new Vector3(chunkWorld, yTop, chunkWorld), boxColor, camera);
-                DrawChunkAxesGizmo(center, chunkWorld * 0.2f, camera);
+                float tx = x / (float)(samplesPerAxis - 1);
+                float tz = z / (float)(samplesPerAxis - 1);
+                float wx = chunkMinX + tx * chunkWorld;
+                float wz = chunkMinZ + tz * chunkWorld;
+                float wy = _terrain.SampleHeight(new Vector3(wx, 0f, wz));
+                if (wy < minY) minY = wy;
+                if (wy > maxY) maxY = wy;
             }
+
+            if (!float.IsFinite(minY) || !float.IsFinite(maxY))
+                return;
+
+            float midX = (chunkMinX + chunkMaxX) * 0.5f;
+            float midZ = (chunkMinZ + chunkMaxZ) * 0.5f;
+            const float groundOffset = 0.12f;
+            int segments = Math.Max(4, info.ChunkSize / 2);
+
+            // Ground guides: perimeter + cross lines through the center.
+            var groundColor = new Vector4(0.2f, 0.95f, 0.2f, 1f);
+            DrawTerrainPolyline(new Vector3(chunkMinX, 0f, chunkMinZ), new Vector3(chunkMaxX, 0f, chunkMinZ), segments, groundOffset, groundColor, camera);
+            DrawTerrainPolyline(new Vector3(chunkMaxX, 0f, chunkMinZ), new Vector3(chunkMaxX, 0f, chunkMaxZ), segments, groundOffset, groundColor, camera);
+            DrawTerrainPolyline(new Vector3(chunkMaxX, 0f, chunkMaxZ), new Vector3(chunkMinX, 0f, chunkMaxZ), segments, groundOffset, groundColor, camera);
+            DrawTerrainPolyline(new Vector3(chunkMinX, 0f, chunkMaxZ), new Vector3(chunkMinX, 0f, chunkMinZ), segments, groundOffset, groundColor, camera);
+            DrawTerrainPolyline(new Vector3(chunkMinX, 0f, midZ), new Vector3(chunkMaxX, 0f, midZ), segments, groundOffset, new Vector4(0.7f, 0.95f, 0.2f, 1f), camera);
+            DrawTerrainPolyline(new Vector3(midX, 0f, chunkMinZ), new Vector3(midX, 0f, chunkMaxZ), segments, groundOffset, new Vector4(0.7f, 0.95f, 0.2f, 1f), camera);
+
+            // Sky pillars at corners and center.
+            float skyTop = MathF.Max(maxY + 35f, camera.Position.Y + 25f);
+            var skyColor = new Vector4(0.35f, 0.95f, 1.0f, 0.95f);
+            DrawSkyPillar(chunkMinX, chunkMinZ, groundOffset, skyTop, skyColor, camera);
+            DrawSkyPillar(chunkMaxX, chunkMinZ, groundOffset, skyTop, skyColor, camera);
+            DrawSkyPillar(chunkMaxX, chunkMaxZ, groundOffset, skyTop, skyColor, camera);
+            DrawSkyPillar(chunkMinX, chunkMaxZ, groundOffset, skyTop, skyColor, camera);
+            DrawSkyPillar(midX, midZ, groundOffset, skyTop, new Vector4(0.95f, 0.95f, 0.2f, 0.95f), camera);
+        }
+
+        private void DrawTerrainPolyline(Vector3 start, Vector3 end, int segments, float heightOffset, Vector4 color, CameraComponent camera)
+        {
+            int segs = Math.Max(1, segments);
+            Vector3 prev = start;
+            prev.Y = _terrain.SampleHeight(prev) + heightOffset;
+
+            for (int i = 1; i <= segs; i++)
+            {
+                float t = i / (float)segs;
+                Vector3 cur = Vector3.Lerp(start, end, t);
+                cur.Y = _terrain.SampleHeight(cur) + heightOffset;
+                DrawProjectedLine(prev, cur, color, camera);
+                prev = cur;
+            }
+        }
+
+        private void DrawSkyPillar(float worldX, float worldZ, float groundOffset, float skyTop, Vector4 color, CameraComponent camera)
+        {
+            float yBase = _terrain.SampleHeight(new Vector3(worldX, 0f, worldZ)) + groundOffset;
+            DrawProjectedLine(new Vector3(worldX, yBase, worldZ), new Vector3(worldX, skyTop, worldZ), color, camera);
+        }
+
+        private void DrawProjectedWireframeBox(Vector3 min, Vector3 max, Vector4 color, CameraComponent camera)
+        {
+            Vector3[] corners =
+            [
+                new(min.X, min.Y, min.Z), // 0
+                new(max.X, min.Y, min.Z), // 1
+                new(max.X, min.Y, max.Z), // 2
+                new(min.X, min.Y, max.Z), // 3
+                new(min.X, max.Y, min.Z), // 4
+                new(max.X, max.Y, min.Z), // 5
+                new(max.X, max.Y, max.Z), // 6
+                new(min.X, max.Y, max.Z)  // 7
+            ];
+
+            Span<Vector2> p = stackalloc Vector2[8];
+            Span<bool> projected = stackalloc bool[8];
+            for (int i = 0; i < corners.Length; i++)
+            {
+                projected[i] = TryProjectWorldToScreen(corners[i], camera, out p[i]);
+            }
+
+            static void DrawEdge(IUiProvider ui, Span<Vector2> pts, int a, int b, Vector4 c)
+            {
+                var pa = pts[a];
+                var pb = pts[b];
+                ui.DrawLine((int)pa.X, (int)pa.Y, (int)pb.X, (int)pb.Y, c);
+            }
+
+            if (projected[0] && projected[1]) DrawEdge(_ui, p, 0, 1, color);
+            if (projected[1] && projected[2]) DrawEdge(_ui, p, 1, 2, color);
+            if (projected[2] && projected[3]) DrawEdge(_ui, p, 2, 3, color);
+            if (projected[3] && projected[0]) DrawEdge(_ui, p, 3, 0, color);
+            if (projected[4] && projected[5]) DrawEdge(_ui, p, 4, 5, color);
+            if (projected[5] && projected[6]) DrawEdge(_ui, p, 5, 6, color);
+            if (projected[6] && projected[7]) DrawEdge(_ui, p, 6, 7, color);
+            if (projected[7] && projected[4]) DrawEdge(_ui, p, 7, 4, color);
+            if (projected[0] && projected[4]) DrawEdge(_ui, p, 0, 4, color);
+            if (projected[1] && projected[5]) DrawEdge(_ui, p, 1, 5, color);
+            if (projected[2] && projected[6]) DrawEdge(_ui, p, 2, 6, color);
+            if (projected[3] && projected[7]) DrawEdge(_ui, p, 3, 7, color);
         }
 
         private void DrawColliderRadiiOverlay()
@@ -1460,54 +1473,26 @@ namespace Veilborne.Core
 
         private void DrawHotbar()
         {
-            int slotSize = 60;
-            int spacing = 5;
-            int totalWidth = (slotSize * 9) + (spacing * 8);
-            int startX = _graphics.ScreenWidth / 2 - totalWidth / 2;
-            int startY = _graphics.ScreenHeight - slotSize - 10;
-
-            for (int i = 0; i < 9; i++)
-            {
-                _ui.DrawRectangle(startX + i * (slotSize + spacing), startY, slotSize, slotSize, new Vector4(0.2f, 0.2f, 0.2f, 1.0f));
-                if (i == _selectedHotbarSlot)
-                {
-                    _ui.DrawRectangleLines(startX + i * (slotSize + spacing), startY, slotSize, slotSize, new Vector4(1, 1, 0, 1));
-                }
-                var item = _items.GetItemInSlot(i);
-                if (item != null)
-                {
-                    // Draw item texture in slot (placeholder)
-                }
-            }
+            _hudUi.DrawHotbar(_ui, _graphics.ScreenWidth, _graphics.ScreenHeight, GetSelectedHotbarSlot());
         }
 
-        private void ApplySelectedToolToDig()
+        private int GetSelectedHotbarSlot()
         {
-            if (!_playerEntity.TryGetComponent<DigInteractionComponent>(out var dig))
-                return;
-
-            var item = _items.GetItemInSlot(_selectedHotbarSlot);
-            dig.ToolBreakSpeedMultiplier = Math.Clamp(item?.BreakSpeedMultiplier ?? 1f, 0.1f, 5f);
-            dig.ToolStaminaCost = Math.Max(0, item?.StaminaCost ?? 0);
-            _playerEntity.SetComponent(dig);
+            if (_playerEntity.TryGetComponent<HotbarSelectionComponent>(out var hotbar))
+                return Math.Clamp(hotbar.SelectedSlot, 0, 8);
+            return 0;
         }
 
         private void DrawCrosshair()
         {
-            Vector4 color = new Vector4(0.9f, 0.9f, 0.9f, 1.0f);
             if (_crosshairEntity.TryGetComponent<UIElementComponent>(out var uiElement))
             {
                 uiElement.Bounds = new Rect(_graphics.ScreenWidth / 2f, _graphics.ScreenHeight / 2f, 6f, 6f);
                 _crosshairEntity.SetComponent(uiElement);
-                if (uiElement.Text == "hit")
-                    color = new Vector4(0, 1, 0, 1);
             }
 
-            int cx = _graphics.ScreenWidth / 2;
-            int cy = _graphics.ScreenHeight / 2;
-            int size = 6;
-            _ui.DrawLine(cx - size, cy, cx + size, cy, color);
-            _ui.DrawLine(cx, cy - size, cx, cy + size, color);
+            bool isHit = _crosshairEntity.TryGetComponent<UIElementComponent>(out var state) && state.Text == "hit";
+            _hudUi.DrawCrosshair(_ui, _graphics.ScreenWidth, _graphics.ScreenHeight, isHit);
         }
 
     }

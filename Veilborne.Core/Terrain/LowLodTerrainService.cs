@@ -94,7 +94,19 @@ namespace Veilborne.Terrain
             // unload chunks outside desired set
             var toRemove = new List<(int cx, int cz)>();
             foreach (var key in _loadedChunks.Keys)
-                if (!desired.Contains(key)) toRemove.Add(key);
+            {
+                if (desired.Contains(key))
+                    continue;
+
+                // Keep a small hysteresis ring so LOD coverage stays continuous during streaming churn.
+                int dx = Math.Abs(key.cx - centerX);
+                int dz = Math.Abs(key.cz - centerZ);
+                int chebyshev = Math.Max(dx, dz);
+                if (chebyshev <= radiusChunks + 1)
+                    continue;
+
+                toRemove.Add(key);
+            }
             foreach (var key in toRemove)
             {
                 _loadedChunks.Remove(key);
@@ -116,7 +128,7 @@ namespace Veilborne.Terrain
                 {
                     Heights = item.heights,
                     BaseHeights = (float[,])item.heights.Clone(),
-                    Splatmap = BuildSplatmap(item.heights),
+                    Splatmap = BuildSplatmap(item.heights, item.heights),
                     Origin = item.origin,
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
@@ -148,7 +160,14 @@ namespace Veilborne.Terrain
                 lock (_biomeBlendByChunk)
                     blendInfo = _biomeBlendByChunk.TryGetValue(key, out var info) ? info : (null, 0f);
                 _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
-                _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, _config.Config.TerrainLayers, chunk.Splatmap);
+                _renderer.RenderAt(
+                    chunk.Heights,
+                    TileSize,
+                    chunk.Origin,
+                    camera,
+                    chunk.BaseHeights,
+                    _config.Config.TerrainLayers,
+                    chunk.Splatmap);
             }
         }
 
@@ -177,37 +196,35 @@ namespace Veilborne.Terrain
             }
         }
 
-        private Vector4[,] BuildSplatmap(float[,] heights)
+        private Vector4[,] BuildSplatmap(float[,] heights, float[,]? baseHeights)
         {
             int w = heights.GetLength(0);
             int h = heights.GetLength(1);
             var splat = new Vector4[w, h];
+            var layers = _config.Config.TerrainLayers;
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
             {
-                float slope = EstimateSlope(heights, x, z);
-                float top = Math.Clamp(1f - slope * 1.3f, 0f, 1f);
-                float dirt = Math.Clamp(1f - top, 0f, 1f);
-                float rock = Math.Clamp((slope - 0.45f) / 0.55f, 0f, 1f);
+                float depth = 0f;
+                if (baseHeights != null)
+                    depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
+
+                float top = Math.Clamp(1f - depth / MathF.Max(0.05f, layers.SubsurfaceDepth), 0f, 1f);
+                float dirt = 0f;
+                float rock = 0f;
+                if (depth > 0f)
+                {
+                    float subT = Math.Clamp(depth / MathF.Max(0.05f, layers.SubsurfaceDepth), 0f, 1f);
+                    float deepT = Math.Clamp((depth - layers.SubsurfaceDepth) / MathF.Max(0.05f, layers.DeepDepth - layers.SubsurfaceDepth), 0f, 1f);
+                    dirt = Math.Clamp(subT * (1f - deepT), 0f, 1f);
+                    rock = deepT;
+                }
                 float sum = top + dirt + rock;
                 splat[x, z] = sum > 1e-5f
                     ? new Vector4(top / sum, dirt / sum, rock / sum, 0f)
                     : new Vector4(1f, 0f, 0f, 0f);
             }
             return splat;
-        }
-
-        private static float EstimateSlope(float[,] heights, int x, int z)
-        {
-            int w = heights.GetLength(0);
-            int h = heights.GetLength(1);
-            int x0 = Math.Clamp(x - 1, 0, w - 1);
-            int x1 = Math.Clamp(x + 1, 0, w - 1);
-            int z0 = Math.Clamp(z - 1, 0, h - 1);
-            int z1 = Math.Clamp(z + 1, 0, h - 1);
-            float dx = heights[x1, z] - heights[x0, z];
-            float dz = heights[x, z1] - heights[x, z0];
-            return MathF.Min(1f, MathF.Sqrt(dx * dx + dz * dz) * 0.5f);
         }
     }
 }

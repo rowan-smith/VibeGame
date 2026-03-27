@@ -11,6 +11,7 @@ namespace Veilborne.Core.Sky
         Vector3 SunColor { get; }
         Vector3 SunDirection { get; }
         float SunIntensity { get; }
+        float ShadowStrength { get; }
         void Update(float deltaSeconds);
     }
 }

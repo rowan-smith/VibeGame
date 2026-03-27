@@ -229,7 +229,7 @@ namespace Veilborne.Terrain
 
             // Stagger extra RO/LOD updates to distribute workload
             _frameCounter++;
-            int roInterval = Math.Max(1, _cfg.ReadOnlyUpdateInterval);
+            int roInterval = Math.Max(1, _cfg.ReadOnlyUpdateInterval + (perfDeficit > 0.08f ? 1 : 0));
             int lodInterval = Math.Max(1, roInterval * 2);
 
             if (!_isWarmupMode && _frameCounter % roInterval == 0)
@@ -241,11 +241,9 @@ namespace Veilborne.Terrain
 
             if (_lowLodRing is not null)
             {
-                float roChunkWorld = _readOnlyRing.ChunkSize * _readOnlyRing.TileSize;
-                float lodChunkWorld = _lowLodRing.ChunkSize * _lowLodRing.TileSize;
-                int effectiveRo = ShouldShowReadOnlyRing() ? ro : 0;
-                int lodInnerExclusion = (int)MathF.Ceiling((effectiveRo * roChunkWorld) / lodChunkWorld);
-                _lowLodRing.InnerExclusionRadiusChunks = Math.Max(0, lodInnerExclusion);
+                // Continuity-first: never exclude inner LOD by RO radius.
+                // We allow overlap and resolve visibility with depth testing to avoid sky gaps.
+                _lowLodRing.InnerExclusionRadiusChunks = 0;
                 _lowLodRing.UpdateAround(worldPos, lod);
                 if (!_isWarmupMode && _frameCounter % lodInterval == 0)
                     _lowLodRing.UpdateAround(predictedPos, lod + 1);
@@ -306,13 +304,18 @@ namespace Veilborne.Terrain
                         int rx1 = Math.Clamp((int)MathF.Ceiling((iwMaxX - minX) / _readOnlyRing.TileSize), 0, _readOnlyRing.ChunkSize);
                         int rz1 = Math.Clamp((int)MathF.Ceiling((iwMaxZ - minZ) / _readOnlyRing.TileSize), 0, _readOnlyRing.ChunkSize);
 
-                        for (int z = rz0; z <= rz1; z++)
-                        for (int x = rx0; x <= rx1; x++)
-                        {
-                            float wx = minX + x * _readOnlyRing.TileSize;
-                            float wz = minZ + z * _readOnlyRing.TileSize;
-                            chunk.Heights[x, z] = _editableRing.SampleHeight(wx, wz);
-                        }
+                            for (int z = rz0; z <= rz1; z++)
+                            for (int x = rx0; x <= rx1; x++)
+                            {
+                                float wx = minX + x * _readOnlyRing.TileSize;
+                                float wz = minZ + z * _readOnlyRing.TileSize;
+                                chunk.Heights[x, z] = _editableRing.SampleHeight(wx, wz);
+                                if (chunk.Splatmap != null && chunk.BaseHeights != null)
+                                {
+                                    float depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
+                                    chunk.Splatmap[x, z] = ComputeDepthSplat(depth);
+                                }
+                            }
 
                         anyPatched = true;
                         aggX0 = Math.Min(aggX0, rx0);
@@ -419,6 +422,11 @@ namespace Veilborne.Terrain
                                 float wx = minX + x * _lowLodRing.TileSize;
                                 float wz = minZ + z * _lowLodRing.TileSize;
                                 chunk.Heights[x, z] = _editableRing.SampleHeight(wx, wz);
+                                if (chunk.Splatmap != null && chunk.BaseHeights != null)
+                                {
+                                    float depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
+                                    chunk.Splatmap[x, z] = ComputeDepthSplat(depth);
+                                }
                             }
 
                             anyPatched = true;
@@ -449,13 +457,36 @@ namespace Veilborne.Terrain
 
             // Upload a limited number of prepared meshes this frame.
             // During active editing, allow one extra upload to reduce visible dig latency.
-            int uploadBudget = _cfg.MaxMeshBuildsPerFrame + (anyEditableDirty ? 1 : 0);
+            int uploadBudget = _cfg.MaxMeshBuildsPerFrame;
+            if (perfDeficit > 0.10f)
+                uploadBudget = Math.Max(1, uploadBudget - 1);
+            if (anyEditableDirty && perfDeficit < 0.20f)
+                uploadBudget += 1;
             _renderer.ProcessBuildQueue(Math.Max(1, uploadBudget));
         }
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
         private static int Clamp(int v, int min, int max) => Math.Max(min, Math.Min(max, v));
         private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
+        private Vector4 ComputeDepthSplat(float depth)
+        {
+            var layers = _configService.Config.TerrainLayers;
+            float top = Math.Clamp(1f - depth / MathF.Max(0.05f, layers.SubsurfaceDepth), 0f, 1f);
+            float dirt = 0f;
+            float rock = 0f;
+            if (depth > 0f)
+            {
+                float subT = Math.Clamp(depth / MathF.Max(0.05f, layers.SubsurfaceDepth), 0f, 1f);
+                float deepT = Math.Clamp((depth - layers.SubsurfaceDepth) / MathF.Max(0.05f, layers.DeepDepth - layers.SubsurfaceDepth), 0f, 1f);
+                dirt = Math.Clamp(subT * (1f - deepT), 0f, 1f);
+                rock = deepT;
+            }
+
+            float sum = top + dirt + rock;
+            return sum > 1e-5f
+                ? new Vector4(top / sum, dirt / sum, rock / sum, 0f)
+                : new Vector4(1f, 0f, 0f, 0f);
+        }
 
         // -----------------------------
         // Sample Height
@@ -489,7 +520,7 @@ namespace Veilborne.Terrain
             // Exclude RO and LOD chunks that overlap editable chunks.
             foreach (var (ecx, ecz) in editableKeySet)
             {
-                if (!editableChunks.TryGetValue((ecx, ecz), out var editableChunk) || !editableChunk.IsMeshGenerated)
+                if (!editableChunks.TryGetValue((ecx, ecz), out _))
                     continue;
 
                 float eMinX = ecx * eChunkWorld;
@@ -517,33 +548,7 @@ namespace Veilborne.Terrain
                 }
             }
 
-            // Exclude LOD chunks that overlap RO chunks only if the RO ring is actually being rendered.
-            // This avoids far-distance holes when RO is intentionally hidden/disabled.
-            if (_lowLodRing is not null)
-            {
-                if (showReadOnlyRing)
-                {
-                    var roChunks = _readOnlyRing.GetLoadedChunks();
-                    foreach (var (rcx, rcz) in roChunks.Keys)
-                    {
-                        if (roExclude.Contains((rcx, rcz))) continue;
-                        if (!roChunks.TryGetValue((rcx, rcz), out var roChunk) || !roChunk.IsMeshGenerated)
-                            continue;
-                        float rMinX = rcx * roChunkWorld;
-                        float rMinZ = rcz * roChunkWorld;
-                        float rMaxX = rMinX + roChunkWorld;
-                        float rMaxZ = rMinZ + roChunkWorld;
-
-                        int lodMinX = (int)MathF.Floor(rMinX / lodChunkWorld);
-                        int lodMaxX = (int)MathF.Floor((rMaxX - 1e-3f) / lodChunkWorld);
-                        int lodMinZ = (int)MathF.Floor(rMinZ / lodChunkWorld);
-                        int lodMaxZ = (int)MathF.Floor((rMaxZ - 1e-3f) / lodChunkWorld);
-                        for (int cz = lodMinZ; cz <= lodMaxZ; cz++)
-                        for (int cx = lodMinX; cx <= lodMaxX; cx++)
-                            lodExclude.Add((cx, cz));
-                    }
-                }
-            }
+            // Do not exclude LOD where RO exists; overlap prevents transient ring holes under streaming churn.
 
             // Far
             if (showLowLodRing)
@@ -590,20 +595,7 @@ namespace Veilborne.Terrain
         // -----------------------------
         public Task DigSphereAsync(Vector3 worldCenter, float radius, float strength = 1.0f, VoxelFalloff falloff = VoxelFalloff.Cosine)
         {
-            _editableRing.DigSphereAsync(worldCenter, radius, strength, falloff).GetAwaiter().GetResult();
-            foreach (var chunk in _editableRing.GetLoadedChunks().Values)
-            {
-                if (chunk.Dirty || !chunk.IsMeshGenerated)
-                {
-                    _renderer.MarkOriginDirty(chunk.Origin);
-                    _renderer.EnqueueBuild(chunk.Heights, _editableRing.TileSize, chunk.Origin);
-                    chunk.IsMeshGenerated = true;
-                    chunk.BuiltFromVersion = chunk.Version;
-                    chunk.Dirty = false;
-                }
-            }
-            _renderer.ProcessBuildQueue(Math.Max(1, _cfg.MaxMeshBuildsPerFrame + 2));
-            return Task.CompletedTask;
+            return _editableRing.DigSphereAsync(worldCenter, radius, strength, falloff);
         }
 
         public Task PlaceSphereAsync(Vector3 position, float radius, float strength, VoxelFalloff falloff)

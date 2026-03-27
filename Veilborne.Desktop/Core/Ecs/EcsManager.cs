@@ -41,14 +41,15 @@ namespace Veilborne.Core.Ecs
             var biomeProvider = _serviceProvider.GetService<IBiomeProvider>();
             var settings = _serviceProvider.GetRequiredService<IGameSettingsService>();
             var sky = _serviceProvider.GetRequiredService<ISkyLightingService>();
-            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, sky, biomeProvider);
+            var shadowMap = _serviceProvider.GetRequiredService<IShadowMapService>();
+            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, sky, shadowMap, biomeProvider);
             _terrainRenderer = realRenderer;
 
             // Swap the DI proxy renderer to the real implementation
             var proxy = _serviceProvider.GetService<ProxyTerrainRenderer>();
             proxy?.SetInner(realRenderer);
 
-            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, sky, contentManager, Matrix.Identity, Matrix.Identity);
+            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, sky, shadowMap, contentManager, Matrix.Identity, Matrix.Identity);
             _uiProvider = new MonoGameUiProvider();
 
             _systems.Add(_serviceProvider.GetRequiredService<CleanupSystem>());
@@ -57,11 +58,12 @@ namespace Veilborne.Core.Ecs
             _systems.Add(_serviceProvider.GetRequiredService<DigInputSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigProbeSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<VoxelRaycastSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CameraSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<PlayerInputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<HotbarSelectionSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DepleteSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigExecutionSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<PatchRegenSystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<CameraSystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<PlayerInputSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<AISystem>());
             _systems.Add(_serviceProvider.GetRequiredService<AnimationSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<ParticleSystem>());
@@ -128,13 +130,14 @@ namespace Veilborne.Core.Ecs
             var biomeProvider = _serviceProvider.GetService<IBiomeProvider>();
             var settings = _serviceProvider.GetRequiredService<IGameSettingsService>();
             var sky = _serviceProvider.GetRequiredService<ISkyLightingService>();
-            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, sky, biomeProvider);
+            var shadowMap = _serviceProvider.GetRequiredService<IShadowMapService>();
+            var realRenderer = new MonoGameTerrainRenderer(graphicsDevice, settings, sky, shadowMap, biomeProvider);
             _terrainRenderer = realRenderer;
 
             var proxy = _serviceProvider.GetService<ProxyTerrainRenderer>();
             proxy?.SetInner(realRenderer);
 
-            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, sky, null, Matrix.Identity, Matrix.Identity);
+            _worldObjectRenderer = new MonoGameWorldObjectRenderer(entityRegistry, graphicsDevice, settings, sky, shadowMap, null, Matrix.Identity, Matrix.Identity);
             _uiProvider = new MonoGameUiProvider();
             _systems.Add(_serviceProvider.GetRequiredService<CleanupSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DependencySystem>());
@@ -142,11 +145,12 @@ namespace Veilborne.Core.Ecs
             _systems.Add(_serviceProvider.GetRequiredService<DigInputSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigProbeSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<VoxelRaycastSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<CameraSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<PlayerInputSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<HotbarSelectionSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DepleteSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigExecutionSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<PatchRegenSystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<CameraSystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<PlayerInputSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<AISystem>());
             _systems.Add(_serviceProvider.GetRequiredService<AnimationSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<ParticleSystem>());

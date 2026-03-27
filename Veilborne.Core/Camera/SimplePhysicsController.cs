@@ -1,7 +1,6 @@
 using System.Numerics;
 using Veilborne.Core.Ecs;
 using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Settings;
 using Veilborne.Interfaces;
 
 namespace Veilborne.Camera
@@ -9,13 +8,9 @@ namespace Veilborne.Camera
     public class SimplePhysicsController : IPhysicsController
     {
         private readonly float _eyeHeight;
-        private readonly IInputProvider _input;
-        private readonly IGameSettingsService _settings;
 
-        public SimplePhysicsController(IInputProvider input, IGameSettingsService settings, float eyeHeight = 1.7f)
+        public SimplePhysicsController(float eyeHeight = 1.7f)
         {
-            _input = input;
-            _settings = settings;
             _eyeHeight = eyeHeight;
         }
 
@@ -30,10 +25,7 @@ namespace Veilborne.Camera
             // Ground height under current position (eye height applied after sampling)
             float groundY = groundHeightFunc(camera.Position.X, camera.Position.Z) + _eyeHeight;
 
-            if (KeyBindingTokens.IsPressed(_input, _settings.Current.Keyboard.Jump))
-                jump.JumpBufferTimer = jump.JumpBufferSeconds;
-            else
-                jump.JumpBufferTimer = MathF.Max(0f, jump.JumpBufferTimer - dt);
+            jump.JumpBufferTimer = MathF.Max(0f, jump.JumpBufferTimer - dt);
 
             if (jump.IsGrounded)
                 jump.CoyoteTimer = jump.CoyoteSeconds;

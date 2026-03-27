@@ -1,4 +1,3 @@
-using System.Numerics;
 using Serilog;
 using Veilborne.Core.Ecs.Components;
 using Veilborne.Interfaces;
@@ -25,14 +24,8 @@ namespace Veilborne.Core.Ecs.Systems
             {
                 anyCamera = true;
                 var cam = entity.GetComponent<CameraComponent>();
-                Vector3 horizMove = _cameraController.UpdateAndGetHorizontalMove(ref cam, dt);
+                _cameraController.UpdateAndGetHorizontalMove(ref cam, dt);
                 entity.SetComponent(cam);
-                if (entity.TryGetComponent<MoveInputComponent>(out var moveInput))
-                {
-                    moveInput.HorizontalDisplacement = horizMove;
-                    entity.SetComponent(moveInput);
-                }
-
             });
 
             if (!anyCamera && !_loggedMissingCamera)
