@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
 /// <summary>
 /// Marks a UI canvas target entity and basic visibility state.

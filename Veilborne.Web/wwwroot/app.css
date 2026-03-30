@@ -1,0 +1,105 @@
+:root {
+    --bg: #0a0f17;
+    --bg-elevated: rgba(15, 24, 38, 0.8);
+    --line: rgba(139, 169, 204, 0.2);
+    --text: #edf4ff;
+    --muted: #9fb3cd;
+    --accent: #8cd6ff;
+    --accent-strong: #d3f07a;
+}
+
+html, body {
+    margin: 0;
+    min-height: 100%;
+    background:
+        radial-gradient(circle at top, rgba(51, 99, 167, 0.35), transparent 40%),
+        linear-gradient(180deg, #101826 0%, #071019 100%);
+    color: var(--text);
+    font-family: Georgia, "Times New Roman", serif;
+}
+
+body {
+    min-height: 100vh;
+}
+
+.shell {
+    min-height: 100vh;
+}
+
+.boot {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    color: var(--muted);
+}
+
+.hero {
+    display: grid;
+    gap: 2rem;
+    padding: 3rem 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.copy,
+.stage {
+    border: 1px solid var(--line);
+    background: var(--bg-elevated);
+    backdrop-filter: blur(12px);
+    border-radius: 24px;
+    padding: 1.5rem;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+}
+
+.eyebrow {
+    margin: 0 0 0.75rem 0;
+    color: var(--accent-strong);
+    font-size: 0.85rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.copy h1 {
+    margin: 0 0 1rem 0;
+    font-size: clamp(2.4rem, 5vw, 4.75rem);
+    line-height: 0.95;
+}
+
+.body {
+    margin: 0 0 1rem 0;
+    max-width: 60ch;
+    color: var(--muted);
+    font-size: 1.05rem;
+    line-height: 1.6;
+}
+
+.status {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(140, 214, 255, 0.14);
+    color: var(--accent);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#veilborne-game-canvas {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    display: block;
+    border-radius: 18px;
+    border: 1px solid rgba(211, 240, 122, 0.22);
+    background:
+        radial-gradient(circle at 50% 35%, rgba(211, 240, 122, 0.12), transparent 35%),
+        linear-gradient(180deg, rgba(19, 29, 42, 0.94), rgba(7, 13, 21, 0.98));
+}
+
+@media (min-width: 900px) {
+    .hero {
+        grid-template-columns: 1.05fr 1fr;
+        align-items: stretch;
+        padding: 4rem 2rem;
+    }
+}

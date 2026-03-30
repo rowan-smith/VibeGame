@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
 /// <summary>
 /// Stores remaining lifetime in seconds for temporary entities.

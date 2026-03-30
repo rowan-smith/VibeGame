@@ -1,13 +1,10 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Numerics;
 using Serilog;
-using Veilborne.Interfaces;
-using Veilborne.Objects;
-using Veilborne.Biomes;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Objects;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     internal sealed class HeightmapChunkJobScheduler : IChunkJobScheduler
     {

@@ -1,8 +1,8 @@
 using System.Numerics;
-using Veilborne.Interfaces;
-using Veilborne.Settings;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Settings;
 
-namespace Veilborne.UI
+namespace Veilborne.Core.UI
 {
     public enum MenuAction
     {

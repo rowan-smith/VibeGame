@@ -3,11 +3,12 @@ using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Serilog;
 using SharpGLTF.Schema2;
-using Veilborne.Ecs;
-using Veilborne.Ecs.Components;
-using Veilborne.Objects;
-using Veilborne.Settings;
-using Veilborne.Sky;
+using Veilborne.Core;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Objects;
+using Veilborne.Core.Settings;
+using Veilborne.Core.Sky;
 using Quaternion = System.Numerics.Quaternion;
 using Matrix4x4 = System.Numerics.Matrix4x4;
 using NumVec2 = System.Numerics.Vector2;
@@ -18,7 +19,7 @@ using XnaMatrix = Microsoft.Xna.Framework.Matrix;
 using XnaMathHelper = Microsoft.Xna.Framework.MathHelper;
 using XnaColor = Microsoft.Xna.Framework.Color;
 
-namespace Veilborne.MonoGameImpl
+namespace Veilborne.Desktop.MonoGameImpl
 {
     public class MonoGameWorldObjectRenderer : IWorldObjectRenderer, IRenderSystem
     {

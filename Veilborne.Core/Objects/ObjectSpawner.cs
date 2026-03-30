@@ -1,13 +1,10 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Numerics;
-using System.Threading.Tasks;
-using Veilborne.Biomes;
-using Veilborne.Interfaces;
-using Veilborne.Terrain;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne.Objects
+namespace Veilborne.Core.Objects
 {
     public sealed class ObjectSpawner
     {

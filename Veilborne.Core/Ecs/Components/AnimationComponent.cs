@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
 /// <summary>
 /// Stores animation playback state for renderable entities.

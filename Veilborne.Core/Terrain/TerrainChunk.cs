@@ -1,7 +1,6 @@
-using System.Collections.Generic;
 using System.Numerics;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public class TerrainChunk
     {

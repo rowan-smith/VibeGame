@@ -1,14 +1,14 @@
 using System.Numerics;
 using Serilog;
-using Veilborne.Ecs;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
-using Veilborne.Settings;
-using Veilborne.Sky;
-using Veilborne.Terrain;
-using Veilborne.UI;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Settings;
+using Veilborne.Core.Sky;
+using Veilborne.Core.Terrain;
+using Veilborne.Core.UI;
 
-namespace Veilborne
+namespace Veilborne.Core
 {
     public class VeilborneEngine : IGameEngine
     {

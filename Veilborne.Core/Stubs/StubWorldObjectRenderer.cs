@@ -1,7 +1,7 @@
-using Veilborne.Ecs.Components;
-using Veilborne.Objects;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Objects;
 
-namespace Veilborne.Stubs
+namespace Veilborne.Core.Stubs
 {
     /// <summary>
     /// Stub world object renderer for DI setup. Real implementation will be provided by ECS manager.

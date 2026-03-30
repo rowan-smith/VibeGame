@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public struct Rect
     {

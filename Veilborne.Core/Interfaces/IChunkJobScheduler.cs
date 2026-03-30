@@ -1,6 +1,6 @@
-using Veilborne.Terrain;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public interface IChunkJobScheduler
     {

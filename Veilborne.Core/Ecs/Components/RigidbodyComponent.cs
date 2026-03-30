@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
 /// <summary>
 /// Stores rigidbody simulation flags such as kinematic and sleeping states.

@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Per-frame render phase state shared across cull/sort/render systems.

@@ -1,7 +1,8 @@
+using Veilborne.Core.Ecs.Components;
 using EcsEntityStore = Friflo.Engine.ECS.EntityStore;
-using EcsComponent = Veilborne.Ecs.Components.IComponent;
+using EcsComponent = Veilborne.Core.Ecs.Components.IComponent;
 
-namespace Veilborne.Ecs
+namespace Veilborne.Core.Ecs
 {
 public readonly struct Entity
 {
@@ -14,28 +15,28 @@ public readonly struct Entity
 
     public int Id => _inner.Id;
 
-    public T AddComponent<T>(T component) where T : struct, EcsComponent
+    public T AddComponent<T>(T component) where T : struct, IComponent
     {
         _inner.AddComponent(component);
         return component;
     }
 
-    public T GetComponent<T>() where T : struct, EcsComponent
+    public T GetComponent<T>() where T : struct, IComponent
     {
         return _inner.GetComponent<T>();
     }
 
-    public bool TryGetComponent<T>(out T component) where T : struct, EcsComponent
+    public bool TryGetComponent<T>(out T component) where T : struct, IComponent
     {
         return _inner.TryGetComponent(out component);
     }
 
-    public bool HasComponent<T>() where T : struct, EcsComponent
+    public bool HasComponent<T>() where T : struct, IComponent
     {
         return _inner.HasComponent<T>();
     }
 
-    public void SetComponent<T>(T component) where T : struct, EcsComponent
+    public void SetComponent<T>(T component) where T : struct, IComponent
     {
         _inner.GetComponent<T>() = component;
     }
@@ -56,7 +57,7 @@ public readonly struct Entity
             _store.GetEntityById(entity.Id).DeleteEntity();
         }
 
-        public IEnumerable<Entity> GetEntitiesWith<T>() where T : struct, EcsComponent
+        public IEnumerable<Entity> GetEntitiesWith<T>() where T : struct, IComponent
         {
             var query = _store.Query<T>();
         var entities = new List<Entity>();
@@ -67,7 +68,7 @@ public readonly struct Entity
         return entities;
     }
 
-        public void ForEachWith<T>(Action<Entity> callback) where T : struct, EcsComponent
+        public void ForEachWith<T>(Action<Entity> callback) where T : struct, IComponent
         {
             var query = _store.Query<T>();
             query.ForEachEntity((ref T _, Friflo.Engine.ECS.Entity ecsEntity) =>
@@ -76,7 +77,7 @@ public readonly struct Entity
             });
         }
 
-        public IEnumerable<Entity> GetEntitiesWith<T1, T2>() where T1 : struct, EcsComponent where T2 : struct, EcsComponent
+        public IEnumerable<Entity> GetEntitiesWith<T1, T2>() where T1 : struct, IComponent where T2 : struct, IComponent
         {
             var query = _store.Query<T1, T2>();
         var entities = new List<Entity>();
@@ -87,7 +88,7 @@ public readonly struct Entity
         return entities;
     }
 
-        public void ForEachWith<T1, T2>(Action<Entity> callback) where T1 : struct, EcsComponent where T2 : struct, EcsComponent
+        public void ForEachWith<T1, T2>(Action<Entity> callback) where T1 : struct, IComponent where T2 : struct, IComponent
         {
             var query = _store.Query<T1, T2>();
             query.ForEachEntity((ref T1 _, ref T2 __, Friflo.Engine.ECS.Entity ecsEntity) =>

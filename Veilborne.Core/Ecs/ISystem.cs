@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs
+namespace Veilborne.Core.Ecs
 {
     public interface ISystem
     {

@@ -3,9 +3,9 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using SkiaSharp;
 using Svg.Skia;
-using Veilborne.Interfaces;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.MonoGameImpl
+namespace Veilborne.Desktop.MonoGameImpl
 {
     public class MonoGameUiProvider : IUiProvider
     {

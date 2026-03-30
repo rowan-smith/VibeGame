@@ -1,4 +1,4 @@
-namespace Veilborne.UI
+namespace Veilborne.Core.UI
 {
     /// <summary>
     /// Shared context passed to screen renderers.

@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Biomes.Environment;
+using Veilborne.Core.Biomes.Environment;
 
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public interface IEnvironmentSampler
     {

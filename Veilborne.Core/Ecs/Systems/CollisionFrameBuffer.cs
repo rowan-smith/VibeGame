@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Per-frame transient collision data shared between detection and resolution phases.

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
 /// <summary>
 /// Stores linear velocity in world units per second.

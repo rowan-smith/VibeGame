@@ -3,15 +3,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
-using Veilborne.Ecs.Components;
-using Veilborne.Ecs.Systems;
-using Veilborne.Interfaces;
-using Veilborne.MonoGameImpl;
-using Veilborne.Objects;
-using Veilborne.Settings;
-using Veilborne.Sky;
+using Veilborne.Core;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Ecs.Systems;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Objects;
+using Veilborne.Core.Settings;
+using Veilborne.Core.Sky;
+using Veilborne.Desktop.MonoGameImpl;
 
-namespace Veilborne.Ecs
+namespace Veilborne.Desktop.Ecs
 {
     /// <summary>
     /// Manages ECS systems initialization after MonoGame dependencies are available

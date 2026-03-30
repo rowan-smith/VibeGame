@@ -1,8 +1,8 @@
 using Serilog;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     public class PlayerSystem : ISystem
     {

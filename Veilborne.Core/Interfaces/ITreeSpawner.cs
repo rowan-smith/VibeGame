@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Objects;
+using Veilborne.Core.Objects;
 
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public interface ITreeSpawner : IWorldObjectSpawner
     {

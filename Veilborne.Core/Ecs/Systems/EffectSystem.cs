@@ -1,6 +1,6 @@
-using Veilborne.Ecs.Components;
+using Veilborne.Core.Ecs.Components;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Maintains lightweight visual-effect state derived from lifetime.

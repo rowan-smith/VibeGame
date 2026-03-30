@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
     /// <summary>
     /// Defines collision layer and mask filtering rules for an entity.

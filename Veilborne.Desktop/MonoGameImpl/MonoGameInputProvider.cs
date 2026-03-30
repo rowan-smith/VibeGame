@@ -1,8 +1,8 @@
 using System.Numerics;
 using Microsoft.Xna.Framework.Input;
-using Veilborne.Interfaces;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.MonoGameImpl
+namespace Veilborne.Desktop.MonoGameImpl
 {
     public class MonoGameInputProvider : IInputProvider
     {

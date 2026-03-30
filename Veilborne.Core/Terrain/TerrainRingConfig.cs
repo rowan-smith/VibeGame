@@ -1,4 +1,4 @@
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public class TerrainRingConfig
     {

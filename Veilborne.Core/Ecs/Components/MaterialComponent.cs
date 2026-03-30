@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
 /// <summary>
 /// Stores material shader key and tint override for rendering.

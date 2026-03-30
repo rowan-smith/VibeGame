@@ -1,7 +1,6 @@
-using System.Collections.Generic;
 using System.Numerics;
 
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public interface IInputProvider
     {

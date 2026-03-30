@@ -1,31 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Numerics;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Veilborne.Biomes;
-using Veilborne.Biomes.Environment;
-using Veilborne.Biomes.Spawners;
-using Veilborne.Camera;
-using Veilborne.Ecs;
-using Veilborne.Ecs.Systems;
-using Veilborne.Interfaces;
-using Veilborne.Items;
-using Veilborne.Logging;
-using Veilborne.MonoGameImpl;
-using Veilborne.Objects;
-using Veilborne.Settings;
-using Veilborne.Sky;
-using Veilborne.Stubs;
-using Veilborne.Terrain;
-using Veilborne.TerrainTexture;
-using Veilborne.UI;
-using Veilborne.WorldObjects;
+using Veilborne.Core;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Biomes.Spawners;
+using Veilborne.Core.Camera;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Logging;
+using Veilborne.Core.Objects;
+using Veilborne.Core.Stubs;
+using Veilborne.Desktop.Ecs;
+using Veilborne.Desktop.MonoGameImpl;
 
-namespace Veilborne;
+namespace Veilborne.Desktop;
 
 internal static class Program
 {
@@ -40,12 +26,15 @@ internal static class Program
         using var logging = new LoggingService();
         var builder = Host.CreateApplicationBuilder(args);
 
-        // Bootstrap Core configuration
-        var configService = new WorldConfigService();
-        builder.Services.AddSingleton<IWorldConfigService>(configService);
+        // Register all core services via extension
+        builder.Services.AddVeilborneCoreServices();
 
-        // Core Input, Time, Graphics and UI
-        // Core providers (no MonoGame dependencies)
+        // Platform-specific and MonoGame-specific registrations
+        builder.Services.AddSingleton<ProxyTerrainRenderer>();
+        builder.Services.AddSingleton<ITerrainRenderer>(sp => sp.GetRequiredService<ProxyTerrainRenderer>());
+        builder.Services.AddSingleton<IWorldObjectRenderer, StubWorldObjectRenderer>();
+        builder.Services.AddSingleton<EcsManager>();
+        builder.Services.AddSingleton<IEcsRuntime>(sp => sp.GetRequiredService<EcsManager>());
         builder.Services.AddSingleton<IInputProvider, MonoGameInputProvider>();
         builder.Services.AddSingleton<ITimeService, MonoGameTimeService>();
         builder.Services.AddSingleton<MonoGameGraphicsProvider>();
@@ -53,124 +42,11 @@ internal static class Program
         builder.Services.AddSingleton<IGameLoopHost>(sp => sp.GetRequiredService<MonoGameGraphicsProvider>());
         // UI provider will be initialized after MonoGame is ready
 
-        // Core terrain & environment — proxy renderer: starts as stub, swapped to real MonoGame renderer after graphics init
-        builder.Services.AddSingleton<ProxyTerrainRenderer>();
-        builder.Services.AddSingleton<ITerrainRenderer>(sp => sp.GetRequiredService<ProxyTerrainRenderer>());
-        builder.Services.AddSingleton<IWorldObjectRenderer, StubWorldObjectRenderer>(); // Stub for DI, real one from ECS manager
-        builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
-        builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
-        builder.Services.AddSingleton<ISkyLightingService, SkyLightingService>();
-        builder.Services.AddSingleton<IShadowMapService, CpuShadowMapService>();
-        // ECS Systems (will be initialized manually after MonoGame is ready)
-        builder.Services.AddSingleton<CleanupSystem>();
-        builder.Services.AddSingleton<DependencySystem>();
-        builder.Services.AddSingleton<InputSystem>();
-        builder.Services.AddSingleton<DigInputSystem>();
-        builder.Services.AddSingleton<DigProbeSystem>();
-        builder.Services.AddSingleton<VoxelRaycastSystem>();
-        builder.Services.AddSingleton<DepleteSystem>();
-        builder.Services.AddSingleton<PatchRegenSystem>();
-        builder.Services.AddSingleton<DigExecutionSystem>();
-        builder.Services.AddSingleton<DigParticleSystem>();
-        builder.Services.AddSingleton<CameraSystem>();
-        builder.Services.AddSingleton<HotbarSelectionSystem>();
-        builder.Services.AddSingleton<PlayerSystem>(); // still used as implementation detail
-        builder.Services.AddSingleton<PlayerInputSystem>();
-        builder.Services.AddSingleton<AISystem>();
-        builder.Services.AddSingleton<AnimationSystem>();
-        builder.Services.AddSingleton<ParticleSystem>();
-        builder.Services.AddSingleton<BiomeAssetTracker>();
-        builder.Services.AddSingleton<BiomeDiscoverySystem>();
-        builder.Services.AddSingleton<AssetLoadSystem>();
-        builder.Services.AddSingleton<BiomePrepSystem>();
-        builder.Services.AddSingleton<AssetUnloadSystem>();
-        builder.Services.AddSingleton<WorldObjectSpatialIndex>();
-        builder.Services.AddSingleton<WorldObjectSpatialIndexSystem>();
-        builder.Services.AddSingleton<CollisionFrameBuffer>();
-        builder.Services.AddSingleton<EcsPerformanceMonitor>();
-        builder.Services.AddSingleton<CollisionDetectionSystem>();
-        builder.Services.AddSingleton<CollisionResolutionSystem>();
-        builder.Services.AddSingleton<ConstraintSystem>();
-        builder.Services.AddSingleton<ForceSystem>();
-        builder.Services.AddSingleton<IntegrationSystem>();
-        builder.Services.AddSingleton<TerrainLoadSystem>();
-        builder.Services.AddSingleton<TerrainLoadQueueSystem>();
-        builder.Services.AddSingleton<TerrainLoadRequestTracker>();
-        builder.Services.AddSingleton<TerrainGenSystem>();
-        builder.Services.AddSingleton<VegetationSystem>();
-        builder.Services.AddSingleton<ShadowMapSystem>();
-        builder.Services.AddSingleton<EffectSystem>();
-        builder.Services.AddSingleton<UISystem>();
-        builder.Services.AddSingleton<DebugDrawSystem>();
-        builder.Services.AddSingleton<CompositeRenderSystem>();
-        builder.Services.AddSingleton<EcsManager>();
-        builder.Services.AddSingleton<IEcsRuntime>(sp => sp.GetRequiredService<EcsManager>());
-
-        builder.Services.AddSingleton<IWorldObjectRegistry, WorldObjectRegistry>();
-        builder.Services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
-
-        // Load biomes dynamically
+        // Load biomes dynamically (host-specific)
         RegisterBiomes(builder.Services);
 
-        builder.Services.AddSingleton<IBiomeProvider>(sp =>
-        {
-            var config = sp.GetRequiredService<IWorldConfigService>();
-            var bcfg = config.BiomeProviderConfig;
-            return new SimpleBiomeProvider(
-                sp.GetServices<IBiome>(),
-                bcfg.AverageCellSize,
-                config.Seed,
-                bcfg.Jitter,
-                bcfg.WarpFrequencyScale,
-                bcfg.WarpAmplitudeScale,
-                bcfg.BlendWidthWorld);
-        });
-
-        // Terrain services
-        builder.Services.AddSingleton<EditableTerrainService>();
-        builder.Services.AddSingleton<ReadOnlyTerrainService>();
-        builder.Services.AddSingleton<LowLodTerrainService>();
-        builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorldConfigService>().TerrainConfig);
-
-        builder.Services.AddSingleton<IInfiniteTerrain>(sp =>
-        {
-            var config = sp.GetRequiredService<IWorldConfigService>();
-            return new TerrainManager(
-                sp.GetRequiredService<EditableTerrainService>(),
-                sp.GetRequiredService<ReadOnlyTerrainService>(),
-                config.TerrainConfig,
-                sp.GetRequiredService<IBiomeProvider>(),
-                sp.GetRequiredService<ITerrainRenderer>(),
-                config,
-                sp.GetRequiredService<ITimeService>(),
-                sp.GetRequiredService<IGameSettingsService>(),
-                sp.GetRequiredService<LowLodTerrainService>());
-        });
-        builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
-
-        // Game engine & state
-        builder.Services.AddSingleton<IGameSettingsService, GameSettingsService>();
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
         builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
-        builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
-        builder.Services.AddSingleton<HudUiController>();
-        builder.Services.AddSingleton<DebugOverlayUiController>();
-
-        builder.Services.AddSingleton(sp => new ObjectSpawner(
-            sp.GetRequiredService<IWorldConfigService>().Seed,
-            sp.GetRequiredService<ITerrainGenerator>(),
-            sp.GetRequiredService<IBiomeProvider>()));
-
-        // ECS
-        builder.Services.AddSingleton<EntityRegistry>();
-        builder.Services.AddSingleton(new Player(Vector3.Zero));
-        builder.Services.AddSingleton(sp => new World(
-            sp.GetRequiredService<IWorldConfigService>().Seed,
-            sp.GetRequiredService<Player>(),
-            sp.GetRequiredService<TerrainManager>(),
-            sp.GetRequiredService<IBiomeProvider>(),
-            sp.GetRequiredService<ObjectSpawner>(),
-            sp.GetRequiredService<EntityRegistry>()));
 
         builder.Services.AddHostedService<Entry>();
         builder.Services.AddTransient<IGameEngine, VeilborneEngine>();

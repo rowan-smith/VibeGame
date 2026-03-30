@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Veilborne
+namespace Veilborne.Core
 {
     // Minimal async task queue for off-thread work. Heavy jobs run on background thread(s),
     // while main thread can periodically Pump() to execute completion callbacks if needed.

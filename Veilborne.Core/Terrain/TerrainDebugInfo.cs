@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public record TerrainDebugInfo(
         int ChunkX, 

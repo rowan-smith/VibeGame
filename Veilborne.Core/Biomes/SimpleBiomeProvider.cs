@@ -1,10 +1,9 @@
-using System.Numerics;
 using System.Collections.Concurrent;
+using System.Numerics;
 using Serilog;
-using Veilborne.Interfaces;
-using Veilborne.Terrain;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Biomes
+namespace Veilborne.Core.Biomes
 {
     /// <summary>
     /// World-space Voronoi-style biome provider.

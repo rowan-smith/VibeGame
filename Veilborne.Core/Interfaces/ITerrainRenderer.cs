@@ -1,8 +1,8 @@
 using System.Numerics;
-using Veilborne.Biomes;
-using Veilborne.Ecs.Components;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Ecs.Components;
 
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public interface ITerrainRenderer
     {

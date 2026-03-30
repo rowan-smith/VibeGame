@@ -4,10 +4,10 @@ using Microsoft.Xna.Framework.Graphics;
 using Serilog;
 using SkiaSharp;
 using Svg.Skia;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.MonoGameImpl
+namespace Veilborne.Desktop.MonoGameImpl
 {
     public class MonoGameGraphicsProvider : IGraphicsProvider, IGameLoopHost
     {

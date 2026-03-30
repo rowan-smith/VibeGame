@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Tracks biome asset request/load state to avoid duplicate work.

@@ -1,8 +1,7 @@
-using System;
-using Veilborne.Ecs.Components;
-using Veilborne.Objects;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Objects;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     internal static class WorldObjectCollisionRules
     {

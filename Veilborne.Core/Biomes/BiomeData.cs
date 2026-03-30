@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Text.Json.Serialization;
 
-namespace Veilborne.Biomes
+namespace Veilborne.Core.Biomes
 {
     /// <summary>RGBA colour entry as stored in JSON (0-255 per channel).</summary>
     public class ColorRgba

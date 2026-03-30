@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
     /// <summary>
     /// Tracks currently selected hotbar slot for an entity.

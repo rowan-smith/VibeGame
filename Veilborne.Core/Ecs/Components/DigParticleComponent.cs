@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Terrain;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
     /// <summary>
     /// Marks an entity as a dig debris particle with velocity and lifetime.

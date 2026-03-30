@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using Veilborne.Interfaces;
-using Veilborne.Terrain;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Biomes
+namespace Veilborne.Core.Biomes
 {
     /// <summary>
     /// Helper methods to compute dominant biome over an area in a consistent way across systems.

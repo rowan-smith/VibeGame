@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Ecs.Components
+namespace Veilborne.Core.Ecs.Components
 {
 /// <summary>
 /// Stores frame movement intent produced by input systems.

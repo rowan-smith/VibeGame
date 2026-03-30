@@ -1,9 +1,9 @@
 using System.Numerics;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
-using Veilborne.Terrain;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Executes terrain dig operations from ECS interaction state.

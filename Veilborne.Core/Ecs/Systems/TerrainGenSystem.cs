@@ -1,6 +1,6 @@
-using Veilborne.Terrain;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Pumps asynchronous terrain generation/install queues each frame.

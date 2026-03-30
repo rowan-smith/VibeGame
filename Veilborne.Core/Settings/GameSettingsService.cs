@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Serilog;
 
-namespace Veilborne.Settings
+namespace Veilborne.Core.Settings
 {
     public sealed class GameSettings
     {

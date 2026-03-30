@@ -1,8 +1,7 @@
 using System.Numerics;
-using Veilborne.Interfaces;
-using Veilborne.Terrain;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Biomes.Environment
+namespace Veilborne.Core.Biomes.Environment
 {
     public sealed class MultiNoiseSampler : IEnvironmentSampler
     {

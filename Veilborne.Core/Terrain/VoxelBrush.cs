@@ -1,7 +1,6 @@
-using System;
 using System.Numerics;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public static class VoxelBrush
     {

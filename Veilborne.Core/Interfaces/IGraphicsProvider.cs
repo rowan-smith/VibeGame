@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Ecs.Components;
+using Veilborne.Core.Ecs.Components;
 
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public interface IGraphicsProvider
     {

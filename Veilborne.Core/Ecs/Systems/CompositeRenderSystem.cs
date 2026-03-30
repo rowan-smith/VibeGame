@@ -1,4 +1,4 @@
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// End-of-frame composite pass placeholder for skybox and overlay composition.

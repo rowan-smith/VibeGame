@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Veilborne
+namespace Veilborne.Core
 {
     public static class JsonModelLoader
     {

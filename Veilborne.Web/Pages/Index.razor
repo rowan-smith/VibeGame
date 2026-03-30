@@ -1,0 +1,23 @@
+@page "/"
+
+<PageTitle>Veilborne Web</PageTitle>
+
+<section class="hero">
+    <div class="copy">
+        <p class="eyebrow">Veilborne Web</p>
+        <h1>Browser host scaffolded for the KNI runtime.</h1>
+        <p class="body">
+            This project now builds as a WebAssembly app, references the shared core project,
+            and publishes the shared asset tree into browser static content.
+        </p>
+        <p class="body">
+            The desktop renderer stack still depends on native desktop APIs, so this web host is
+            currently the delivery shell and canvas mount point for the browser port.
+        </p>
+    </div>
+
+    <div class="stage">
+        <div class="status">KNI host target</div>
+        <canvas id="veilborne-game-canvas" width="1280" height="720" aria-label="Veilborne game canvas"></canvas>
+    </div>
+</section>

@@ -1,6 +1,6 @@
-using Veilborne.Interfaces;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Settings
+namespace Veilborne.Core.Settings
 {
     public static class KeyBindingTokens
     {

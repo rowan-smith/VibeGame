@@ -1,14 +1,11 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using Veilborne.Interfaces;
-using Veilborne.Biomes;
-using Veilborne.Ecs.Components;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
 using Vector4 = System.Numerics.Vector4;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public class LowLodTerrainService
     {

@@ -1,14 +1,9 @@
-using System;
-using System.Collections.Generic;
-
 using System.Numerics;
-using System.Threading.Tasks;
-using Veilborne.Interfaces;
-using Veilborne.Biomes;
-using Veilborne.Ecs.Components;
-using Veilborne.Settings;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Settings;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public class TerrainManager : IEditableTerrain, ITerrainGenerator
     {

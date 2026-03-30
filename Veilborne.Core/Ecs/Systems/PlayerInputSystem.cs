@@ -1,9 +1,9 @@
 using System.Numerics;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
-using Veilborne.Settings;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Settings;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Maps player control bindings to ECS movement/jump intent components.

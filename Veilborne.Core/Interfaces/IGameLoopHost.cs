@@ -1,4 +1,4 @@
-namespace Veilborne.Interfaces
+namespace Veilborne.Core.Interfaces
 {
     public interface IGameLoopHost
     {

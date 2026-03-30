@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Ecs.Components;
+using Veilborne.Core.Ecs.Components;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Uniform-grid spatial index for static world objects to keep collision queries local.

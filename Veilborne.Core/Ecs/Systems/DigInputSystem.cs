@@ -1,8 +1,8 @@
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
-using Veilborne.Settings;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Settings;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Samples dig binding state into ECS interaction intent.

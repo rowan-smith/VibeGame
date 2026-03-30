@@ -1,9 +1,9 @@
 using System.Numerics;
-using Veilborne.Biomes;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Stubs
+namespace Veilborne.Core.Stubs
 {
     /// <summary>
     /// Stub terrain renderer for DI setup. Real implementation will be provided by ECS manager.

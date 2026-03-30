@@ -1,6 +1,6 @@
-using Veilborne.Objects;
+using Veilborne.Core.Objects;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public enum ChunkJobType { Load, Unload }
 

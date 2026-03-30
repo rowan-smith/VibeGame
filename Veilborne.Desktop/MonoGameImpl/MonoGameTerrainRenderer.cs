@@ -1,24 +1,28 @@
-using System.Numerics;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Serilog;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using Veilborne.Biomes;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
-using Veilborne.Settings;
-using Veilborne.Sky;
+using Veilborne.Core;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Settings;
+using Veilborne.Core.Sky;
+using Vector2 = System.Numerics.Vector2;
+using Vector3 = System.Numerics.Vector3;
+using Vector4 = System.Numerics.Vector4;
+using XnaColor = Microsoft.Xna.Framework.Color;
+using XnaBoundingFrustum = Microsoft.Xna.Framework.BoundingFrustum;
+using XnaBoundingBox = Microsoft.Xna.Framework.BoundingBox;
+using XnaMatrix = Microsoft.Xna.Framework.Matrix;
+using XnaVector3 = Microsoft.Xna.Framework.Vector3;
+using XnaVector2 = Microsoft.Xna.Framework.Vector2;
+using XnaMathHelper = Microsoft.Xna.Framework.MathHelper;
 
-namespace Veilborne.MonoGameImpl
+namespace Veilborne.Desktop.MonoGameImpl
 {
-    using XnaColor = Microsoft.Xna.Framework.Color;
-    using XnaBoundingFrustum = Microsoft.Xna.Framework.BoundingFrustum;
-    using XnaBoundingBox = Microsoft.Xna.Framework.BoundingBox;
-    using XnaMatrix = Microsoft.Xna.Framework.Matrix;
-    using XnaVector3 = Microsoft.Xna.Framework.Vector3;
-    using XnaVector2 = Microsoft.Xna.Framework.Vector2;
-    using XnaMathHelper = Microsoft.Xna.Framework.MathHelper;
-
     public class MonoGameTerrainRenderer : ITerrainRenderer
     {
         private readonly GraphicsDevice _graphicsDevice;
@@ -74,7 +78,7 @@ namespace Veilborne.MonoGameImpl
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
         private readonly Queue<(float x, float z, float tile)> _buildQueue = new();
-        private readonly Dictionary<(float x, float z, float tile), (float[,] heights, float tileSize, System.Numerics.Vector2 origin)> _pendingBuildData = new();
+        private readonly Dictionary<(float x, float z, float tile), (float[,] heights, float tileSize, Vector2 origin)> _pendingBuildData = new();
         private readonly HashSet<(float x, float z, float tile)> _queuedBuildKeys = new();
         private readonly HashSet<(float x, float z, float tile)> _dirtyKeys = new();
         private readonly Dictionary<(int width, int depth), short[]> _cachedIndices16 = new();
@@ -136,14 +140,14 @@ namespace Veilborne.MonoGameImpl
             _activeSecondaryBlend = Math.Clamp(secondaryBlend, 0f, 1f);
         }
 
-        public void SetColorTint(System.Numerics.Vector4 color)
+        public void SetColorTint(Vector4 color)
         {
             // Applied per-chunk at draw time via the active biome
         }
 
-        public void Render(float[,] heights, float tileSize, CameraComponent camera, System.Numerics.Vector3 baseColor)
+        public void Render(float[,] heights, float tileSize, CameraComponent camera, Vector3 baseColor)
         {
-            RenderAt(heights, tileSize, System.Numerics.Vector2.Zero, camera);
+            RenderAt(heights, tileSize, Vector2.Zero, camera);
         }
 
         /// <summary>Call once per frame after all RenderAt calls to issue the actual draw.</summary>
@@ -185,7 +189,7 @@ namespace Veilborne.MonoGameImpl
             _activeChunkKeys.Clear();
         }
 
-        public void RenderAt(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, CameraComponent camera)
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera)
         {
             var key = (originWorld.X, originWorld.Y, tileSize);
             _activeChunkKeys.Add(key);
@@ -219,12 +223,12 @@ namespace Veilborne.MonoGameImpl
             _hasPendingCamera = true;
         }
 
-        public void RenderAt(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig)
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig)
         {
             RenderAt(heights, tileSize, originWorld, camera, baseHeights, layerConfig, null);
         }
 
-        public void RenderAt(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig, Vector4[,]? splatmap)
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig, Vector4[,]? splatmap)
         {
             RenderAt(heights, tileSize, originWorld, camera);
             var key = (originWorld.X, originWorld.Y, tileSize);
@@ -255,10 +259,10 @@ namespace Veilborne.MonoGameImpl
             }
         }
 
-        public void BuildChunks(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld) =>
+        public void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld) =>
             BuildChunkMesh(heights, tileSize, originWorld);
 
-        public void EnqueueBuild(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld)
+        public void EnqueueBuild(float[,] heights, float tileSize, Vector2 originWorld)
         {
             var key = (originWorld.X, originWorld.Y, tileSize);
             _pendingBuildData[key] = (heights, tileSize, originWorld);
@@ -284,14 +288,14 @@ namespace Veilborne.MonoGameImpl
             }
         }
 
-        public void MarkOriginDirty(System.Numerics.Vector2 originWorld)
+        public void MarkOriginDirty(Vector2 originWorld)
         {
             foreach (var key in _chunks.Keys)
                 if (Math.Abs(key.x - originWorld.X) < 1e-4f && Math.Abs(key.z - originWorld.Y) < 1e-4f)
                     _dirtyKeys.Add(key);
         }
 
-        public void PatchRegion(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, int x0, int z0, int x1, int z1)
+        public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1)
         {
             MarkOriginDirty(originWorld);
             EnqueueBuild(heights, tileSize, originWorld);
@@ -299,7 +303,7 @@ namespace Veilborne.MonoGameImpl
 
         // ── Mesh building ────────────────────────────────────────────────────────
 
-        private void BuildChunkMesh(float[,] heights, float tileSize, System.Numerics.Vector2 origin)
+        private void BuildChunkMesh(float[,] heights, float tileSize, Vector2 origin)
         {
             _frameMeshBuilds++;
             int width = heights.GetLength(0);
@@ -327,16 +331,16 @@ namespace Veilborne.MonoGameImpl
                 float chunkW = (width - 1) * tileSize;
                 float chunkD = (depth - 1) * tileSize;
 
-                _biomeProvider!.GetBlendWeightsAt(new System.Numerics.Vector2(origin.X, origin.Y), null!, bw, out int c0, 4);
+                _biomeProvider!.GetBlendWeightsAt(new Vector2(origin.X, origin.Y), null!, bw, out int c0, 4);
                 cornerAlpha00 = c0 > 1 ? 1f - bw[0].Weight : 0f;
 
-                _biomeProvider.GetBlendWeightsAt(new System.Numerics.Vector2(origin.X + chunkW, origin.Y), null!, bw, out int c1, 4);
+                _biomeProvider.GetBlendWeightsAt(new Vector2(origin.X + chunkW, origin.Y), null!, bw, out int c1, 4);
                 cornerAlpha10 = c1 > 1 ? 1f - bw[0].Weight : 0f;
 
-                _biomeProvider.GetBlendWeightsAt(new System.Numerics.Vector2(origin.X, origin.Y + chunkD), null!, bw, out int c2, 4);
+                _biomeProvider.GetBlendWeightsAt(new Vector2(origin.X, origin.Y + chunkD), null!, bw, out int c2, 4);
                 cornerAlpha01 = c2 > 1 ? 1f - bw[0].Weight : 0f;
 
-                _biomeProvider.GetBlendWeightsAt(new System.Numerics.Vector2(origin.X + chunkW, origin.Y + chunkD), null!, bw, out int c3, 4);
+                _biomeProvider.GetBlendWeightsAt(new Vector2(origin.X + chunkW, origin.Y + chunkD), null!, bw, out int c3, 4);
                 cornerAlpha11 = c3 > 1 ? 1f - bw[0].Weight : 0f;
             }
 
@@ -721,10 +725,10 @@ namespace Veilborne.MonoGameImpl
 
         private bool DetectBiomeBlendShaderAssets()
         {
-            string shadersDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "shaders");
-            string frag = System.IO.Path.Combine(shadersDir, "biome_blend.frag");
-            string vert = System.IO.Path.Combine(shadersDir, "biome_blend.vert");
-            bool ok = System.IO.File.Exists(frag) && System.IO.File.Exists(vert);
+            string shadersDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "shaders");
+            string frag = Path.Combine(shadersDir, "biome_blend.frag");
+            string vert = Path.Combine(shadersDir, "biome_blend.vert");
+            bool ok = File.Exists(frag) && File.Exists(vert);
             if (!ok)
                 _log.Warning("Biome blend shader assets not found under {Dir}; using BasicEffect fallback.", shadersDir);
             return ok;
@@ -788,7 +792,7 @@ namespace Veilborne.MonoGameImpl
                 float distanceSq = camDelta.LengthSquared();
                 float chunkDistanceLimit = drawDistance + chunk.WorldSize * 0.75f;
                 if (distanceSq > chunkDistanceLimit * chunkDistanceLimit) continue;
-                if (frustum.Contains(bounds) == Microsoft.Xna.Framework.ContainmentType.Disjoint) continue;
+                if (frustum.Contains(bounds) == ContainmentType.Disjoint) continue;
 
                 _graphicsDevice.SetVertexBuffer(chunk.Vb);
                 _graphicsDevice.Indices = chunk.Ib;
@@ -874,8 +878,8 @@ namespace Veilborne.MonoGameImpl
         {
             if (_textureCache.TryGetValue(textureId, out var cached)) return cached;
 
-            string dir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "textures", "terrain", textureId);
-            if (!System.IO.Directory.Exists(dir))
+            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "textures", "terrain", textureId);
+            if (!Directory.Exists(dir))
             {
                 _log.Warning("Terrain texture directory not found: {Dir}", dir);
                 _textureCache[textureId] = null;
@@ -884,18 +888,18 @@ namespace Veilborne.MonoGameImpl
 
             // Find the diffuse/albedo file
             string? file = null;
-            var imageFiles = System.IO.Directory
+            var imageFiles = Directory
                 .EnumerateFiles(dir)
                 .Where(f =>
                 {
-                    var ext = System.IO.Path.GetExtension(f).ToLowerInvariant();
+                    var ext = Path.GetExtension(f).ToLowerInvariant();
                     return ext is ".png" or ".jpg" or ".jpeg";
                 })
                 .ToArray();
 
             foreach (var f in imageFiles)
             {
-                var name = System.IO.Path.GetFileName(f).ToLower();
+                var name = Path.GetFileName(f).ToLower();
                 if (name.Contains("_diff_") || name.Contains("_albedo_") || name.Contains("_col_") || name.Contains("basecolor") || name.Contains("color"))
                 { file = f; break; }
             }
@@ -904,7 +908,7 @@ namespace Veilborne.MonoGameImpl
             {
                 file = imageFiles.FirstOrDefault(f =>
                 {
-                    var n = System.IO.Path.GetFileName(f).ToLowerInvariant();
+                    var n = Path.GetFileName(f).ToLowerInvariant();
                     return !(n.Contains("_nor_") || n.Contains("normal") || n.Contains("_rough_") || n.Contains("rough")
                         || n.Contains("_ao_") || n.Contains("ambientocclusion") || n.Contains("_metal_") || n.Contains("metallic")
                         || n.Contains("_disp_") || n.Contains("height"));
@@ -920,8 +924,8 @@ namespace Veilborne.MonoGameImpl
 
             try
             {
-                _log.Debug("Loading terrain texture: {File}", System.IO.Path.GetFileName(file));
-                using var img = SixLabors.ImageSharp.Image.Load<Rgba32>(file);
+                _log.Debug("Loading terrain texture: {File}", Path.GetFileName(file));
+                using var img = Image.Load<Rgba32>(file);
 
                 // Downscale large textures to avoid hitching and excess VRAM use
                 if (img.Width > MaxTexSize || img.Height > MaxTexSize)

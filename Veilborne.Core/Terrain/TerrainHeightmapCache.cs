@@ -1,6 +1,4 @@
-using System.Collections.Generic;
-
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     /// <summary>
     /// Bounded heightmap cache with LRU eviction to reduce repeated chunk regeneration.

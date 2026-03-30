@@ -1,14 +1,13 @@
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Numerics;
-using Veilborne.Biomes;
-using Veilborne.Ecs;
-using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
-using Veilborne.Objects;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Objects;
 using Vector4 = System.Numerics.Vector4;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public class ReadOnlyTerrainService : ITerrainColliderProvider
     {

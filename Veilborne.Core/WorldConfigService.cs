@@ -1,8 +1,8 @@
-using Veilborne.Biomes;
-using Veilborne.Biomes.Environment;
-using Veilborne.Terrain;
+using Veilborne.Core.Biomes;
+using Veilborne.Core.Biomes.Environment;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne
+namespace Veilborne.Core
 {
     public interface IWorldConfigService
     {

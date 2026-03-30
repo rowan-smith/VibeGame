@@ -1,8 +1,8 @@
 using System.Numerics;
-using Veilborne.Ecs.Components;
-using Veilborne.Terrain;
+using Veilborne.Core.Ecs.Components;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne.Ecs.Systems
+namespace Veilborne.Core.Ecs.Systems
 {
     /// <summary>
     /// Prepares terrain load priorities around the active camera.

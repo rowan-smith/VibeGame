@@ -1,8 +1,7 @@
-using System;
 using System.Numerics;
-using Veilborne.Interfaces;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Biomes
+namespace Veilborne.Core.Biomes
 {
     internal static class BiomeTerrainHeightBlender
     {

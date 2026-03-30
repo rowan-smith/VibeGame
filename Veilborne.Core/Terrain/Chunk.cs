@@ -1,8 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Numerics;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     // Generic chunk used by World.ActiveChunks for bookkeeping across rings.
     // This is intentionally lightweight; existing services keep their own chunk types internally.

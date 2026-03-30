@@ -1,4 +1,4 @@
-namespace Veilborne.Biomes
+namespace Veilborne.Core.Biomes
 {
     public class TextureRule
     {

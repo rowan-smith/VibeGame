@@ -1,7 +1,7 @@
-using Veilborne.Biomes.Environment;
-using Veilborne.Interfaces;
+using Veilborne.Core.Biomes.Environment;
+using Veilborne.Core.Interfaces;
 
-namespace Veilborne.Terrain
+namespace Veilborne.Core.Terrain
 {
     public class TerrainGenerator : ITerrainGenerator
     {

@@ -1,12 +1,11 @@
 using System.Numerics;
-using Veilborne.Biomes.Environment;
-using Veilborne.Interfaces;
-using Veilborne.Objects;
-using Veilborne.Terrain;
 using Serilog;
-using Veilborne.WorldObjects;
+using Veilborne.Core.Biomes.Environment;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Objects;
+using Veilborne.Core.WorldObjects;
 
-namespace Veilborne.Biomes.Spawners
+namespace Veilborne.Core.Biomes.Spawners
 {
     /// <summary>
     /// Config-driven spawner for trees as world objects.

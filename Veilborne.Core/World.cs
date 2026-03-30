@@ -1,10 +1,10 @@
 using System.Numerics;
-using Veilborne.Ecs;
-using Veilborne.Interfaces;
-using Veilborne.Objects;
-using Veilborne.Terrain;
+using Veilborne.Core.Ecs;
+using Veilborne.Core.Interfaces;
+using Veilborne.Core.Objects;
+using Veilborne.Core.Terrain;
 
-namespace Veilborne
+namespace Veilborne.Core
 {
     /// <summary>
     /// Core runtime world.
