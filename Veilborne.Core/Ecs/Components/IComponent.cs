@@ -1,7 +1,6 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
-    public interface IComponent
-    {
-        
-    }
+    public interface IComponent : Friflo.Engine.ECS.IComponent;
 }
+
+

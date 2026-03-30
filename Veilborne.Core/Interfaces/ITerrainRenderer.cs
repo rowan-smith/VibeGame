@@ -1,7 +1,6 @@
 using System.Numerics;
 using Veilborne.Biomes;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
 namespace Veilborne.Interfaces
 {
@@ -11,6 +10,8 @@ namespace Veilborne.Interfaces
 
         // Render a heightmap positioned with its (0,0) corner at originWorld (bottom-left), no centering
         void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera);
+        void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig);
+        void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig, Vector4[,]? splatmap);
 
         // Apply the biome-specific surface texture set prior to rendering
         void ApplyBiomeTextures(BiomeData biome);

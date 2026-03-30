@@ -1,9 +1,14 @@
 using System.Numerics;
 
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
-    public class CameraComponent : IComponent
+/// <summary>
+/// Stores camera transform and projection settings used for rendering.
+/// </summary>
+ public struct CameraComponent : IComponent
     {
+        public CameraComponent() { }
+
         public Vector3 Position { get; set; }
 
         public Vector3 Target { get; set; }
@@ -15,3 +20,5 @@ namespace Veilborne.Core.Ecs.Components
         public bool IsPerspective { get; set; } = true;
     }
 }
+
+

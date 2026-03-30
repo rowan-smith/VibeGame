@@ -18,6 +18,7 @@
     <PackageReference Include="FontStashSharp.MonoGame" Version="1.5.4" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.4.1" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="SharpGLTF.Core" Version="1.0.5" />
     <PackageReference Include="SkiaSharp" Version="3.119.2" />
     <PackageReference Include="Svg.Skia" Version="3.4.1" />
@@ -27,7 +28,8 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="assets\**">
+    <None Include="..\Veilborne.Core\assets\**">
+      <Link>assets\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

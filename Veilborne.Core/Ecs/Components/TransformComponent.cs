@@ -1,9 +1,14 @@
 using System.Numerics;
 
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
-    public class TransformComponent : IComponent
+/// <summary>
+/// Stores world-space position, rotation, and scale.
+/// </summary>
+ public struct TransformComponent : IComponent
     {
+        public TransformComponent() { }
+
         public Vector3 Position { get; set; } = Vector3.Zero;
 
         public Quaternion Rotation { get; set; } = Quaternion.Identity;
@@ -11,3 +16,5 @@ namespace Veilborne.Core.Ecs.Components
         public Vector3 Scale { get; set; } = Vector3.One;
     }
 }
+
+

@@ -11,6 +11,9 @@ public class VoxelChunk
     private float[,,] _density;
     private bool _dirty;
     private (Vector3 min, Vector3 max)? _dirtyRegion;
+    private VoxelGreedyMesher.MeshData? _lastMesh;
+
+    internal VoxelGreedyMesher.MeshData? LastMesh => _lastMesh;
 
     public VoxelChunk(Vector3 origin, int size, float voxelSize)
     {
@@ -73,7 +76,7 @@ public class VoxelChunk
     public void Rebuild()
     {
         if (!_dirty) return;
-        // Mesh generation logic here (e.g. Marching Cubes)
+        _lastMesh = VoxelGreedyMesher.Build(this, 0);
         _dirty = false;
         _dirtyRegion = null;
     }

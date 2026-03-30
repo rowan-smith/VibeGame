@@ -1,31 +1,37 @@
-using System.Numerics;
-using Veilborne.Core.Ecs.Components;
+using Serilog;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     public class PlayerSystem : ISystem
     {
         private readonly EntityRegistry _entities;
         private readonly ICameraController _cameraController;
-        private readonly IPhysicsController _physics;
-        private readonly IInfiniteTerrain _terrain;
+        private readonly ILogger _log = Log.ForContext<PlayerSystem>();
+        private bool _loggedMissingCamera;
 
-        public PlayerSystem(EntityRegistry entities, ICameraController cameraController, IPhysicsController physics, IInfiniteTerrain terrain)
+        public PlayerSystem(EntityRegistry entities, ICameraController cameraController)
         {
             _entities = entities;
             _cameraController = cameraController;
-            _physics = physics;
-            _terrain = terrain;
         }
 
         public void Update(float dt)
         {
-            foreach (var entity in _entities.GetEntitiesWith<PlayerComponent, CameraComponent>())
+            bool anyCamera = false;
+            _entities.ForEachWith<CameraComponent>(entity =>
             {
+                anyCamera = true;
                 var cam = entity.GetComponent<CameraComponent>();
-                Vector3 horizMove = _cameraController.UpdateAndGetHorizontalMove(cam, dt);
-                _physics.Integrate(cam, dt, horizMove, (x, z) => _terrain.SampleHeight(new Vector3(x, 0, z)));
+                _cameraController.UpdateAndGetHorizontalMove(ref cam, dt);
+                entity.SetComponent(cam);
+            });
+
+            if (!anyCamera && !_loggedMissingCamera)
+            {
+                _log.Warning("PlayerSystem: no entities matched CameraComponent query.");
+                _loggedMissingCamera = true;
             }
         }
     }

@@ -37,8 +37,7 @@ namespace Veilborne.Interfaces
         public const int KEY_LEFT = 37;
         public const int KEY_RIGHT = 39;
         public const int KEY_F1 = 112;      // MonoGame Keys.F1 = 112
-        public const int KEY_F2 = 113;
-        public const int KEY_F3 = 114;
+        public const int KEY_F10 = 121;
         public const int KEY_F12 = 123;     // MonoGame Keys.F12 = 123
         public const int KEY_LEFT_SHIFT = 160;  // MonoGame Keys.LeftShift = 160
         public const int KEY_ONE = 49;

@@ -1,0 +1,127 @@
+{
+    "Id":  "mistral_dunes",
+    "DisplayName":  "Mistral Dunes",
+    "Enabled":  true,
+    "ProceduralData":  {
+                           "Base":  {
+                                        "Temperature":  0.8,
+                                        "Moisture":  0.2,
+                                        "Altitude":  0.15,
+                                        "Fertility":  0.15,
+                                        "Roughness":  0.3,
+                                        "VegetationDensity":  0.1
+                                    },
+                           "Weights":  {
+                                           "WtTemp":  1.1,
+                                           "WtMoisture":  1.3,
+                                           "WtElevation":  0.8,
+                                           "WtFertility":  0.9
+                                       },
+                           "NoiseModifiers":  {
+                                                  "HeightScale":  0.3,
+                                                  "Frequency":  0.6,
+                                                  "Persistence":  0.3,
+                                                  "Lacunarity":  1.5,
+                                                  "Detail":  0.35,
+                                                  "RidgeWeight":  0.1,
+                                                  "WarpStrength":  0.6,
+                                                  "WarpFrequency":  0.4,
+                                                  "ErosionStrength":  0.7,
+                                                  "DuneFrequency":  2.5,
+                                                  "DuneAmplitude":  1.8,
+                                                  "DuneDirection":  30,
+                                                  "MicroDetailFrequency":  3.0,
+                                                  "MicroDetailAmplitude":  0.15
+                                              }
+                       },
+    "ColorPalette":  {
+                         "Primary":  {
+                                         "R":  237,
+                                         "G":  201,
+                                         "B":  175,
+                                         "A":  255
+                                     },
+                         "Secondary":  {
+                                           "R":  54,
+                                           "G":  117,
+                                           "B":  136,
+                                           "A":  255
+                                       },
+                         "Accent":  {
+                                        "R":  183,
+                                        "G":  65,
+                                        "B":  14,
+                                        "A":  255
+                                    }
+                     },
+    "SurfaceTextures":  [
+                            {
+                                "TextureId":  "aerial_rocks",
+                                "BlendMin":  0.5,
+                                "BlendMax":  1.0
+                            }
+                        ],
+    "TextureRules":  {
+                         "brown_mud_leaves":  {
+                                                  "MinAltitude":  0.3,
+                                                  "MaxAltitude":  1.0,
+                                                  "SlopeMin":  20
+                                              }
+                     },
+    "AllowedObjects":  [
+                           "palm_trees"
+                       ],
+    "DominantFlora":  [
+                          "Desert Palms",
+                          "Thornbloom"
+                      ],
+    "DominantFauna":  [
+
+                      ],
+    "SurfaceMaterial":  "Fine Sand",
+    "WeatherPatterns":  [
+                            "Sandstorms"
+                        ],
+    "AssetTags":  [
+                      "sand",
+                      "ruins",
+                      "wind-eroded"
+                  ],
+    "LightingModifier":  1.1,
+    "FeatureDescription":  "Endless dunes shaped by whispering winds that seem almost alive.",
+    "SpecialFeatures":  [
+                            "Wind-carved ruins"
+                        ],
+    "MusicTag":  "desert",
+    "TerrainLayers":  {
+                          "SurfaceTextureId":  "aerial_rocks",
+                          "SubsurfaceTextureId":  "aerial_rocks",
+                          "DeepTextureId":  "brown_mud",
+                          "SlopeTextureId":  "aerial_rocks",
+                          "SubsurfaceDepth":  0.8,
+                          "DeepDepth":  2.0,
+                          "DepthVariation":  0.7,
+                          "SlopeRockThreshold":  0.7,
+                          "SlopeBlendRange":  0.35
+                      },
+    "Mining":  {
+                   "Ores":  [
+                                {
+                                    "OreType":  "copper",
+                                    "OreNoiseFrequency":  7,
+                                    "OreThreshold":  0.75,
+                                    "OreMinDepth":  0.8,
+                                    "OreMaxDepth":  1.8,
+                                    "OreSpawnChance":  0.08
+                                },
+                                {
+                                    "OreType":  "gold",
+                                    "OreNoiseFrequency":  8,
+                                    "OreThreshold":  0.82,
+                                    "OreMinDepth":  1.2,
+                                    "OreMaxDepth":  2.0,
+                                    "OreSpawnChance":  0.04
+                                }
+                            ]
+               }
+}

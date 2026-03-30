@@ -1,17 +1,17 @@
 using System.Text.Json.Serialization;
 
-namespace Veilborne.Core.WorldObjects
+namespace Veilborne.WorldObjects
 {
     // Root container for all world objects loaded from trees.json
     public sealed class WorldObjectsConfig
     {
         // List of all world objects (trees, etc.) in the config
         [JsonPropertyName("WorldObjects")] 
-        public List<TreeObjectConfig> WorldObjects { get; set; } = new();
+        public List<WorldObjectConfig> WorldObjects { get; set; } = new();
     }
 
     // Represents a single world object (currently used for trees)
-    public sealed class TreeObjectConfig
+    public sealed class WorldObjectConfig
     {
         public string Id { get; set; } = string.Empty;           // Unique ID: "maple_tree"
         public string DisplayName { get; set; } = string.Empty;  // Friendly name: "Maple Tree"

@@ -1,0 +1,10 @@
+{
+  "Id": "rock_3",
+  "DisplayName": "Rock 3",
+  "Textures": {
+    "Albedo": "textures/terrain/rock_3/rock_3_diff_4k.jpg",
+    "Normal": "textures/terrain/rock_3/rock_3_nor_gl_4k.jpg",
+    "Rough": "textures/terrain/rock_3/rock_3_rough_4k.jpg"
+  },
+  "TileSize": 7.0
+}

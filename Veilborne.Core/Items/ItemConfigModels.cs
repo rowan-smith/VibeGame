@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Veilborne.Core.Items
+namespace Veilborne.Items
 {
     // Root container for all item definitions in the config
     public sealed class ItemConfigSet
@@ -68,6 +68,15 @@ namespace Veilborne.Core.Items
     {
         public string Id { get; init; } = string.Empty;                // Item ID
         public string DisplayName { get; init; } = string.Empty;       // Friendly name
+        public string Description { get; init; } = string.Empty;
+        public string Type { get; init; } = string.Empty;
+        public string Category { get; init; } = string.Empty;
+        public bool Stackable { get; init; }
+        public int MaxStack { get; init; } = 1;
+        public float Weight { get; init; }
+        public int Value { get; init; }
+        public float BreakSpeedMultiplier { get; init; } = 1f;
+        public int StaminaCost { get; init; }
         public string IconPath { get; init; } = string.Empty;          // Full or relative path to icon
         public string ModelPath { get; init; } = string.Empty;         // Full or relative path to model
     }

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Veilborne.Core.TerrainTexture
+namespace Veilborne.TerrainTexture
 {
     // Raw definition as stored in assets\\config\\terrain JSON files
     public sealed class TerrainTextureDef

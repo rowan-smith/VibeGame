@@ -1,7 +1,7 @@
 using Serilog;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Items
+namespace Veilborne.Items
 {
     public sealed class ItemRegistry : IItemRegistry
     {
@@ -44,7 +44,10 @@ namespace Veilborne.Core.Items
             return new Item
             {
                 Name = def.DisplayName,
-                // Optional: add IconPath/ModelPath or other properties
+                IconPath = def.IconPath,
+                ModelPath = def.ModelPath,
+                BreakSpeedMultiplier = def.BreakSpeedMultiplier,
+                StaminaCost = def.StaminaCost,
             };
         }
 
@@ -76,6 +79,15 @@ namespace Veilborne.Core.Items
                         {
                             Id = ic.Id.Trim(),
                             DisplayName = string.IsNullOrWhiteSpace(ic.DisplayName) ? ic.Id.Trim() : ic.DisplayName.Trim(),
+                            Description = ic.Description ?? string.Empty,
+                            Type = ic.Type ?? string.Empty,
+                            Category = ic.Category ?? string.Empty,
+                            Stackable = ic.Stackable,
+                            MaxStack = Math.Max(1, ic.MaxStack),
+                            Weight = ic.Weight,
+                            Value = ic.Value,
+                            BreakSpeedMultiplier = ic.ToolProperties?.BreakSpeedMultiplier > 0f ? ic.ToolProperties.BreakSpeedMultiplier : 1f,
+                            StaminaCost = Math.Max(0, ic.ToolProperties?.StaminaCost ?? 0),
                             IconPath = iconPath,
                             ModelPath = modelPath,
                         };
@@ -115,7 +127,10 @@ namespace Veilborne.Core.Items
     // Simple Item class used by GetItemInSlot
     public class Item
     {
-        public string Name;
-        // Could add IconPath, ModelPath, or other runtime properties here
+        public string Name = string.Empty;
+        public string IconPath = string.Empty;
+        public string ModelPath = string.Empty;
+        public float BreakSpeedMultiplier = 1f;
+        public int StaminaCost = 0;
     }
 }

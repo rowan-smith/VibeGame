@@ -1,9 +1,9 @@
 using System.Numerics;
 using Veilborne.Biomes;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Stubs
+namespace Veilborne.Stubs
 {
     /// <summary>
     /// Stub terrain renderer for DI setup. Real implementation will be provided by ECS manager.
@@ -14,6 +14,8 @@ namespace Veilborne.Core.Stubs
         public void ApplyBiomeBlendTextures(BiomeData primary, BiomeData? secondary, float secondaryBlend) { }
         public void Render(float[,] heights, float tileSize, CameraComponent camera, Vector3 baseColor) { }
         public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera) { }
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig) { }
+        public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera, float[,]? baseHeights, TerrainLayerConfig? layerConfig, Vector4[,]? splatmap) { }
         public void SetColorTint(Vector4 tint) { }
         public void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld) { }
         public void EnqueueBuild(float[,] heights, float tileSize, Vector2 originWorld) { }

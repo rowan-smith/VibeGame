@@ -1,6 +1,5 @@
 using System.Numerics;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
 namespace Veilborne.Interfaces
 {
@@ -8,6 +7,6 @@ namespace Veilborne.Interfaces
     {
         // Applies gravity/jump and moves camera by the provided horizontal displacement.
         // groundHeightFunc should return ground Y for a given (x,z) world point.
-        void Integrate(CameraComponent camera, float dt, Vector3 horizontalDisplacement, Func<float, float, float> groundHeightFunc);
+        void Integrate(ref CameraComponent camera, ref JumpComponent jump, ref VerticalVelocityComponent verticalVelocity, float dt, Vector3 horizontalDisplacement, float gravityY, Func<float, float, float> groundHeightFunc);
     }
 }

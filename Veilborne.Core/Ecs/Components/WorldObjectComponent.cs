@@ -1,6 +1,11 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
-    public sealed class WorldObjectComponent : IComponent
+/// <summary>
+/// Tags an entity as a spawned world object.
+/// </summary>
+ public struct WorldObjectComponent : IComponent
     {
     }
 }
+
+

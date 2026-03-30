@@ -1,6 +1,5 @@
 using System.Numerics;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
 namespace Veilborne.Interfaces
 {
@@ -20,9 +19,11 @@ namespace Veilborne.Interfaces
         void Begin3D(CameraComponent camera);
         void End3D();
         void Clear(Vector3 color);
+        void SetSkyClearColor(Vector3 color);
         void DrawCube(Vector3 position, Vector3 size, Vector3 color);
         void DrawCubeWires(Vector3 position, Vector3 size, Vector3 color);
         void ToggleFullscreen();
+        void RequestScreenshot();
         // Add more drawing methods as needed
     }
 }

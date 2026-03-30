@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace Veilborne.Terrain
@@ -5,6 +6,9 @@ namespace Veilborne.Terrain
     public class TerrainChunk
     {
         public float[,] Heights;
+        public float[,]? BaseHeights;
+        public Vector4[,]? Splatmap;
+        public Dictionary<(int x, int z), ResourceVoxel> ResourceVoxels = new();
         public Vector2 Origin;
         public bool IsMeshGenerated = false;
 
