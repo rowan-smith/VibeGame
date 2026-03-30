@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Performs lightweight player-vs-world-object broadphase/narrowphase checks.
@@ -10,21 +10,26 @@ namespace Veilborne.Core.Ecs.Systems
     {
         private readonly EntityRegistry _entities;
         private readonly CollisionFrameBuffer _collisionBuffer;
+        private readonly WorldObjectSpatialIndex _spatialIndex;
+        private readonly List<Entity> _candidateObjects = new(128);
 
-        public CollisionDetectionSystem(EntityRegistry entities, CollisionFrameBuffer collisionBuffer)
+        public CollisionDetectionSystem(EntityRegistry entities, CollisionFrameBuffer collisionBuffer, WorldObjectSpatialIndex spatialIndex)
         {
             _entities = entities;
             _collisionBuffer = collisionBuffer;
+            _spatialIndex = spatialIndex;
         }
 
         public void Update(float dt)
         {
             _collisionBuffer.PlayerPush = Vector3.Zero;
 
-            foreach (var player in _entities.GetEntitiesWith<PlayerComponent, CameraComponent>())
+            bool playerHandled = false;
+            _entities.ForEachWith<PlayerComponent, CameraComponent>(player =>
             {
+                if (playerHandled) return;
                 if (!player.TryGetComponent<ColliderComponent>(out var playerCollider))
-                    continue;
+                    return;
 
                 var playerCamera = player.GetComponent<CameraComponent>();
                 var playerPos = playerCamera.Position;
@@ -32,6 +37,8 @@ namespace Veilborne.Core.Ecs.Systems
                 var playerVelocity = player.TryGetComponent<VelocityComponent>(out var velocity)
                     ? velocity.Linear
                     : Vector3.Zero;
+                var playerPrevPos = playerPos - playerVelocity * MathF.Max(0f, dt);
+                float playerMoveDistance = Vector3.Distance(playerPos, playerPrevPos);
                 var playerFilter = player.TryGetComponent<CollisionFilterComponent>(out var pf)
                     ? pf
                     : new CollisionFilterComponent
@@ -41,8 +48,15 @@ namespace Veilborne.Core.Ecs.Systems
                     };
 
                 Vector3 accumulatedPush = Vector3.Zero;
-                foreach (var worldObject in _entities.GetEntitiesWith<WorldObjectComponent, TransformComponent>())
+                float queryRadius = MathF.Max(2f, playerRadius + playerMoveDistance + 8f);
+                _spatialIndex.Query(playerPos, queryRadius, _candidateObjects);
+                for (int candidateIndex = 0; candidateIndex < _candidateObjects.Count; candidateIndex++)
                 {
+                    var worldObject = _candidateObjects[candidateIndex];
+                    if (!worldObject.HasComponent<WorldObjectComponent>())
+                        continue;
+                    if (!worldObject.TryGetComponent<TransformComponent>(out _))
+                        continue;
                     if (!worldObject.TryGetComponent<ColliderComponent>(out var objectCollider))
                         continue;
                     var objectFilter = worldObject.TryGetComponent<CollisionFilterComponent>(out var of)
@@ -64,12 +78,18 @@ namespace Veilborne.Core.Ecs.Systems
                     var distanceSq = delta.LengthSquared();
                     var targetDistance = playerRadius + MathF.Max(0.001f, objectCollider.Radius);
                     var targetDistanceSq = targetDistance * targetDistance;
+                    float broadphaseRadius = targetDistance + playerMoveDistance + 1.0f;
+                    float broadphaseRadiusSq = broadphaseRadius * broadphaseRadius;
+                    var fromStart = playerPrevPos - objectTransform.Position;
+                    fromStart.Y = 0f;
+                    if (distanceSq > broadphaseRadiusSq && fromStart.LengthSquared() > broadphaseRadiusSq)
+                        continue;
 
                     if (distanceSq >= targetDistanceSq)
                     {
                         // Swept XZ test prevents tunneling when player moves fast enough to cross a tree in one frame.
                         if (dt > 1e-5f &&
-                            TryComputeSweptPush(playerPos - playerVelocity * dt, playerPos, objectTransform.Position, targetDistance, out var sweptPush))
+                            TryComputeSweptPush(playerPrevPos, playerPos, objectTransform.Position, targetDistance, out var sweptPush))
                         {
                             accumulatedPush += sweptPush;
                         }
@@ -88,8 +108,8 @@ namespace Veilborne.Core.Ecs.Systems
 
                 accumulatedPush.Y = 0f;
                 _collisionBuffer.PlayerPush = accumulatedPush;
-                break;
-            }
+                playerHandled = true;
+            });
         }
 
         private static bool TryComputeSweptPush(Vector3 start3, Vector3 end3, Vector3 center3, float radius, out Vector3 push)

@@ -1,23 +1,34 @@
+using Veilborne.Ecs.Components;
 using Veilborne.Objects;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Render-phase adapter for world object mesh drawing.
     /// </summary>
     public class ObjectRenderSystem : IRenderSystem
     {
+        private readonly EntityRegistry _entities;
         private readonly IWorldObjectRenderer _renderer;
 
-        public ObjectRenderSystem(IWorldObjectRenderer renderer)
+        public ObjectRenderSystem(EntityRegistry entities, IWorldObjectRenderer renderer)
         {
+            _entities = entities;
             _renderer = renderer;
         }
 
         public void Draw()
         {
-            if (_renderer is IRenderSystem renderSystem)
-                renderSystem.Draw();
+            CameraComponent cam = default;
+            bool hasCamera = false;
+            _entities.ForEachWith<CameraComponent>(entity =>
+            {
+                if (hasCamera) return;
+                cam = entity.GetComponent<CameraComponent>();
+                hasCamera = true;
+            });
+            if (!hasCamera) return;
+            _renderer.Render(cam);
         }
     }
 }

@@ -32,7 +32,7 @@
           "Autumn": [1.0, 0.7, 0.5],
           "Winter": [0.8, 0.8, 0.8]
         },
-        "BaseScale": [0.03, 0.03, 0.03],
+        "BaseScale": [1.0, 1.0, 1.0],
         "ScaleVariance": 0.08,
         "RandomRotationY": true
       }
@@ -59,7 +59,7 @@
       },
       "Assets": {
         "Models": [
-          { "Path": "models/world/trees/maple_tree.glb", "Weight": 1.0, "Rotation": 90 }
+          { "Path": "models/world/trees/Dead_Trees.glb", "Weight": 1.0, "Rotation": 90 }
         ]
       },
       "Visual": {
@@ -69,7 +69,7 @@
           "Autumn": [1.0, 0.7, 0.5],
           "Winter": [0.8, 0.8, 0.8]
         },
-        "BaseScale": [0.03, 0.03, 0.03],
+        "BaseScale": [1.0, 1.0, 1.0],
         "ScaleVariance": 0.08,
         "RandomRotationY": true
       }
@@ -97,7 +97,7 @@
       },
       "Assets": {
         "Models": [
-          { "Path": "models/world/trees/maple_tree.glb", "Weight": 1.0 }
+          { "Path": "models/world/trees/Birch_Trees.glb", "Weight": 1.0 }
         ]
       },
       "Visual": {
@@ -107,7 +107,7 @@
           "Autumn": [1.0, 0.85, 0.6],
           "Winter": [0.85, 0.9, 0.95]
         },
-        "BaseScale": [0.03, 0.03, 0.03],
+        "BaseScale": [1.0, 1.0, 1.0],
         "ScaleVariance": 0.1,
         "RandomRotationY": true
       }
@@ -135,7 +135,7 @@
       },
       "Assets": {
         "Models": [
-          { "Path": "models/world/trees/maple_tree.glb", "Weight": 1.0, "Rotation": 90 }
+          { "Path": "models/world/trees/Maple_Trees.glb", "Weight": 1.0, "Rotation": 90 }
         ]
       },
       "Visual": {
@@ -145,7 +145,7 @@
           "Autumn": [1.0, 0.7, 0.5],
           "Winter": [0.8, 0.8, 0.8]
         },
-        "BaseScale": [0.03, 0.03, 0.03],
+        "BaseScale": [1.0, 1.0, 1.0],
         "ScaleVariance": 0.08,
         "RandomRotationY": true
       }
@@ -173,7 +173,7 @@
       },
       "Assets": {
         "Models": [
-          { "Path": "models/world/trees/maple_tree.glb", "Weight": 1.0 }
+          { "Path": "models/world/trees/Palm_Trees.glb", "Weight": 1.0 }
         ]
       },
       "Visual": {
@@ -183,7 +183,7 @@
           "Autumn": [0.95, 0.9, 0.8],
           "Winter": [0.9, 0.95, 1.0]
         },
-        "BaseScale": [0.03, 0.03, 0.03],
+        "BaseScale": [1.0, 1.0, 1.0],
         "ScaleVariance": 0.12,
         "RandomRotationY": true
       }
@@ -211,7 +211,7 @@
       },
       "Assets": {
         "Models": [
-          { "Path": "models/world/trees/maple_tree.glb", "Weight": 1.0, "Rotation": 0 }
+          { "Path": "models/world/trees/Pine_Trees.glb", "Weight": 1.0, "Rotation": 0 }
         ]
       },
       "Visual": {
@@ -221,7 +221,7 @@
           "Autumn": [0.9, 0.85, 0.8],
           "Winter": [0.85, 0.9, 0.95]
         },
-        "BaseScale": [0.03, 0.03, 0.03],
+        "BaseScale": [1.0, 1.0, 1.0],
         "ScaleVariance": 0.1,
         "RandomRotationY": true
       }
@@ -249,7 +249,7 @@
       },
       "Assets": {
         "Models": [
-          { "Path": "models/world/trees/maple_tree.glb", "Weight": 1.0 }
+          { "Path": "models/world/trees/Trees.glb", "Weight": 1.0 }
         ]
       },
       "Visual": {
@@ -259,10 +259,11 @@
           "Autumn": [1.0, 0.85, 0.7],
           "Winter": [0.85, 0.9, 0.9]
         },
-        "BaseScale": [0.03, 0.03, 0.03],
+        "BaseScale": [1.0, 1.0, 1.0],
         "ScaleVariance": 0.1,
         "RandomRotationY": true
       }
     }
   ]
 }
+

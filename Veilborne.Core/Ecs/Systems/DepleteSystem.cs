@@ -1,8 +1,8 @@
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 using Veilborne.Terrain;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Depletes finite mining voxels and emits item drops/dirty patch tags.

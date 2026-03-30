@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Collections.Concurrent;
 using Serilog;
 using Veilborne.Interfaces;
 using Veilborne.Terrain;
@@ -14,6 +15,8 @@ namespace Veilborne.Biomes
     /// </summary>
     public class SimpleBiomeProvider : IBiomeProvider
     {
+        private readonly record struct CellSiteData(Vector2 Site, float Scale, int BiomeIndex);
+
         private readonly List<IBiome> _biomes;
         private readonly int _seed;
 
@@ -24,6 +27,7 @@ namespace Veilborne.Biomes
         private readonly float _warpFrequency;
         private readonly float _warpAmplitude;
         private readonly float _blendWidthWorld;
+        private readonly ConcurrentDictionary<(int sx, int sy), CellSiteData> _cellCache = new();
 
         private readonly ILogger _logger = Log.ForContext<SimpleBiomeProvider>();
 
@@ -62,9 +66,6 @@ namespace Veilborne.Biomes
             float bestDist = float.MaxValue;
             int bestSX = 0, bestSY = 0;
 
-            // Track second best to derive potential blend (future use)
-            float secondDist = float.MaxValue;
-
             const int searchRadius = 2; // 5x5 neighborhood
             for (int dy = -searchRadius; dy <= searchRadius; dy++)
             {
@@ -73,31 +74,24 @@ namespace Veilborne.Biomes
                     int sx = cx + dx;
                     int sy = cy + dy;
 
-                    var site = GetSiteWorldPosition(sx, sy);
+                    var cell = GetCellData(sx, sy);
+                    var site = cell.Site;
 
                     float dxw = warped.X - site.X;
                     float dyw = warped.Y - site.Y;
 
-                    // Per-cell scale to introduce variable sizes
-                    float scale = 0.75f + 0.5f * Hash01(sx, sy, 7919);
-                    float dist = (dxw * dxw + dyw * dyw) * (scale * scale);
+                    float dist = (dxw * dxw + dyw * dyw) * (cell.Scale * cell.Scale);
 
                     if (dist < bestDist)
                     {
-                        secondDist = bestDist;
                         bestDist = dist;
                         bestSX = sx; bestSY = sy;
-                    }
-                    else if (dist < secondDist)
-                    {
-                        secondDist = dist;
                     }
                 }
             }
 
             // Map the winning site to a biome index deterministically
-            int idx = HashToBiomeIndex(bestSX, bestSY);
-            return _biomes[idx];
+            return _biomes[GetCellData(bestSX, bestSY).BiomeIndex];
         }
 
         public (IBiome primary, IBiome? secondary, float secondaryBlend) GetBiomeBlendAt(Vector2 worldPos, ITerrainGenerator terrain)
@@ -120,11 +114,11 @@ namespace Veilborne.Biomes
             {
                 int sx = cx + dx;
                 int sy = cy + dy;
-                var site = GetSiteWorldPosition(sx, sy);
+                var cell = GetCellData(sx, sy);
+                var site = cell.Site;
                 float dxw = warped.X - site.X;
                 float dyw = warped.Y - site.Y;
-                float scale = 0.75f + 0.5f * Hash01(sx, sy, 7919);
-                float dist = MathF.Sqrt((dxw * dxw + dyw * dyw) * (scale * scale));
+                float dist = MathF.Sqrt((dxw * dxw + dyw * dyw) * (cell.Scale * cell.Scale));
 
                 if (dist < bestDist)
                 {
@@ -140,12 +134,12 @@ namespace Veilborne.Biomes
                 }
             }
 
-            var primary = _biomes[HashToBiomeIndex(bestSX, bestSY)];
+            var primary = _biomes[GetCellData(bestSX, bestSY).BiomeIndex];
             IBiome? secondary = null;
             float blend = 0f;
             if (secondDist < float.MaxValue && secondDist > bestDist)
             {
-                secondary = _biomes[HashToBiomeIndex(secondSX, secondSY)];
+                secondary = _biomes[GetCellData(secondSX, secondSY).BiomeIndex];
                 float delta = secondDist - bestDist;
                 blend = 1f - Math.Clamp(delta / _blendWidthWorld, 0f, 1f);
                 blend = SmoothStep(blend) * 0.49f;
@@ -165,16 +159,50 @@ namespace Veilborne.Biomes
             return new Vector2(p.X + wx * _warpAmplitude, p.Y + wy * _warpAmplitude);
         }
 
-        private int HashToBiomeIndex(int sx, int sy)
+        private int SelectBiomeIndexForSite(int sx, int sy, Vector2 site)
         {
-            unchecked
+            if (_biomes.Count == 1)
+                return 0;
+
+            // Deterministic climate features sampled from site position.
+            float temp = HashNoise(site.X * 0.0021f + 19.3f, site.Y * 0.0021f - 7.7f, 12013);
+            float moist = HashNoise(site.X * 0.0024f - 3.1f, site.Y * 0.0024f + 11.8f, 17011);
+            float elev = HashNoise(site.X * 0.0019f + 5.4f, site.Y * 0.0019f + 2.3f, 23117);
+            float fert = HashNoise(site.X * 0.0027f - 9.2f, site.Y * 0.0027f + 0.9f, 29017);
+
+            int best = 0;
+            float bestScore = float.PositiveInfinity;
+            for (int i = 0; i < _biomes.Count; i++)
             {
-                int h = _seed;
-                h = (h * 16777619) ^ sx;
-                h = (h * 16777619) ^ sy;
-                if (h < 0) h = ~h;
-                return h % _biomes.Count;
+                var d = _biomes[i].Data.ProceduralData;
+                var b = d.Base;
+                var w = d.Weights;
+                float score =
+                    MathF.Abs(temp - b.Temperature) * MathF.Max(0.0001f, w.WtTemp) +
+                    MathF.Abs(moist - b.Moisture) * MathF.Max(0.0001f, w.WtMoisture) +
+                    MathF.Abs(elev - b.Altitude) * MathF.Max(0.0001f, w.WtElevation) +
+                    MathF.Abs(fert - b.Fertility) * MathF.Max(0.0001f, w.WtFertility);
+                // Small deterministic jitter to avoid ties and repetitive boundaries.
+                float jitter = (Hash01(sx, sy, 4001 + i * 23) - 0.5f) * 0.02f;
+                score += jitter;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = i;
+                }
             }
+            return best;
+        }
+
+        private CellSiteData GetCellData(int sx, int sy)
+        {
+            return _cellCache.GetOrAdd((sx, sy), key =>
+            {
+                var site = GetSiteWorldPosition(key.sx, key.sy);
+                float scale = 0.75f + 0.5f * Hash01(key.sx, key.sy, 7919);
+                int biomeIndex = SelectBiomeIndexForSite(key.sx, key.sy, site);
+                return new CellSiteData(site, scale, biomeIndex);
+            });
         }
 
         private Vector2 GetSiteWorldPosition(int sx, int sy)
@@ -222,6 +250,109 @@ namespace Veilborne.Biomes
             float nx0 = h00 + (h10 - h00) * sx;
             float nx1 = h01 + (h11 - h01) * sx;
             return nx0 + (nx1 - nx0) * sy;
+        }
+
+        /// <summary>
+        /// Returns the top-N nearest biomes with inverse-distance blend weights, normalized to 1.0.
+        /// Uses smoothstep on the raw weights for organic transitions.
+        /// </summary>
+        public void GetBlendWeightsAt(Vector2 worldPos, ITerrainGenerator terrain, Span<BiomeWeight> buffer, out int count, int maxResults = 4)
+        {
+            if (_biomes.Count == 0)
+                throw new InvalidOperationException("No biomes registered");
+
+            maxResults = Math.Clamp(maxResults, 1, Math.Min(buffer.Length, 8));
+            var warped = Warp(worldPos);
+            int cx = (int)MathF.Floor(warped.X / _cellSize);
+            int cy = (int)MathF.Floor(warped.Y / _cellSize);
+
+            // Collect all candidates with their distances
+            Span<(int sx, int sy, float dist)> candidates = stackalloc (int, int, float)[25];
+            int candidateCount = 0;
+
+            const int searchRadius = 2;
+            for (int dy = -searchRadius; dy <= searchRadius; dy++)
+            for (int dx = -searchRadius; dx <= searchRadius; dx++)
+            {
+                int sx = cx + dx;
+                int sy = cy + dy;
+                var cell = GetCellData(sx, sy);
+                float dxw = warped.X - cell.Site.X;
+                float dyw = warped.Y - cell.Site.Y;
+                float dist = MathF.Sqrt((dxw * dxw + dyw * dyw) * (cell.Scale * cell.Scale));
+                candidates[candidateCount++] = (sx, sy, dist);
+            }
+
+            // Sort by distance (simple insertion sort for small N)
+            for (int i = 1; i < candidateCount; i++)
+            {
+                var tmp = candidates[i];
+                int j = i - 1;
+                while (j >= 0 && candidates[j].dist > tmp.dist)
+                {
+                    candidates[j + 1] = candidates[j];
+                    j--;
+                }
+                candidates[j + 1] = tmp;
+            }
+
+            // Deduplicate by biome index, keeping only the closest distance per biome
+            Span<(int biomeIdx, float dist)> unique = stackalloc (int, float)[maxResults];
+            int uniqueCount = 0;
+            for (int i = 0; i < candidateCount && uniqueCount < maxResults; i++)
+            {
+                int biomeIdx = GetCellData(candidates[i].sx, candidates[i].sy).BiomeIndex;
+                bool dup = false;
+                for (int u = 0; u < uniqueCount; u++)
+                {
+                    if (unique[u].biomeIdx == biomeIdx) { dup = true; break; }
+                }
+                if (!dup)
+                    unique[uniqueCount++] = (biomeIdx, candidates[i].dist);
+            }
+
+            if (uniqueCount <= 1)
+            {
+                int idx = uniqueCount == 1 ? unique[0].biomeIdx : GetCellData(cx, cy).BiomeIndex;
+                buffer[0] = new BiomeWeight(_biomes[idx], 1f);
+                count = 1;
+                return;
+            }
+
+            // Inverse-distance weighting with the blend width as falloff
+            float nearestDist = unique[0].dist;
+            float totalWeight = 0f;
+            Span<float> rawWeights = stackalloc float[uniqueCount];
+            for (int i = 0; i < uniqueCount; i++)
+            {
+                float delta = unique[i].dist - nearestDist;
+                float t = 1f - Math.Clamp(delta / _blendWidthWorld, 0f, 1f);
+                t = SmoothStep(t);
+                rawWeights[i] = t;
+                totalWeight += t;
+            }
+
+            // Normalize and write results, pruning near-zero weights
+            count = 0;
+            if (totalWeight < 1e-6f)
+            {
+                buffer[0] = new BiomeWeight(_biomes[unique[0].biomeIdx], 1f);
+                count = 1;
+                return;
+            }
+
+            for (int i = 0; i < uniqueCount; i++)
+            {
+                float w = rawWeights[i] / totalWeight;
+                if (w < 0.005f) continue;
+                buffer[count++] = new BiomeWeight(_biomes[unique[i].biomeIdx], w);
+            }
+
+            if (count == 0)
+            {
+                buffer[0] = new BiomeWeight(_biomes[unique[0].biomeIdx], 1f);
+                count = 1;
+            }
         }
 
         private static float SmoothStep(float t)

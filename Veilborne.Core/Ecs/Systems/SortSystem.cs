@@ -1,8 +1,7 @@
-using System.Collections.Generic;
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Computes a simple near/far ordering hint used by object rendering.

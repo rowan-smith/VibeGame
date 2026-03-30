@@ -1,8 +1,6 @@
 using System.Numerics;
 using Veilborne.Biomes;
-using Veilborne.Core;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
 namespace Veilborne.Interfaces
 {

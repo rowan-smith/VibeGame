@@ -1,10 +1,10 @@
 using System.Numerics;
 using Veilborne.Biomes.Environment;
-using Veilborne.Core;
-using Veilborne.Core.WorldObjects;
 using Veilborne.Interfaces;
 using Veilborne.Objects;
 using Veilborne.Terrain;
+using Serilog;
+using Veilborne.WorldObjects;
 
 namespace Veilborne.Biomes.Spawners
 {
@@ -15,6 +15,7 @@ namespace Veilborne.Biomes.Spawners
     /// </summary>
     public sealed class ConfigTreeWorldObjectSpawner : IWorldObjectSpawner
     {
+        private static readonly ILogger Log = Serilog.Log.ForContext<ConfigTreeWorldObjectSpawner>();
         private readonly IWorldObjectRegistry _trees;
         private readonly IEnvironmentSampler _sampler;
         private readonly ITerrainGenerator _envTerrain;
@@ -84,22 +85,40 @@ namespace Veilborne.Biomes.Spawners
                 if (models.Count == 0) continue;
                 float totalW = models.Sum(m => MathF.Max(0.0001f, m.Weight));
 
-                // Adjust attempts per-type by spawn density (acts as a multiplier)
+                // Target accepted count per type from density.
                 float density = Math.Clamp(sr.SpawnDensity, 0f, 2f);
-                int attempts = Math.Max(0, (int)MathF.Round(perType * density));
-                if (attempts == 0) continue;
+                int targetAccepted = Math.Max(0, (int)MathF.Round(perType * density));
+                targetAccepted = Math.Min(targetAccepted, 3);
+                if (targetAccepted == 0) continue;
+                // We need extra tries because filters (env/slope/overlap) can reject many candidates.
+                int attempts = Math.Min(18, Math.Max(targetAccepted * 4, targetAccepted + 2));
+                int rejectedSlope = 0;
+                int rejectedEnv = 0;
+                int rejectedOverlap = 0;
+                int accepted = 0;
 
                 for (int i = 0; i < attempts; i++)
                 {
+                    if (accepted >= targetAccepted)
+                        break;
+
                     int seed = HashCode.Combine(seedBase, def.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), i);
                     float wx = HashToRange(seed * 97 + 5, minX, maxX);
                     float wz = HashToRange(seed * 211 + 23, minZ, maxZ);
                     float baseY = SampleMeshHeight(heights, originWorld, terrain.TileSize, wx, wz);
 
-                    if (IsSlopeTooSteep(terrain, wx, wz, baseY)) continue;
+                    if (IsSlopeTooSteep(heights, originWorld, terrain.TileSize, wx, wz, baseY))
+                    {
+                        rejectedSlope++;
+                        continue;
+                    }
 
                     var env = _sampler.Sample(new Vector2(wx, wz), _envTerrain);
-                    if (!IsEnvValid(env, altMin, altMax, tMin, tMax, mMin, mMax)) continue;
+                    if (!IsEnvValid(env, altMin, altMax, tMin, tMax, mMin, mMax))
+                    {
+                        rejectedEnv++;
+                        continue;
+                    }
 
                     // Select weighted model
                     ModelAsset selectedModel = models[0];
@@ -123,73 +142,58 @@ namespace Veilborne.Biomes.Spawners
                     Vector3 baseScale = def.Visual?.BaseScale?.Length >= 3
                         ? new Vector3(def.Visual.BaseScale[0], def.Visual.BaseScale[1], def.Visual.BaseScale[2])
                         : Vector3.One;
-                    baseScale = SanitizeScale(baseScale);
+                    baseScale = SanitizeScale(baseScale, def.Category);
                     float variance = MathF.Abs(def.Visual?.ScaleVariance ?? 0f);
                     float varT = HashToRange(seed * 419 + 101, -variance, variance);
                     Vector3 scale = baseScale * (1.0f + varT);
-                    scale = SanitizeScale(scale);
+                    scale = SanitizeScale(scale, def.Category);
 
-                    // Rotation: use explicit model Rotation if provided; otherwise keep identity (no auto/random rotation)
+                    // Rotation: explicit model rotation overrides visual random rotation.
                     Quaternion rot = Quaternion.Identity;
 
                     if (modelRotation.HasValue)
                     {
-                        // Apply explicit Y-rotation in degrees from config and ignore any random rotation
+                        // Apply explicit Y-rotation in degrees from config.
                         rot = Quaternion.CreateFromAxisAngle(Vector3.UnitY, modelRotation.Value * (MathF.PI / 180f));
                     }
+                    else if (def.Visual?.RandomRotationY == true)
+                    {
+                        float yaw = HashToRange(seed * 613 + 37, 0f, MathF.PI * 2f);
+                        rot = Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw);
+                    }
 
-                    float areaRadius = MathF.Max(def.Physics?.AreaRadius ?? 0f, (sr.ClusterRadius > 0 ? sr.ClusterRadius : 0f));
-                    bool overlaps = placedAreas.Any(pa => Vector2.DistanceSquared(pa.pos, new Vector2(wx, wz)) < (pa.radius + areaRadius) * (pa.radius + areaRadius));
-                    if (overlaps) continue;
-
+                    float areaRadius = MathF.Max(def.Physics?.AreaRadius ?? 0f, 0.6f);
                     float colliderRadius = def.Physics?.ColliderRadius > 0f ? def.Physics.ColliderRadius : areaRadius;
+                    // ClusterRadius controls clumping distribution; it should not act as hard exclusion radius.
+                    float spacingRadius = MathF.Max(colliderRadius, areaRadius * 0.70f);
+                    bool overlaps = placedAreas.Any(pa => Vector2.DistanceSquared(pa.pos, new Vector2(wx, wz)) < (pa.radius + spacingRadius) * (pa.radius + spacingRadius));
+                    if (overlaps)
+                    {
+                        rejectedOverlap++;
+                        continue;
+                    }
 
                     results.Add(new SpawnedObject
                     {
                         ObjectId = def.Id,
+                        ObjectDisplayName = string.IsNullOrWhiteSpace(def.DisplayName) ? def.Id : def.DisplayName,
                         ModelPath = NormalizePath(modelPath),
                         Position = new Vector3(wx, baseY, wz),
                         Rotation = rot,
                         Scale = scale,
-                        CollisionRadius = colliderRadius,
-                        ConfigRotationDegrees = modelRotation
+                        CollisionRadius = colliderRadius
                     });
+                    accepted++;
 
-                    placedAreas.Add((new Vector2(wx, wz), areaRadius));
+                    placedAreas.Add((new Vector2(wx, wz), spacingRadius));
                 }
-            }
-
-            // Fallback: if strict filters rejected everything, place a few deterministic trees anyway
-            // so each biome still renders visible world objects.
-            if (results.Count == 0)
-            {
-                int fallbackCount = Math.Min(4, candidateDefs.Count);
-                for (int i = 0; i < fallbackCount; i++)
+                if (accepted == 0)
                 {
-                    var def = candidateDefs[i % candidateDefs.Count];
-                    var model = def.Assets?.Models?.FirstOrDefault();
-                    if (model == null) continue;
-
-                    int seed = HashCode.Combine(seedBase, def.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 1000 + i);
-                    float wx = HashToRange(seed * 97 + 5, minX, maxX);
-                    float wz = HashToRange(seed * 211 + 23, minZ, maxZ);
-                    float baseY = SampleMeshHeight(heights, originWorld, terrain.TileSize, wx, wz);
-
-                    Vector3 baseScale = def.Visual?.BaseScale?.Length >= 3
-                        ? new Vector3(def.Visual.BaseScale[0], def.Visual.BaseScale[1], def.Visual.BaseScale[2])
-                        : Vector3.One;
-                    baseScale = SanitizeScale(baseScale);
-
-                    results.Add(new SpawnedObject
-                    {
-                        ObjectId = def.Id,
-                        ModelPath = NormalizePath(model.Path),
-                        Position = new Vector3(wx, baseY, wz),
-                        Rotation = Quaternion.Identity,
-                        Scale = baseScale,
-                        CollisionRadius = def.Physics?.ColliderRadius > 0f ? def.Physics.ColliderRadius : (def.Physics?.AreaRadius ?? 1f),
-                        ConfigRotationDegrees = model.Rotation
-                    });
+                    Log.Debug(
+                        "Tree spawn produced zero objects for id={ObjectId} biome={BiomeId} chunk=({ChunkX},{ChunkZ}); target={TargetAccepted}, slopeRejected={SlopeRejected}, envRejected={EnvRejected}, overlapRejected={OverlapRejected}; ranges alt=[{AltMin:0.##},{AltMax:0.##}] temp=[{TempMin:0.##},{TempMax:0.##}] moist=[{MoistMin:0.##},{MoistMax:0.##}]",
+                        def.Id, biomeId, (int)(originWorld.X / chunkWorldSize), (int)(originWorld.Y / chunkWorldSize),
+                        targetAccepted, rejectedSlope, rejectedEnv, rejectedOverlap,
+                        altMin, altMax, tMin, tMax, mMin, mMax);
                 }
             }
 
@@ -225,16 +229,16 @@ namespace Veilborne.Biomes.Spawners
                 return h11 + (h10 - h11) * (1f - tz) + (h01 - h11) * (1f - tx);
         }
 
-        private static bool IsSlopeTooSteep(ITerrainGenerator terrain, float x, float z, float baseY)
+        private static bool IsSlopeTooSteep(float[,] heights, Vector2 originWorld, float tile, float x, float z, float baseY)
         {
-            float s = 1.5f;
-            float ny1 = terrain.ComputeHeight(x + s, z);
-            float ny2 = terrain.ComputeHeight(x - s, z);
-            float ny3 = terrain.ComputeHeight(x, z + s);
-            float ny4 = terrain.ComputeHeight(x, z - s);
+            float s = MathF.Max(tile, 1.0f);
+            float ny1 = SampleMeshHeight(heights, originWorld, tile, x + s, z);
+            float ny2 = SampleMeshHeight(heights, originWorld, tile, x - s, z);
+            float ny3 = SampleMeshHeight(heights, originWorld, tile, x, z + s);
+            float ny4 = SampleMeshHeight(heights, originWorld, tile, x, z - s);
             float slope = MathF.Max(MathF.Max(MathF.Abs(ny1 - baseY), MathF.Abs(ny2 - baseY)),
                                     MathF.Max(MathF.Abs(ny3 - baseY), MathF.Abs(ny4 - baseY)));
-            return slope > 2.0f;
+            return slope > 3.5f;
         }
 
         private static bool IsEnvValid(EnvironmentSample env, float altMin, float altMax, float tMin, float tMax, float mMin, float mMax)
@@ -264,12 +268,15 @@ namespace Veilborne.Biomes.Spawners
             return Path.Combine(AppContext.BaseDirectory, "assets", path.Replace('/', Path.DirectorySeparatorChar));
         }
 
-        private static Vector3 SanitizeScale(Vector3 scale)
+        private static Vector3 SanitizeScale(Vector3 scale, string? category)
         {
-            // Hard safety rail against bad config values (e.g. 100x) that can tank FPS.
-            float x = Math.Clamp(scale.X, 0.01f, 4.0f);
-            float y = Math.Clamp(scale.Y, 0.01f, 4.0f);
-            float z = Math.Clamp(scale.Z, 0.01f, 4.0f);
+            bool isTree = !string.IsNullOrWhiteSpace(category) &&
+                          category.Contains("tree", StringComparison.OrdinalIgnoreCase);
+            // Keep trees from becoming unintentionally tiny due legacy config scales.
+            float min = isTree ? 0.35f : 0.01f;
+            float x = Math.Clamp(scale.X, min, 4.0f);
+            float y = Math.Clamp(scale.Y, min, 4.0f);
+            float z = Math.Clamp(scale.Z, min, 4.0f);
             return new Vector3(x, y, z);
         }
         #endregion

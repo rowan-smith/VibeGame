@@ -1,7 +1,6 @@
-using System.Collections.Generic;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Discovers active biomes from terrain chunks and queues asset load requests.
@@ -10,6 +9,8 @@ namespace Veilborne.Core.Ecs.Systems
     {
         private readonly EntityRegistry _entities;
         private readonly BiomeAssetTracker _tracker;
+        private readonly HashSet<string> _active = new(System.StringComparer.OrdinalIgnoreCase);
+        private int _frameCounter;
 
         public BiomeDiscoverySystem(EntityRegistry entities, BiomeAssetTracker tracker)
         {
@@ -19,16 +20,20 @@ namespace Veilborne.Core.Ecs.Systems
 
         public void Update(float dt)
         {
-            var active = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            // Only run every 3rd frame — biome chunks don't change rapidly
+            if (++_frameCounter % 3 != 0)
+                return;
+
+            _active.Clear();
             foreach (var chunkEntity in _entities.GetEntitiesWith<TerrainChunkComponent, BiomeComponent>())
             {
                 var biome = chunkEntity.GetComponent<BiomeComponent>();
                 if (string.IsNullOrWhiteSpace(biome.BiomeId))
                     continue;
-                active.Add(biome.BiomeId);
+                _active.Add(biome.BiomeId);
             }
 
-            foreach (var biomeId in active)
+            foreach (var biomeId in _active)
             {
                 _tracker.ActiveChunkRefs[biomeId] = _tracker.ActiveChunkRefs.TryGetValue(biomeId, out var refs) ? refs + 1 : 1;
                 if (_tracker.Loaded.Contains(biomeId) || _tracker.Requested.Contains(biomeId))

@@ -1,67 +1,77 @@
 {
-  "WorldSeed": 0,
-  "EditableRadius": 3,
-  "ReadOnlyRadius": 6,
-  "LowLodRadius": 12,
-  "MaxActiveVoxelChunks": 128,
-  "DigRadius": 1.1,
-  "DigStrength": 2.8,
-  "DigFalloff": "Exponential",
-  "DigMaxDepth": 6.0,
-  "DigSmoothness": 0.08,
-  "TerrainLoadQueueRadius": 4,
-  "TerrainLayers": {
-    "SurfaceTextureId": "brown_mud_leaves",
-    "SubsurfaceTextureId": "brown_mud",
-    "DeepTextureId": "rock_3",
-    "SubsurfaceDepth": 0.35,
-    "DeepDepth": 1.20
-  },
-  "BiomeMining": {
-    "aetherwild_grove": {
-      "OreType": "coal",
-      "OreNoiseFrequency": 6.0,
-      "OreThreshold": 0.70,
-      "OreMinDepth": 0.30,
-      "OreMaxDepth": 1.10,
-      "OreSpawnChance": 0.12
-    },
-    "mistral_dunes": {
-      "OreType": "copper",
-      "OreNoiseFrequency": 8.0,
-      "OreThreshold": 0.75,
-      "OreMinDepth": 0.35,
-      "OreMaxDepth": 1.20,
-      "OreSpawnChance": 0.09
-    },
-    "frostveil_tundra": {
-      "OreType": "iron",
-      "OreNoiseFrequency": 7.0,
-      "OreThreshold": 0.73,
-      "OreMinDepth": 0.40,
-      "OreMaxDepth": 1.35,
-      "OreSpawnChance": 0.10
-    }
-  },
-  "Noise": {
-    "Seed": 12345,
-    "TemperatureFrequency": 0.0055,
-    "MoistureFrequency": 0.0060,
-    "FertilityFrequency": 0.0070,
-    "WarpAmount": 36.0,
-    "WarpFrequency": 0.0035,
-    "ElevationMin": 0.0,
-    "ElevationMax": 12.0,
-    "WeightTemperature": 1.0,
-    "WeightMoisture": 1.0,
-    "WeightElevation": 1.2,
-    "WeightFertility": 0.8
-  },
-  "BiomeProvider": {
-    "AverageCellSize": 300.0,
-    "Jitter": 0.85,
-    "WarpFrequencyScale": 1.0,
-    "WarpAmplitudeScale": 1.0,
-    "BlendWidthWorld": 90.0
-  }
+    "WorldSeed":  0,
+    "EditableRadius":  2,
+    "ReadOnlyRadius":  5,
+    "LowLodRadius":  12,
+    "MaxActiveVoxelChunks":  128,
+    "TerrainLoadQueueRadius":  4,
+    "TerrainRuntime":  {
+                           "MinEditableRadius":  2,
+                           "MaxEditableRadius":  4,
+                           "MinReadOnlyRadius":  4,
+                           "MaxReadOnlyRadius":  8,
+                           "MinLowLodRadius":  6,
+                           "MaxLowLodRadius":  16,
+                           "ReadOnlyUpdateIntervalFrames":  3,
+                           "SpeedScale":  0.15,
+                           "DensityPenalty":  0.8,
+                           "FpsTarget":  60.0,
+                           "MaxMeshBuildsPerFrame":  3,
+                           "MaxEditableRebuildsPerFrame":  3,
+                           "MaxReadOnlyChunkUpdatesPerFrame":  2,
+                           "MaxLowLodChunkUpdatesPerFrame":  2,
+                           "MaxReadOnlyInstallsPerFrame":  2,
+                           "MaxLowLodInstallsPerFrame":  2,
+                           "MaxReadOnlyConcurrentJobs":  6,
+                           "MaxLowLodConcurrentJobs":  6,
+                           "MaxTerrainDrawDistance":  900.0,
+                           "SecondaryPassDistanceScale":  0.30
+                       },
+    "WorldObjectRender":  {
+                              "MaxDrawDistance":  80.0,
+                              "FoliageDrawDistanceMultiplier":  0.40,
+                              "MovingFoliageDrawDistanceMultiplier":  0.55,
+                              "MaxDetailedObjectsPerFrame":  300,
+                              "MovingFrameBudgetScale":  0.45,
+                              "MaxNewModelLoadsPerFrame":  1,
+                              "MaxNewModelLoadsWhileMoving":  0,
+                              "FrustumCullingNearDistance":  1.0,
+                              "MaxReasonableModelDimension":  25.0,
+                              "AutoNormalizedTargetDimension":  6.0,
+                              "MaxBaseLiftMeters":  12.0,
+                              "MaxFinalWorldObjectDimension":  14.0
+                          },
+    "Noise":  {
+                  "Seed":  12345,
+                  "TemperatureFrequency":  0.0055,
+                  "MoistureFrequency":  0.0060,
+                  "FertilityFrequency":  0.0070,
+                  "WarpAmount":  36.0,
+                  "WarpFrequency":  0.0035,
+                  "ElevationMin":  0.0,
+                  "ElevationMax":  12.0,
+                  "WeightTemperature":  1.0,
+                  "WeightMoisture":  1.0,
+                  "WeightElevation":  1.2,
+                  "WeightFertility":  0.8
+              },
+    "BiomeProvider":  {
+                          "AverageCellSize":  300.0,
+                          "Jitter":  0.85,
+                          "WarpFrequencyScale":  1.0,
+                          "WarpAmplitudeScale":  1.0,
+                          "BlendWidthWorld":  120.0
+                      },
+    "Dig":  {
+                "Radius":  0.5,
+                "Strength":  0.25,
+                "Falloff":  "Stepped",
+                "MaxDepth":  4.0,
+                "Smoothness":  0.0,
+                "BlockStepSize": 0.25,
+                "MaxTerrainEditsPerFrame":  8,
+                "SpawnParticles":  true,
+                "ParticlesPerDig":  4,
+                "ParticleLifetime":  0.6
+            }
 }

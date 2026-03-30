@@ -1,5 +1,5 @@
 using System;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 using Veilborne.Objects;
 
 namespace Veilborne.Terrain
@@ -16,9 +16,12 @@ namespace Veilborne.Terrain
 
         public static float ComputeColliderRadius(SpawnedObject obj)
         {
-            float baseRadius = MathF.Max(0.75f, obj.CollisionRadius);
+            if (obj.CollisionRadius <= 0f)
+                return 0f;
+
+            float baseRadius = MathF.Max(0.05f, obj.CollisionRadius);
             if (IsFoliage(obj))
-                return MathF.Max(0.35f, baseRadius * 0.5f);
+                return Math.Clamp(baseRadius * 0.5f, 0.05f, 0.45f);
 
             // Trees should block a bit wider than trunk, but keep a sane cap to avoid walling the player in.
             bool looksLikeTree = ContainsAny(obj.ObjectId, "tree", "oak", "pine", "maple", "birch");

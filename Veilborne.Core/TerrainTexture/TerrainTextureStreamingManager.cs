@@ -1,6 +1,6 @@
 using Serilog;
 
-namespace Veilborne.Core.TerrainTexture
+namespace Veilborne.TerrainTexture
 {
     public sealed class TerrainTextureStreamingManager
     {

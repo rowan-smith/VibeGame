@@ -1,10 +1,9 @@
-using Veilborne.Core.Ecs.Components;
 using EcsEntityStore = Friflo.Engine.ECS.EntityStore;
-using EcsComponent = Veilborne.Core.Ecs.Components.IComponent;
+using EcsComponent = Veilborne.Ecs.Components.IComponent;
 
-namespace Veilborne.Core.Ecs
+namespace Veilborne.Ecs
 {
-public sealed class Entity
+public readonly struct Entity
 {
     private readonly Friflo.Engine.ECS.Entity _inner;
 

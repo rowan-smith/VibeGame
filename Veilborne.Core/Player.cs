@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Core
+namespace Veilborne
 {
     public sealed class Player
     {

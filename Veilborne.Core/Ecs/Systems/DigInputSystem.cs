@@ -1,8 +1,8 @@
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Settings;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
+using Veilborne.Settings;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Samples dig binding state into ECS interaction intent.
@@ -25,12 +25,12 @@ namespace Veilborne.Core.Ecs.Systems
             var binding = _settings.Current.Keyboard.DigInteract;
             var isHeld = KeyBindingTokens.IsDown(_input, binding);
 
-            foreach (var entity in _entities.GetEntitiesWith<DigInteractionComponent>())
+            _entities.ForEachWith<DigInteractionComponent>(entity =>
             {
                 var dig = entity.GetComponent<DigInteractionComponent>();
                 dig.IsDigHeld = isHeld;
                 entity.SetComponent(dig);
-            }
+            });
         }
     }
 }

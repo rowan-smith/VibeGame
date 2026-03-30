@@ -15,6 +15,7 @@ namespace Veilborne.Terrain
                 VoxelFalloff.Linear => 1f - t,
                 VoxelFalloff.Cosine => 0.5f * (1f + MathF.Cos(t * MathF.PI)),
                 VoxelFalloff.Exponential => MathF.Exp(-4f * t * t),
+                VoxelFalloff.Stepped => 1f,
                 _ => 1f - t
             };
         }

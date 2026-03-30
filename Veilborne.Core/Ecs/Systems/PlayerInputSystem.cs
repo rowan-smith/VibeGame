@@ -1,9 +1,9 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Settings;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
+using Veilborne.Settings;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Maps player control bindings to ECS movement/jump intent components.
@@ -38,10 +38,10 @@ namespace Veilborne.Core.Ecs.Systems
             if (RuntimeEnvironment.IsDevelopmentEnvironment)
                 speed *= debug.RunSpeedMultiplier / 100f;
 
-            foreach (var entity in _entities.GetEntitiesWith<PlayerComponent, CameraComponent>())
+            _entities.ForEachWith<PlayerComponent, CameraComponent>(entity =>
             {
                 if (!entity.TryGetComponent<MoveInputComponent>(out var moveInput))
-                    continue;
+                    return;
 
                 var cam = entity.GetComponent<CameraComponent>();
 
@@ -70,7 +70,7 @@ namespace Veilborne.Core.Ecs.Systems
                     jump.JumpBufferTimer = jump.JumpBufferSeconds;
                     entity.SetComponent(jump);
                 }
-            }
+            });
         }
     }
 }

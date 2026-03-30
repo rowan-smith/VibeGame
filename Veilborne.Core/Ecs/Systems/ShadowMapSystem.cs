@@ -1,7 +1,7 @@
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Sky;
+using Veilborne.Ecs.Components;
+using Veilborne.Sky;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Flags shadow casters as clean after post-physics updates.
@@ -20,14 +20,14 @@ namespace Veilborne.Core.Ecs.Systems
         public void Update(float dt)
         {
             _shadowMap.Update(dt);
-            foreach (var entity in _entities.GetEntitiesWith<ShadowCasterComponent, DirtyComponent>())
+            _entities.ForEachWith<ShadowCasterComponent, DirtyComponent>(entity =>
             {
                 var dirty = entity.GetComponent<DirtyComponent>();
                 if (!dirty.NeedsUpdate)
-                    continue;
+                    return;
                 dirty.NeedsUpdate = false;
                 entity.SetComponent(dirty);
-            }
+            });
         }
     }
 }

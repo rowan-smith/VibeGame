@@ -1,9 +1,8 @@
-using System.Text.Json;
 using Veilborne.Biomes;
 using Veilborne.Biomes.Environment;
 using Veilborne.Terrain;
 
-namespace Veilborne.Core
+namespace Veilborne
 {
     public interface IWorldConfigService
     {
@@ -37,31 +36,56 @@ namespace Veilborne.Core
                 ? coreConfigPath
                 : (File.Exists(path1) ? path1 : (File.Exists(path2) ? path2 : null));
 
-            if (path != null)
-            {
-                Config = JsonModelLoader.LoadFile<WorldConfig>(path);
-                Seed = Config.WorldSeed != 0 ? Config.WorldSeed : Random.Shared.Next();
-            }
-            else
-            {
-                Config = new WorldConfig();
-                Seed = Random.Shared.Next();
-            }
+            if (path == null)
+                throw new FileNotFoundException(
+                    $"world.json not found. Searched: {coreConfigPath}, {path1}, {path2}");
+
+            Config = JsonModelLoader.LoadFile<WorldConfig>(path);
+            Seed = Config.WorldSeed != 0 ? Config.WorldSeed : Random.Shared.Next();
+
+            if (Config.Dig == null)
+                throw new InvalidOperationException("world.json is missing required 'Dig' section.");
+            if (Config.Noise == null)
+                throw new InvalidOperationException("world.json is missing required 'Noise' section.");
+            if (Config.BiomeProvider == null)
+                throw new InvalidOperationException("world.json is missing required 'BiomeProvider' section.");
 
             TerrainConfig = new TerrainRingConfig
             {
                 EditableRadius = Config.EditableRadius,
                 ReadOnlyRadius = Config.ReadOnlyRadius,
                 LowLodRadius = Config.LowLodRadius,
-                MaxEditable = Math.Max(1, Config.EditableRadius + 1),
-                MaxReadOnly = Math.Max(2, Config.ReadOnlyRadius + 2),
-                MaxLowLod = Math.Max(3, Config.LowLodRadius + 4),
+                MinEditable = Math.Max(1, Config.TerrainRuntime.MinEditableRadius),
+                MaxEditable = Math.Max(1, Config.TerrainRuntime.MaxEditableRadius),
+                MinReadOnly = Math.Max(2, Config.TerrainRuntime.MinReadOnlyRadius),
+                MaxReadOnly = Math.Max(2, Config.TerrainRuntime.MaxReadOnlyRadius),
+                MinLowLod = Math.Max(3, Config.TerrainRuntime.MinLowLodRadius),
+                MaxLowLod = Math.Max(3, Config.TerrainRuntime.MaxLowLodRadius),
+                ReadOnlyUpdateInterval = Math.Max(1, Config.TerrainRuntime.ReadOnlyUpdateIntervalFrames),
+                SpeedScale = MathF.Max(0f, Config.TerrainRuntime.SpeedScale),
+                DensityPenalty = MathF.Max(0f, Config.TerrainRuntime.DensityPenalty),
+                FpsTarget = MathF.Max(15f, Config.TerrainRuntime.FpsTarget),
+                MaxMeshBuildsPerFrame = Math.Max(1, Config.TerrainRuntime.MaxMeshBuildsPerFrame),
+                MaxEditableRebuildsPerFrame = Math.Max(1, Config.TerrainRuntime.MaxEditableRebuildsPerFrame),
+                MaxReadOnlyChunkUpdatesPerFrame = Math.Max(1, Config.TerrainRuntime.MaxReadOnlyChunkUpdatesPerFrame),
+                MaxLowLodChunkUpdatesPerFrame = Math.Max(1, Config.TerrainRuntime.MaxLowLodChunkUpdatesPerFrame),
+                MaxReadOnlyInstallsPerFrame = Math.Max(1, Config.TerrainRuntime.MaxReadOnlyInstallsPerFrame),
+                MaxLowLodInstallsPerFrame = Math.Max(1, Config.TerrainRuntime.MaxLowLodInstallsPerFrame),
+                MaxReadOnlyConcurrentJobs = Math.Max(1, Config.TerrainRuntime.MaxReadOnlyConcurrentJobs),
+                MaxLowLodConcurrentJobs = Math.Max(1, Config.TerrainRuntime.MaxLowLodConcurrentJobs),
             };
 
-            NoiseConfig = Config.Noise ?? new MultiNoiseConfig();
+            if (TerrainConfig.MaxEditable < TerrainConfig.MinEditable)
+                TerrainConfig.MaxEditable = TerrainConfig.MinEditable;
+            if (TerrainConfig.MaxReadOnly < TerrainConfig.MinReadOnly)
+                TerrainConfig.MaxReadOnly = TerrainConfig.MinReadOnly;
+            if (TerrainConfig.MaxLowLod < TerrainConfig.MinLowLod)
+                TerrainConfig.MaxLowLod = TerrainConfig.MinLowLod;
+
+            NoiseConfig = Config.Noise!;
             NoiseConfig.Seed = Seed;
 
-            BiomeProviderConfig = Config.BiomeProvider ?? new BiomeProviderConfig();
+            BiomeProviderConfig = Config.BiomeProvider!;
             BiomeProviderConfig.Seed = Seed;
         }
     }

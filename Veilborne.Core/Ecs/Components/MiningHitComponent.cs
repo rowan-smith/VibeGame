@@ -1,7 +1,7 @@
 using System.Numerics;
 using Veilborne.Terrain;
 
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
     public struct MiningHitComponent : IComponent
     {

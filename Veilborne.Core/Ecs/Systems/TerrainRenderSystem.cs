@@ -1,10 +1,9 @@
-using Serilog;
 using System.Numerics;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
+using Serilog;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     public class TerrainRenderSystem : IRenderSystem
     {

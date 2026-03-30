@@ -10,21 +10,20 @@ using Veilborne.Biomes;
 using Veilborne.Biomes.Environment;
 using Veilborne.Biomes.Spawners;
 using Veilborne.Camera;
-using Veilborne.Core;
-using Veilborne.Core.Stubs;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Systems;
-using Veilborne.Core.Items;
-using Veilborne.Core.Settings;
-using Veilborne.Core.TerrainTexture;
-using Veilborne.Core.UI;
-using Veilborne.Core.WorldObjects;
-using Veilborne.Core.Sky;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Systems;
 using Veilborne.Interfaces;
+using Veilborne.Items;
 using Veilborne.Logging;
+using Veilborne.MonoGameImpl;
 using Veilborne.Objects;
+using Veilborne.Settings;
+using Veilborne.Sky;
+using Veilborne.Stubs;
 using Veilborne.Terrain;
-using Veilborne.Core.MonoGameImpl;
+using Veilborne.TerrainTexture;
+using Veilborne.UI;
+using Veilborne.WorldObjects;
 
 namespace Veilborne;
 
@@ -72,6 +71,7 @@ internal static class Program
         builder.Services.AddSingleton<DepleteSystem>();
         builder.Services.AddSingleton<PatchRegenSystem>();
         builder.Services.AddSingleton<DigExecutionSystem>();
+        builder.Services.AddSingleton<DigParticleSystem>();
         builder.Services.AddSingleton<CameraSystem>();
         builder.Services.AddSingleton<HotbarSelectionSystem>();
         builder.Services.AddSingleton<PlayerSystem>(); // still used as implementation detail
@@ -84,8 +84,10 @@ internal static class Program
         builder.Services.AddSingleton<AssetLoadSystem>();
         builder.Services.AddSingleton<BiomePrepSystem>();
         builder.Services.AddSingleton<AssetUnloadSystem>();
+        builder.Services.AddSingleton<WorldObjectSpatialIndex>();
+        builder.Services.AddSingleton<WorldObjectSpatialIndexSystem>();
         builder.Services.AddSingleton<CollisionFrameBuffer>();
-        builder.Services.AddSingleton<RenderFrameState>();
+        builder.Services.AddSingleton<EcsPerformanceMonitor>();
         builder.Services.AddSingleton<CollisionDetectionSystem>();
         builder.Services.AddSingleton<CollisionResolutionSystem>();
         builder.Services.AddSingleton<ConstraintSystem>();
@@ -98,8 +100,6 @@ internal static class Program
         builder.Services.AddSingleton<VegetationSystem>();
         builder.Services.AddSingleton<ShadowMapSystem>();
         builder.Services.AddSingleton<EffectSystem>();
-        builder.Services.AddSingleton<FrustumCullSystem>();
-        builder.Services.AddSingleton<SortSystem>();
         builder.Services.AddSingleton<UISystem>();
         builder.Services.AddSingleton<DebugDrawSystem>();
         builder.Services.AddSingleton<CompositeRenderSystem>();
@@ -192,6 +192,7 @@ internal static class Program
         {
             var dto = JsonModelLoader.LoadFile<BiomeData>(file);
             if (!dto.Enabled) continue;
+            ValidateBiomeConfig(file, dto);
 
             services.AddSingleton<IBiome>(sp =>
             {
@@ -201,6 +202,25 @@ internal static class Program
                 var config = sp.GetRequiredService<IWorldConfigService>();
                 return new ConfigBiome(dto.Id, dto, new ConfigTreeWorldObjectSpawner(trees, sampler, envTerrain, config, dto.AllowedObjects));
             });
+        }
+    }
+
+    private static void ValidateBiomeConfig(string file, BiomeData biome)
+    {
+        if (string.IsNullOrWhiteSpace(biome.Id))
+            throw new InvalidOperationException($"Biome config missing Id: {file}");
+        if (biome.TerrainLayers == null)
+            throw new InvalidOperationException($"Biome '{biome.Id}' missing TerrainLayers: {file}");
+        if (string.IsNullOrWhiteSpace(biome.TerrainLayers.SurfaceTextureId) ||
+            string.IsNullOrWhiteSpace(biome.TerrainLayers.SubsurfaceTextureId) ||
+            string.IsNullOrWhiteSpace(biome.TerrainLayers.DeepTextureId))
+            throw new InvalidOperationException($"Biome '{biome.Id}' has invalid TerrainLayers texture ids: {file}");
+        if (biome.Mining?.Ores == null)
+            throw new InvalidOperationException($"Biome '{biome.Id}' missing Mining.Ores: {file}");
+        foreach (var ore in biome.Mining.Ores)
+        {
+            if (string.IsNullOrWhiteSpace(ore.OreType))
+                throw new InvalidOperationException($"Biome '{biome.Id}' has an ore rule with empty OreType: {file}");
         }
     }
 }

@@ -1,4 +1,4 @@
-using Veilborne.Core.WorldObjects;
+using Veilborne.WorldObjects;
 
 namespace Veilborne.Interfaces
 {

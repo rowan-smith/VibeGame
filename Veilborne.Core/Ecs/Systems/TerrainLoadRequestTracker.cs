@@ -1,6 +1,4 @@
-using System.Collections.Generic;
-
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Tracks queued terrain request keys to avoid duplicate request entities.

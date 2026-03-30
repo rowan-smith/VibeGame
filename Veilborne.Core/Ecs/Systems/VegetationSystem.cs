@@ -1,6 +1,6 @@
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Finalizes generated vegetation entities by clearing dirty flags after install.
@@ -16,15 +16,15 @@ namespace Veilborne.Core.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var entity in _entities.GetEntitiesWith<WorldObjectComponent, DirtyComponent>())
+            _entities.ForEachWith<WorldObjectComponent, DirtyComponent>(entity =>
             {
                 var dirty = entity.GetComponent<DirtyComponent>();
                 if (!dirty.NeedsUpdate)
-                    continue;
+                    return;
 
                 dirty.NeedsUpdate = false;
                 entity.SetComponent(dirty);
-            }
+            });
         }
     }
 }

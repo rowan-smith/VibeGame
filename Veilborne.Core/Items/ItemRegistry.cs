@@ -1,7 +1,7 @@
 using Serilog;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Items
+namespace Veilborne.Items
 {
     public sealed class ItemRegistry : IItemRegistry
     {

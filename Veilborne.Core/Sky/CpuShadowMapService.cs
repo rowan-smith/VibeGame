@@ -1,9 +1,9 @@
 using System.Numerics;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Sky
+namespace Veilborne.Sky
 {
     /// <summary>
     /// CPU directional shadow map approximation in light-space for terrain + world object casters.
@@ -15,12 +15,12 @@ namespace Veilborne.Core.Sky
         private readonly IInfiniteTerrain _terrain;
         private readonly EntityRegistry _entities;
 
-        private const int MapSize = 96;
-        private const float WorldExtent = 140f;
-        private const float RebuildIntervalSeconds = 0.10f;
-        private const float CameraRecenterThresholdSq = 9f; // 3m
-        private const float SunDirRebuildDotThreshold = 0.9994f;
-        private const float MaxCasterDistanceSq = 180f * 180f;
+        private const int MapSize = 48;
+        private const float WorldExtent = 100f;
+        private const float RebuildIntervalSeconds = 0.35f;
+        private const float CameraRecenterThresholdSq = 16f; // 4m
+        private const float SunDirRebuildDotThreshold = 0.9990f;
+        private const float MaxCasterDistanceSq = 120f * 120f;
         private readonly float[] _heightMap = new float[MapSize * MapSize];
         private bool _ready;
         private Vector2 _mapCenterXZ;
@@ -28,6 +28,7 @@ namespace Veilborne.Core.Sky
         private Vector3 _cachedLightDir = Vector3.UnitY;
         private Vector3 _centerLightPos;
         private float _rebuildTimer;
+        private int _partialRow; // for incremental rebuild
 
         public bool IsReady => _ready;
 
@@ -58,15 +59,26 @@ namespace Veilborne.Core.Sky
             Array.Fill(_heightMap, float.NegativeInfinity);
             float step = (WorldExtent * 2f) / (MapSize - 1);
 
-            // Terrain caster heights.
-            for (int z = 0; z < MapSize; z++)
-            for (int x = 0; x < MapSize; x++)
+            // Terrain caster heights — sample every other cell for speed, interpolation hides gaps.
+            for (int z = 0; z < MapSize; z += 2)
+            for (int x = 0; x < MapSize; x += 2)
             {
                 float wx = _mapCenterXZ.X - WorldExtent + x * step;
                 float wz = _mapCenterXZ.Y - WorldExtent + z * step;
                 float wy = _terrain.SampleHeight(new Vector3(wx, 0f, wz));
                 var lightPos = WorldToLight(new Vector3(wx, wy, wz), _basis);
                 WriteHeight(lightPos);
+                // Fill adjacent cells with same height for coverage
+                if (x + 1 < MapSize)
+                {
+                    var adjX = WorldToLight(new Vector3(wx + step, wy, wz), _basis);
+                    WriteHeight(adjX);
+                }
+                if (z + 1 < MapSize)
+                {
+                    var adjZ = WorldToLight(new Vector3(wx, wy, wz + step), _basis);
+                    WriteHeight(adjZ);
+                }
             }
 
             // World objects as additional casters.
@@ -78,7 +90,6 @@ namespace Veilborne.Core.Sky
                 if (Vector2.DistanceSquared(new Vector2(tr.Position.X, tr.Position.Z), _mapCenterXZ) > MaxCasterDistanceSq)
                     return;
                 float radius = MathF.Max(0.2f, MathF.Max(MathF.Abs(tr.Scale.X), MathF.Max(MathF.Abs(tr.Scale.Y), MathF.Abs(tr.Scale.Z))));
-                // Sample top of object for conservative occluder height.
                 var top = tr.Position + new Vector3(0f, radius * 2f, 0f);
                 var lp = WorldToLight(top, _basis);
                 WriteHeight(lp);

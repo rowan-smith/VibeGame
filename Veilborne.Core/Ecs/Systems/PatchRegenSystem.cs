@@ -1,8 +1,7 @@
-using System.Collections.Generic;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Placeholder patch regeneration stage for dirty terrain patches.

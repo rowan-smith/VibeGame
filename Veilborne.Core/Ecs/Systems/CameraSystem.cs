@@ -1,8 +1,8 @@
 using System.Numerics;
 using Serilog;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Maintains valid camera vectors before input/physics phases execute.

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Veilborne.Core.Items
+namespace Veilborne.Items
 {
     // Root container for all item definitions in the config
     public sealed class ItemConfigSet

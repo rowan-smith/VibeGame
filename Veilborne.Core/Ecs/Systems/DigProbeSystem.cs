@@ -1,16 +1,18 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Probes terrain under camera look direction and stores the dig target.
+    /// Throttled to run every other frame to reduce SampleHeight overhead.
     /// </summary>
     public class DigProbeSystem : ISystem
     {
         private readonly EntityRegistry _entities;
         private readonly IInfiniteTerrain _terrain;
+        private int _frameCounter;
 
         public DigProbeSystem(EntityRegistry entities, IInfiniteTerrain terrain)
         {
@@ -20,20 +22,31 @@ namespace Veilborne.Core.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var entity in _entities.GetEntitiesWith<CameraComponent, DigInteractionComponent>())
+            _frameCounter++;
+            bool isProbeFrame = (_frameCounter & 1) == 0; // every other frame
+
+            _entities.ForEachWith<CameraComponent, DigInteractionComponent>(entity =>
             {
-                var cam = entity.GetComponent<CameraComponent>();
                 var dig = entity.GetComponent<DigInteractionComponent>();
+
+                // Skip probe on odd frames unless actively digging
+                if (!isProbeFrame && !dig.IsDigHeld)
+                    return;
+
+                var cam = entity.GetComponent<CameraComponent>();
+
+                // Use coarser step when not actively digging for cheaper probing
+                float step = dig.IsDigHeld ? dig.ProbeStep : dig.ProbeStep * 2f;
 
                 dig.HasGroundHit = TryGetGroundHit(
                     cam,
                     dig.ProbeMaxDistance,
-                    dig.ProbeStep,
+                    step,
                     dig.ProbeEpsilon,
                     out var hit);
                 dig.GroundHit = hit;
                 entity.SetComponent(dig);
-            }
+            });
         }
 
         private bool TryGetGroundHit(CameraComponent cam, float maxDistance, float step, float epsilon, out Vector3 hit)

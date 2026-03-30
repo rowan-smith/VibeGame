@@ -1,4 +1,4 @@
-using Veilborne.Core.Items;
+using Veilborne.Items;
 
 namespace Veilborne.Interfaces
 {

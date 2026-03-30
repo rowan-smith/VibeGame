@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Veilborne.Core
+namespace Veilborne
 {
     public static class RuntimeEnvironment
     {

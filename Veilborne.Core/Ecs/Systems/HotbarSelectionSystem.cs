@@ -1,9 +1,8 @@
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Items;
-using Veilborne.Core.Settings;
+using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
+using Veilborne.Settings;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Handles hotbar slot selection and applies current tool modifiers to dig interaction.

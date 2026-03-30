@@ -1,7 +1,6 @@
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Terrain;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Updates terrain streaming rings around the active camera.

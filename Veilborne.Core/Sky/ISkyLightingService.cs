@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Core.Sky
+namespace Veilborne.Sky
 {
     public interface ISkyLightingService
     {

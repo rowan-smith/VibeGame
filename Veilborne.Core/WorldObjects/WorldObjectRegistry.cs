@@ -1,7 +1,7 @@
 using Serilog;
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.WorldObjects
+namespace Veilborne.WorldObjects
 {
     public sealed class WorldObjectRegistry : IWorldObjectRegistry
     {

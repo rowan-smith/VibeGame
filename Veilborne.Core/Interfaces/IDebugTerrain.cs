@@ -1,6 +1,5 @@
 using System.Numerics;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 using Veilborne.Terrain;
 
 namespace Veilborne.Interfaces

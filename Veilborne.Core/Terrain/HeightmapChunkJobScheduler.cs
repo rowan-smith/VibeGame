@@ -11,9 +11,12 @@ namespace Veilborne.Terrain
 {
     internal sealed class HeightmapChunkJobScheduler : IChunkJobScheduler
     {
+        private readonly record struct BiomeOverlayConfig(bool Enabled, int Seed, float Frequency, int Octaves, float Lacunarity, float Gain, float HeightScale);
+
         private readonly ITerrainGenerator _gen;
         private readonly IBiomeProvider _biomeProvider;
         private readonly ILogger _logger = Log.ForContext<HeightmapChunkJobScheduler>();
+        private readonly ConcurrentDictionary<string, BiomeOverlayConfig> _overlayCache = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly Queue<(ChunkJobType type, (int cx, int cz) index, ChunkState target)> _jobQueue = new();
         private readonly ConcurrentQueue<HeightmapChunkResult> _applyQueue = new();
@@ -108,17 +111,16 @@ namespace Veilborne.Terrain
             float chunkWorldSize = (_gen.TerrainSize - 1) * _gen.TileSize;
             Vector2 origin = new Vector2(key.cx * chunkWorldSize, key.cz * chunkWorldSize);
             var biome = _biomeProvider.GetBiomeAt(origin, _gen);
-            var mods = biome.Data.ProceduralData.NoiseModifiers;
-            if (mods.HeightScale != 0f)
+            var overlayCfg = _overlayCache.GetOrAdd(biome.Id, _ => BuildOverlayConfig(biome));
+            if (overlayCfg.Enabled)
             {
-                int octaves = Math.Clamp(1 + (int)MathF.Round(mods.Detail * 5f), 1, 6);
-                float baseFreq = 0.03f;
-                float freq = baseFreq * (mods.Frequency <= 0f ? 1f : mods.Frequency);
-                float lac = mods.Lacunarity <= 0f ? 2.0f : mods.Lacunarity;
-                float gain = mods.Persistence;
-
-                int seed = HashCode.Combine(biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
-                var overlay = new FastNoiseLiteSource(seed, FastNoiseLite.NoiseType.OpenSimplex2, freq, octaves, lac, gain);
+                var overlay = new FastNoiseLiteSource(
+                    overlayCfg.Seed,
+                    FastNoiseLite.NoiseType.OpenSimplex2,
+                    overlayCfg.Frequency,
+                    overlayCfg.Octaves,
+                    overlayCfg.Lacunarity,
+                    overlayCfg.Gain);
                 for (int z = 0; z < _gen.TerrainSize; z++)
                 {
                     for (int x = 0; x < _gen.TerrainSize; x++)
@@ -126,7 +128,7 @@ namespace Veilborne.Terrain
                         float wx = origin.X + x * _gen.TileSize;
                         float wz = origin.Y + z * _gen.TileSize;
                         float n = overlay.GetValue3D(wx, 0f, wz);
-                        float delta = n * (mods.HeightScale * 6.0f);
+                        float delta = n * overlayCfg.HeightScale;
                         heights[x, z] += delta;
                     }
                 }
@@ -147,6 +149,22 @@ namespace Veilborne.Terrain
             }
 
             return new HeightmapChunkResult(key, heights, objs, state);
+        }
+
+        private static BiomeOverlayConfig BuildOverlayConfig(IBiome biome)
+        {
+            var mods = biome.Data.ProceduralData.NoiseModifiers;
+            if (mods.HeightScale == 0f)
+                return new BiomeOverlayConfig(false, 0, 0f, 0, 0f, 0f, 0f);
+
+            int octaves = Math.Clamp(1 + (int)MathF.Round(mods.Detail * 5f), 1, 6);
+            float baseFreq = 0.03f;
+            float freq = baseFreq * (mods.Frequency <= 0f ? 1f : mods.Frequency);
+            float lac = mods.Lacunarity <= 0f ? 2.0f : mods.Lacunarity;
+            float gain = mods.Persistence;
+            int seed = HashCode.Combine(biome.Id.GetHashCode(StringComparison.OrdinalIgnoreCase), 9176);
+            float heightScale = mods.HeightScale * 6.0f;
+            return new BiomeOverlayConfig(true, seed, freq, octaves, lac, gain, heightScale);
         }
     }
 }

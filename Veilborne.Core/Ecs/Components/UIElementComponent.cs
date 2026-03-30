@@ -1,6 +1,6 @@
 using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
 /// <summary>
 /// Stores UI element bounds and label text.

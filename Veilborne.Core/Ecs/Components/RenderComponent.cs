@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
 /// <summary>
 /// Stores model rendering metadata for world objects.
@@ -11,7 +11,7 @@ namespace Veilborne.Core.Ecs.Components
 
         public bool Visible { get; set; } = true;
 
-        public float? ConfigRotationDegrees { get; set; }
+        public bool IsFoliage { get; set; } = false;
     }
 }
 

@@ -36,43 +36,6 @@
         "ScaleVariance": 0.35,
         "RandomRotationY": true
       }
-    },
-    {
-      "Id": "small_log",
-      "DisplayName": "Small Log",
-      "Description": "A small fallen log placed randomly across the world.",
-      "Category": "Prop",
-      "SpawnRules": {
-        "BiomeIds": ["aetherwild_grove", "solaris_steppe", "verdigris_expanse", "glimmerfall_ridge", "frostveil_tundra", "mistral_dunes"],
-        "SpawnDensity": 0.08,
-        "AltitudeRange": [0.0, 1.0],
-        "TemperatureRange": [0.0, 1.0],
-        "MoistureRange": [0.0, 1.0],
-        "ClusterRadius": 2
-      },
-      "Physics": {
-        "CollisionType": "Static",
-        "Interactable": false,
-        "Mass": 20,
-        "AreaRadius": 0.5,
-        "ColliderRadius": 0.35
-      },
-      "Assets": {
-        "Models": [
-          { "Path": "models/world/props/small_log.glb", "Weight": 1.0 }
-        ]
-      },
-      "Visual": {
-        "SeasonalTint": {
-          "Spring": [1.0, 1.0, 1.0],
-          "Summer": [1.0, 1.0, 1.0],
-          "Autumn": [1.0, 0.95, 0.9],
-          "Winter": [0.9, 0.9, 0.9]
-        },
-        "BaseScale": [0.6, 0.6, 0.6],
-        "ScaleVariance": 0.2,
-        "RandomRotationY": true
-      }
     }
   ]
 }

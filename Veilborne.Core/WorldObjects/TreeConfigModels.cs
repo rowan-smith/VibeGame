@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Veilborne.Core.WorldObjects
+namespace Veilborne.WorldObjects
 {
     // Root container for all world objects loaded from trees.json
     public sealed class WorldObjectsConfig
