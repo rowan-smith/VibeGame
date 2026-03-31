@@ -15,6 +15,6 @@
         float SampleHeight(float[,] heights, float worldX, float worldZ);
 
         // Compute base infinite height at arbitrary world position
-        float ComputeHeight(float worldX, float worldZ);
+        float ComputeHeight(float worldX, float worldZ, float detailLevel = 1f);
     }
 }

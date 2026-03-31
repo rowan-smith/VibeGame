@@ -500,7 +500,15 @@ namespace Veilborne.Core.UI
             if (_input.IsKeyPressed(InputKeys.KEY_DOWN)) deltaRows += 1;
 
             if (deltaRows != 0)
-                _tabScrollOffset = Math.Max(0, _tabScrollOffset + deltaRows);
+            {
+                _tabScrollOffset += deltaRows;
+                // Soft-clamp to a reasonable range if not already clamped by a Draw call.
+                // We'll clamp to 0 here, and the upper bound will be handled in DrawScrollableRows.
+                // To avoid "scrolling off into infinity", we also apply a large upper bound safety
+                // until the next Draw call precisely clamps it to the row count.
+                if (_tabScrollOffset < 0) _tabScrollOffset = 0;
+                if (_tabScrollOffset > 500) _tabScrollOffset = 500;
+            }
         }
 
         private static (string label, KeyboardAction action, bool disabled)[] GetKeyboardActionRows()

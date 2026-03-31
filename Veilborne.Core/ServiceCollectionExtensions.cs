@@ -20,8 +20,8 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddVeilborneCoreServices(this IServiceCollection services)
     {
-        // Bootstrap Core configuration
-        services.AddSingleton<IWorldConfigService, WorldConfigService>();
+        // Bootstrap Core configuration - platform must provide IWorldConfigService
+        // services.AddSingleton<IWorldConfigService, WorldConfigService>();
 
         // Core Input, Time, Graphics and UI (abstract, not platform-specific)
         // Platform-specific implementations should be registered in the host project
@@ -75,7 +75,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CompositeRenderSystem>();
         // ECS runtime (host must provide IEcsRuntime implementation)
 
-        services.AddSingleton<IWorldObjectRegistry, WorldObjectRegistry>();
+        // IWorldObjectRegistry and IItemRegistry must be provided by host
+        // services.AddSingleton<IWorldObjectRegistry, WorldObjectRegistry>();
         services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
 
         // Biome registration is host-specific (file system access)
@@ -118,7 +119,7 @@ public static class ServiceCollectionExtensions
 
         // Game engine & state
         services.AddSingleton<IGameSettingsService, GameSettingsService>();
-        services.AddSingleton<IItemRegistry, ItemRegistry>();
+        // services.AddSingleton<IItemRegistry, ItemRegistry>();
         services.AddSingleton<EntityRegistry>();
         services.AddSingleton(new Player(Vector3.Zero));
         services.AddSingleton(sp => new World(

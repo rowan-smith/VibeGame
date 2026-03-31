@@ -15,12 +15,35 @@
     <PackageReference Include="KNI.Extended" Version="5.5.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.5" PrivateAssets="all" />
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Sinks.BrowserConsole" Version="2.1.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="..\Veilborne.Core\assets\**">
-      <Link>wwwroot\assets\%(RecursiveDir)%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+  <ItemGroup />
+
+  <!-- Physically copy shared assets from Core into Web's wwwroot at build time.
+       This ensures the Blazor DevServer finds them as physical files during development,
+       avoiding "0 byte" responses that can happen with linked files in WASM. -->
+  <Target Name="CopySharedAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
+    <ItemGroup>
+      <CoreAssets Include="..\Veilborne.Core\assets\**" />
+      <CoreTextures Include="..\Veilborne.Core\textures\**" />
+      <CoreModels Include="..\Veilborne.Core\models\**" />
+      <CoreShaders Include="..\Veilborne.Core\shaders\**" />
+      <CoreFonts Include="..\Veilborne.Core\fonts\**" />
+      <CoreSvgs Include="..\Veilborne.Core\*.svg" />
+      <CoreAppsettings Include="..\Veilborne.Core\appsettings.json" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(CoreAssets)" DestinationFiles="@(CoreAssets->'wwwroot\assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CoreTextures)" DestinationFiles="@(CoreTextures->'wwwroot\textures\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CoreModels)" DestinationFiles="@(CoreModels->'wwwroot\models\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CoreShaders)" DestinationFiles="@(CoreShaders->'wwwroot\shaders\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CoreFonts)" DestinationFiles="@(CoreFonts->'wwwroot\fonts\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CoreSvgs)" DestinationFiles="@(CoreSvgs->'wwwroot\%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CoreAppsettings)" DestinationFiles="@(CoreAppsettings->'wwwroot\appsettings.json')" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

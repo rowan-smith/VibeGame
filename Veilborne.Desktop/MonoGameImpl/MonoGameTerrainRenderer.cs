@@ -725,7 +725,7 @@ namespace Veilborne.Desktop.MonoGameImpl
 
         private bool DetectBiomeBlendShaderAssets()
         {
-            string shadersDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "shaders");
+            string shadersDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "shaders");
             string frag = Path.Combine(shadersDir, "biome_blend.frag");
             string vert = Path.Combine(shadersDir, "biome_blend.vert");
             bool ok = File.Exists(frag) && File.Exists(vert);
@@ -878,7 +878,7 @@ namespace Veilborne.Desktop.MonoGameImpl
         {
             if (_textureCache.TryGetValue(textureId, out var cached)) return cached;
 
-            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "textures", "terrain", textureId);
+            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "textures", "terrain", textureId);
             if (!Directory.Exists(dir))
             {
                 _log.Warning("Terrain texture directory not found: {Dir}", dir);

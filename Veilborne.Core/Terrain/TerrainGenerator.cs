@@ -48,18 +48,20 @@ namespace Veilborne.Core.Terrain
                 gain: 0.45f);
         }
 
-        public float ComputeHeight(float worldX, float worldZ)
+        public float ComputeHeight(float worldX, float worldZ, float detailLevel = 1f)
         {
             float macro = _macroNoise.GetValue3D(worldX, 0f, worldZ);   // [-1,1]
             float ridgeRaw = _ridgeNoise.GetValue3D(worldX, 0f, worldZ); // [-1,1]
-            float detail = _detailNoise.GetValue3D(worldX, 0f, worldZ);  // [-1,1]
-            float micro = _microNoise.GetValue3D(worldX, 0f, worldZ);    // [-1,1]
 
-            // Ridged transform with sharpening to add more broken terrain and less smooth rolling hills.
+            // Skip medium/fine details if low-detail requested
+            float detail = detailLevel > 0.5f ? _detailNoise.GetValue3D(worldX, 0f, worldZ) : 0f;
+            float micro = detailLevel > 0.8f ? _microNoise.GetValue3D(worldX, 0f, worldZ) : 0f;
+
+            // Ridged transform with sharpening
             float ridge = 1f - MathF.Abs(ridgeRaw);
             ridge = MathF.Pow(Math.Clamp(ridge, 0f, 1f), 1.35f);
 
-            // Keep a stable baseline while layering medium/high-frequency variation.
+            // Keep a stable baseline
             float h = 2.2f;
             h += (macro * 0.5f + 0.5f) * 8.5f; // large forms
             h += ridge * 8.0f;                 // mountain ridges

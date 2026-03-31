@@ -36,8 +36,8 @@ namespace Veilborne.Core.Ecs.Systems
                 bundle.AddComponent(new BiomeLoadedAssetsComponent
                 {
                     BiomeId = req.BiomeId,
-                    GrassTexturePath = $"assets\\textures\\{req.BiomeId}_grass.png",
-                    TreeModelPath = $"assets\\models\\tree_oak.glb",
+                    GrassTexturePath = $"textures\\{req.BiomeId}_grass.png",
+                    TreeModelPath = $"models\\tree_oak.glb",
                     ActiveChunkRefs = 1
                 });
 

@@ -12,7 +12,8 @@ namespace Veilborne.Core.Biomes
             float worldZ,
             float baseHeight,
             IBiomeProvider biomeProvider,
-            ITerrainGenerator terrain)
+            ITerrainGenerator terrain,
+            float detailLevel = 1f)
         {
             var p = new Vector2(worldX, worldZ);
 
@@ -23,38 +24,43 @@ namespace Veilborne.Core.Biomes
             if (count <= 1)
             {
                 var biome = count == 1 ? weights[0].Biome : biomeProvider.GetBiomeAt(p, terrain);
-                return ApplyBiome(biome.Data, worldX, worldZ, baseHeight);
+                return ApplyBiome(biome.Data, worldX, worldZ, baseHeight, detailLevel);
             }
 
             // Weighted blend across all contributing biomes
             float blendedHeight = 0f;
             for (int i = 0; i < count; i++)
             {
-                float h = ApplyBiome(weights[i].Biome.Data, worldX, worldZ, baseHeight);
+                float h = ApplyBiome(weights[i].Biome.Data, worldX, worldZ, baseHeight, detailLevel);
                 blendedHeight += h * weights[i].Weight;
             }
             return blendedHeight;
         }
 
-        private static float ApplyBiome(BiomeData biome, float worldX, float worldZ, float baseHeight)
+        private static float ApplyBiome(BiomeData biome, float worldX, float worldZ, float baseHeight, float detailLevel = 1f)
         {
+            if (!biome.SeedsInitialized) biome.InitializeSeedsOnce();
+
             var b = biome.ProceduralData.Base;
             var n = biome.ProceduralData.NoiseModifiers;
 
             float freq = 0.0011f * MathF.Max(0.2f, n.Frequency);
             int octaves = Math.Clamp(2 + (int)MathF.Round(MathF.Max(0f, n.Detail) * 3f), 2, 6);
+            if (detailLevel < 0.6f) octaves = Math.Clamp(octaves, 2, 3);
+            if (detailLevel < 0.3f) octaves = 2;
+
             float persistence = Math.Clamp(n.Persistence <= 0f ? 0.5f : n.Persistence, 0.2f, 0.85f);
             float lacunarity = Math.Clamp(n.Lacunarity <= 0f ? 2f : n.Lacunarity, 1.5f, 3.2f);
 
-            int seedA = HashBiomeSeed(biome.Id, 17);
-            int seedB = HashBiomeSeed(biome.Id, 71);
-            int seedW = HashBiomeSeed(biome.Id, 53);
-            int seedC = HashBiomeSeed(biome.Id, 89);
+            int seedA = biome.SeedA;
+            int seedB = biome.SeedB;
+            int seedW = biome.SeedW;
+            int seedC = biome.SeedC;
 
             // Domain warping for organic terrain shapes
             float wx = worldX;
             float wz = worldZ;
-            if (n.WarpStrength > 0.001f)
+            if (n.WarpStrength > 0.001f && detailLevel > 0.45f)
             {
                 float wf = freq * MathF.Max(0.1f, n.WarpFrequency);
                 float warpX = ValueNoise2D(worldX * wf, worldZ * wf, seedW) * n.WarpStrength * 40f;
@@ -65,7 +71,7 @@ namespace Veilborne.Core.Biomes
 
             // Continental noise: very low-frequency macro-scale height modulation
             float continentalOffset = 0f;
-            if (n.ContinentalScale > 0.001f)
+            if (n.ContinentalScale > 0.001f && detailLevel > 0.35f)
             {
                 float cf = freq * MathF.Max(0.01f, n.ContinentalFrequency);
                 continentalOffset = Fbm(wx, wz, seedA + 200, cf, 3, 0.5f, 2f) * n.ContinentalScale * 8f;
@@ -74,21 +80,25 @@ namespace Veilborne.Core.Biomes
             float fbm = Fbm(wx, wz, seedA, freq, octaves, persistence, lacunarity);
 
             // Ridge noise with configurable sharpness
-            float ridgeSharpness = Math.Clamp(n.RidgeSharpness > 0f ? n.RidgeSharpness : 1.5f, 0.5f, 4f);
-            float ridge = 1f - MathF.Abs(Fbm(wx, wz, seedB, freq * 1.8f, Math.Max(2, octaves - 1), persistence * 0.9f, lacunarity));
-            ridge = MathF.Pow(Math.Clamp(ridge, 0f, 1f), ridgeSharpness);
+            float ridge = 0f;
+            if (detailLevel > 0.25f)
+            {
+                float ridgeSharpness = Math.Clamp(n.RidgeSharpness > 0f ? n.RidgeSharpness : 1.5f, 0.5f, 4f);
+                ridge = 1f - MathF.Abs(Fbm(wx, wz, seedB, freq * 1.8f, Math.Max(2, octaves - 1), persistence * 0.9f, lacunarity));
+                ridge = MathF.Pow(Math.Clamp(ridge, 0f, 1f), ridgeSharpness);
+            }
 
             // Billow noise: abs(FBM) for rounded puffy shapes
             float billow = 0f;
             float bw = Math.Clamp(n.BillowWeight, 0f, 1f);
-            if (bw > 0.001f)
+            if (bw > 0.001f && detailLevel > 0.55f)
             {
                 float rawBillow = Fbm(wx + 500f, wz + 500f, seedC, freq * 1.2f, Math.Max(2, octaves - 1), persistence, lacunarity);
                 billow = MathF.Abs(rawBillow);
             }
 
             // Erosion: smooth FBM peaks, deepen valleys
-            if (n.ErosionStrength > 0.001f)
+            if (n.ErosionStrength > 0.001f && detailLevel > 0.5f)
             {
                 float e = Math.Clamp(n.ErosionStrength, 0f, 1f);
                 fbm = fbm > 0 ? fbm * (1f - e * 0.3f) : fbm * (1f + e * 0.4f);
@@ -117,7 +127,7 @@ namespace Veilborne.Core.Biomes
                              + continentalOffset;
 
             // Dune directional noise: wind-sculpted sand dune or rolling hill patterns
-            if (n.DuneFrequency > 0.001f && n.DuneAmplitude > 0.001f)
+            if (n.DuneFrequency > 0.001f && n.DuneAmplitude > 0.001f && detailLevel > 0.65f)
             {
                 float dirRad = n.DuneDirection * MathF.PI / 180f;
                 float projected = wx * MathF.Cos(dirRad) + wz * MathF.Sin(dirRad);
@@ -128,7 +138,7 @@ namespace Veilborne.Core.Biomes
             }
 
             // Crater noise: Worley/cellular-like depressions with raised rims
-            if (n.CraterFrequency > 0.001f && (n.CraterDepth > 0.001f || n.CraterRimHeight > 0.001f))
+            if (n.CraterFrequency > 0.001f && (n.CraterDepth > 0.001f || n.CraterRimHeight > 0.001f) && detailLevel > 0.75f)
             {
                 float craterFreq = freq * n.CraterFrequency * 2f;
                 float cellDist = WorleyNoise2D(wx * craterFreq, wz * craterFreq, seedC + 100);
@@ -139,7 +149,7 @@ namespace Veilborne.Core.Biomes
             }
 
             // Micro-detail noise: high-frequency surface variation
-            if (n.MicroDetailFrequency > 0.001f && n.MicroDetailAmplitude > 0.001f)
+            if (n.MicroDetailFrequency > 0.001f && n.MicroDetailAmplitude > 0.001f && detailLevel > 0.9f)
             {
                 float microFreq = freq * MathF.Max(1f, n.MicroDetailFrequency) * 4f;
                 float micro = ValueNoise2D(wx * microFreq, wz * microFreq, seedC + 31);
@@ -147,7 +157,7 @@ namespace Veilborne.Core.Biomes
             }
 
             // Overhang cliff displacement: creates steep cliff-band profiles
-            if (n.OverhangStrength > 0.001f)
+            if (n.OverhangStrength > 0.001f && detailLevel > 0.6f)
             {
                 float ohFreq = freq * MathF.Max(0.5f, n.OverhangFrequency) * 6f;
                 float cliffNoise = ValueNoise2D(wx * ohFreq, wz * ohFreq, seedW + 200);
@@ -156,22 +166,22 @@ namespace Veilborne.Core.Biomes
             }
 
             // Custom stacked noise layers (data-driven from JSON)
-            if (biome.NoiseLayers is { Count: > 0 } layers)
+            if (biome.NoiseLayers is { Count: > 0 } layers && detailLevel > 0.8f)
             {
                 foreach (var layer in layers)
                 {
                     if (!layer.Enabled || layer.Amplitude < 0.001f) continue;
-                    int layerSeed = seedA + layer.Seed + HashCode.Combine(layer.Type, layer.Frequency);
+                    int layerSeed = seedA + layer.Seed + HashCode.Combine(layer.TypeLower, layer.Frequency);
                     float layerFreq = freq * layer.Frequency;
                     float layerValue = EvaluateNoiseLayer(layer, wx, wz, layerSeed, layerFreq) * layer.Amplitude + layer.Offset;
-                    localShape = BlendLayerValue(localShape, layerValue, layer.BlendMode);
+                    localShape = BlendLayerValue(localShape, layerValue, layer.BlendModeLower);
                 }
             }
 
             float h = baseHeight + elevationBias + localShape;
 
             // Slope-aware erosion: compute local gradient and apply extra smoothing on steep areas
-            if (n.SlopeErosionScale > 0.001f)
+            if (n.SlopeErosionScale > 0.001f && detailLevel > 0.7f)
             {
                 float gradX = ValueNoise2D((wx + 0.5f) * freq, wz * freq, seedA) - ValueNoise2D((wx - 0.5f) * freq, wz * freq, seedA);
                 float gradZ = ValueNoise2D(wx * freq, (wz + 0.5f) * freq, seedA) - ValueNoise2D(wx * freq, (wz - 0.5f) * freq, seedA);
@@ -211,7 +221,7 @@ namespace Veilborne.Core.Biomes
             float pers = Math.Clamp(layer.Persistence, 0.1f, 0.9f);
             float lac = Math.Clamp(layer.Lacunarity, 1.2f, 4f);
 
-            return layer.Type?.ToLowerInvariant() switch
+            return layer.TypeLower switch
             {
                 "ridge" => 1f - MathF.Abs(Fbm(wx, wz, seed, freq, oct, pers * 0.9f, lac)),
                 "billow" => MathF.Abs(Fbm(wx, wz, seed, freq, oct, pers, lac)),
@@ -222,9 +232,9 @@ namespace Veilborne.Core.Biomes
         }
 
         /// <summary>Combine a noise layer value with the existing terrain shape.</summary>
-        private static float BlendLayerValue(float existing, float layerValue, string blendMode)
+        private static float BlendLayerValue(float existing, float layerValue, string blendModeLower)
         {
-            return blendMode?.ToLowerInvariant() switch
+            return blendModeLower switch
             {
                 "multiply" => existing * (1f + layerValue),
                 "max" => MathF.Max(existing, layerValue),
@@ -257,8 +267,6 @@ namespace Veilborne.Core.Biomes
             return MathF.Sqrt(minDist);
         }
 
-        private static int HashBiomeSeed(string biomeId, int salt)
-            => HashCode.Combine(biomeId.ToLowerInvariant(), salt);
 
         private static float Fbm(float x, float z, int seed, float frequency, int octaves, float persistence, float lacunarity)
         {

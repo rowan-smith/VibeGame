@@ -143,24 +143,35 @@ namespace Veilborne.Core.Terrain
                     var origin = new Vector2(originX, originZ);
 
                     _generating.Add(key);
-                    _ = Task.Run(() =>
+                    _ = Task.Run(async () =>
                     {
-                        // Coarse sampling in background
-                        float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
-                        for (int zz = 0; zz <= ChunkSize; zz++)
-                        for (int xx = 0; xx <= ChunkSize; xx++)
+                        try
                         {
-                            float wx = origin.X + xx * TileSize;
-                            float wz = origin.Y + zz * TileSize;
-                            heights[xx, zz] = _editable.SampleHeight(wx, wz);
+                            // Coarse sampling in background
+                            float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
+                            for (int zz = 0; zz <= ChunkSize; zz++)
+                            {
+                                for (int xx = 0; xx <= ChunkSize; xx++)
+                                {
+                                    float wx = origin.X + xx * TileSize;
+                                    float wz = origin.Y + zz * TileSize;
+                                    heights[xx, zz] = _editable.SampleHeight(wx, wz, 0.2f);
+                                }
+                                if (zz % 2 == 0) await Task.Yield();
+                            }
+                            var center = new Vector2(
+                                origin.X + ChunkSize * TileSize * 0.5f,
+                                origin.Y + ChunkSize * TileSize * 0.5f);
+                            var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
+                            lock (_biomeBlendByChunk)
+                                _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
+                            _completed.Enqueue((key, heights, origin, biome.Data));
                         }
-                        var center = new Vector2(
-                            origin.X + ChunkSize * TileSize * 0.5f,
-                            origin.Y + ChunkSize * TileSize * 0.5f);
-                        var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
-                        lock (_biomeBlendByChunk)
-                            _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
-                        _completed.Enqueue((key, heights, origin, biome.Data));
+                        catch (Exception ex)
+                        {
+                            System.Console.WriteLine($"[DEBUG_LOG] Error generating LOD chunk {key}: {ex}");
+                            _generating.Remove(key);
+                        }
                     });
                 }
             }

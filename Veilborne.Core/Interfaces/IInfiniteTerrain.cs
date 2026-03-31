@@ -7,7 +7,7 @@ namespace Veilborne.Core.Interfaces
     {
         void UpdateCenter(Vector3 cameraPosition);
 
-        float SampleHeight(Vector3 worldPos);
+        float SampleHeight(Vector3 worldPos, float detailLevel = 1f);
 
         void Update();
 

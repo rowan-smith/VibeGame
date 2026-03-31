@@ -421,7 +421,7 @@ namespace Veilborne.Core
 
         private void LoadUiAssets()
         {
-            _graphics.SetWindowIcon("assets\\logo.svg");
+            _graphics.SetWindowIcon("logo.svg");
             _menuRenderer.Initialize(_ui, _graphics);
             _debugVizRenderer.Initialize(_ui, _graphics);
             // Load splash texture asynchronously to avoid blocking the first frame
@@ -430,7 +430,7 @@ namespace Veilborne.Core
             {
                 try
                 {
-                    _ui.RegisterSvgTexture(GameMenuRenderer.SplashTextureKey, "assets\\splash.svg", 2000, 1200);
+                    _ui.RegisterSvgTexture(GameMenuRenderer.SplashTextureKey, "splash.svg", 2000, 1200);
                 }
                 catch (Exception ex)
                 {

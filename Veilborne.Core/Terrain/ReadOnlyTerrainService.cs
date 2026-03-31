@@ -221,28 +221,39 @@ namespace Veilborne.Core.Terrain
 
                     // Off-thread height sampling from editable ring
                     _generating.Add(key);
-                    _ = Task.Run(() =>
+                    _ = Task.Run(async () =>
                     {
-                        // Build heights from editable surface so RO ring stays in sync with
-                        // editable/LOD sampling and avoids shape pops when transitioning rings.
-                        float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
-                        for (int zz = 0; zz <= ChunkSize; zz++)
-                        for (int xx = 0; xx <= ChunkSize; xx++)
+                        try
                         {
-                            float wx = origin.X + xx * TileSize;
-                            float wz = origin.Y + zz * TileSize;
-                            heights[xx, zz] = _editable.SampleHeight(wx, wz);
-                        }
+                            // Build heights from editable surface so RO ring stays in sync with
+                            // editable/LOD sampling and avoids shape pops when transitioning rings.
+                            float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
+                            for (int zz = 0; zz <= ChunkSize; zz++)
+                            {
+                                for (int xx = 0; xx <= ChunkSize; xx++)
+                                {
+                                    float wx = origin.X + xx * TileSize;
+                                    float wz = origin.Y + zz * TileSize;
+                                    heights[xx, zz] = _editable.SampleHeight(wx, wz, 0.8f);
+                                }
+                                if (zz % 4 == 0) await Task.Yield();
+                            }
 
-                        // Spawn world objects for this chunk using biome spawner
-                        var center = new Vector2(
-                            origin.X + ChunkSize * TileSize * 0.5f,
-                            origin.Y + ChunkSize * TileSize * 0.5f);
-                        var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
-                        var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
-                        _completed.Enqueue((key, heights, origin, raw, biome.Data));
-                        lock (_biomeBlendByChunk)
-                            _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
+                            // Spawn world objects for this chunk using biome spawner
+                            var center = new Vector2(
+                                origin.X + ChunkSize * TileSize * 0.5f,
+                                origin.Y + ChunkSize * TileSize * 0.5f);
+                            var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
+                            var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
+                            _completed.Enqueue((key, heights, origin, raw, biome.Data));
+                            lock (_biomeBlendByChunk)
+                                _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Console.WriteLine($"[DEBUG_LOG] Error generating RO chunk {key}: {ex}");
+                            _generating.Remove(key);
+                        }
                     });
                 }
             }
@@ -467,8 +478,8 @@ namespace Veilborne.Core.Terrain
         public void RenderWithExclusions(CameraComponent camera, HashSet<(int cx, int cz)> exclusions)
             => RenderTiles(camera, exclusions);
 
-        public float SampleHeight(float worldX, float worldZ)
-            => _editable.SampleHeight(worldX, worldZ);
+        public float SampleHeight(float worldX, float worldZ, float detailLevel = 1f)
+            => _editable.SampleHeight(worldX, worldZ, detailLevel);
 
         public IBiome GetBiomeAt(float worldX, float worldZ)
             => _biomeProvider.GetBiomeAt(new Vector2(worldX, worldZ), null);

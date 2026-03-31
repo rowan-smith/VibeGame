@@ -139,14 +139,14 @@ namespace Veilborne.Core.Terrain
         public int ChunkSize => _readOnlyRing.ChunkSize;
         public int TerrainSize => ChunkSize;
 
-        public float ComputeHeight(float worldX, float worldZ) => SampleHeight(new Vector3(worldX, 0, worldZ));
+        public float ComputeHeight(float worldX, float worldZ, float detailLevel = 1f) => SampleHeight(new Vector3(worldX, 0, worldZ), detailLevel);
 
         public float[,] GenerateHeights()
         {
             float[,] heights = new float[ChunkSize, ChunkSize];
             for (int z = 0; z < ChunkSize; z++)
             for (int x = 0; x < ChunkSize; x++)
-                heights[x, z] = ComputeHeight(x * TileSize, z * TileSize);
+                heights[x, z] = ComputeHeight(x * TileSize, z * TileSize, 1.0f);
             return heights;
         }
 
@@ -165,7 +165,7 @@ namespace Veilborne.Core.Terrain
                 float originZ = chunkZ * chunkSize * TileSize;
                 for (int z = 0; z <= chunkSize; z++)
                 for (int x = 0; x <= chunkSize; x++)
-                    heights[x, z] = ComputeHeight(originX + x * TileSize, originZ + z * TileSize);
+                    heights[x, z] = ComputeHeight(originX + x * TileSize, originZ + z * TileSize, 1.0f);
                 return heights;
             });
         }
@@ -586,9 +586,9 @@ namespace Veilborne.Core.Terrain
         // -----------------------------
         // Sample Height
         // -----------------------------
-        public float SampleHeight(Vector3 worldPos)
+        public float SampleHeight(Vector3 worldPos, float detailLevel = 1f)
         {
-            return _editableRing.SampleHeight(worldPos.X, worldPos.Z);
+            return _editableRing.SampleHeight(worldPos.X, worldPos.Z, detailLevel);
         }
 
         // -----------------------------
@@ -680,7 +680,7 @@ namespace Veilborne.Core.Terrain
         void IInfiniteTerrain.Render(CameraComponent camera)
             => Render(camera);
 
-        float IInfiniteTerrain.SampleHeight(Vector3 worldPos) => SampleHeight(worldPos);
+        float IInfiniteTerrain.SampleHeight(Vector3 worldPos, float detailLevel) => SampleHeight(worldPos, detailLevel);
 
         // -----------------------------
         // Editable terrain API

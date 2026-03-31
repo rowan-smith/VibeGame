@@ -34,9 +34,9 @@ namespace Veilborne.Desktop.MonoGameImpl
             if (!string.IsNullOrEmpty(requested) && System.IO.File.Exists(requested))
                 return requested;
 
-            // Look in assets/fonts relative to the executable
+            // Look in fonts/ relative to the executable
             string assetsFont = System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "assets", "fonts", "font.ttf");
+                AppDomain.CurrentDomain.BaseDirectory, "fonts", "font.ttf");
             if (System.IO.File.Exists(assetsFont)) return assetsFont;
 
             // Windows system font fallbacks

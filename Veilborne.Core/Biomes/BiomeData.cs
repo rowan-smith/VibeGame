@@ -57,6 +57,33 @@ namespace Veilborne.Core.Biomes
         public string? FeatureDescription { get; set; }
         public List<string>? SpecialFeatures { get; set; }
         public string? MusicTag { get; set; }
+
+        // --- WASM/Performance Optimizations ---
+        [JsonIgnore] public int SeedA { get; set; }
+        [JsonIgnore] public int SeedB { get; set; }
+        [JsonIgnore] public int SeedW { get; set; }
+        [JsonIgnore] public int SeedC { get; set; }
+        [JsonIgnore] public bool SeedsInitialized { get; set; }
+
+        public void InitializeSeedsOnce()
+        {
+            if (SeedsInitialized) return;
+            string lowerId = Id.ToLowerInvariant();
+            SeedA = HashCode.Combine(lowerId, 17);
+            SeedB = HashCode.Combine(lowerId, 71);
+            SeedW = HashCode.Combine(lowerId, 53);
+            SeedC = HashCode.Combine(lowerId, 89);
+            
+            if (NoiseLayers != null)
+            {
+                foreach (var layer in NoiseLayers)
+                {
+                    layer.TypeLower = layer.Type?.ToLowerInvariant() ?? "perlin";
+                    layer.BlendModeLower = layer.BlendMode?.ToLowerInvariant() ?? "add";
+                }
+            }
+            SeedsInitialized = true;
+        }
     }
 
     public sealed class BiomeMiningConfig
@@ -220,5 +247,8 @@ namespace Veilborne.Core.Biomes
 
         /// <summary>Toggle to enable/disable this layer without removing it.</summary>
         public bool Enabled { get; set; } = true;
+
+        [JsonIgnore] public string TypeLower { get; set; } = string.Empty;
+        [JsonIgnore] public string BlendModeLower { get; set; } = string.Empty;
     }
 }

@@ -56,38 +56,16 @@ namespace Veilborne.Core.TerrainTexture
     public sealed class TerrainTextureRegistry : ITerrainTextureRegistry
     {
         private readonly Dictionary<string, TerrainTextureDef> _defs = new(StringComparer.OrdinalIgnoreCase);
-        private readonly string _assetsRoot;
 
-        public TerrainTextureRegistry()
+        public TerrainTextureRegistry(IEnumerable<TerrainTextureDef> defs)
         {
-            _assetsRoot = Path.Combine(AppContext.BaseDirectory, "assets");
-            var dir = Path.Combine(_assetsRoot, "config", "terrain");
-            if (Directory.Exists(dir))
+            foreach (var def in defs)
             {
-                foreach (var file in Directory.GetFiles(dir, "*.json", SearchOption.TopDirectoryOnly))
+                if (!string.IsNullOrWhiteSpace(def.Id))
                 {
-                    try
-                    {
-                        var def = Load(file);
-                        if (!string.IsNullOrWhiteSpace(def.Id))
-                        {
-                            _defs[def.Id] = def;
-                        }
-                    }
-                    catch
-                    {
-                        // ignore bad entries to avoid breaking startup
-                    }
+                    _defs[def.Id] = def;
                 }
             }
-        }
-
-        private static TerrainTextureDef Load(string filePath)
-        {
-            var json = File.ReadAllText(filePath);
-            var def = JsonSerializer.Deserialize<TerrainTextureDef>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (def == null) throw new InvalidOperationException($"Failed to deserialize terrain texture: {filePath}");
-            return def;
         }
 
         public TerrainTextureDef? Get(string id)
@@ -116,9 +94,10 @@ namespace Veilborne.Core.TerrainTexture
             if (string.IsNullOrWhiteSpace(rel)) return null;
 
             // Prefer pre-downscaled variant if LOD Strategy is Downscale and such file exists
+            // NOTE: In agnostic core, we don't check for file existence. Platforms should handle this.
             if (!string.IsNullOrWhiteSpace(lod?.Strategy) && string.Equals(lod.Strategy, "Downscale", StringComparison.OrdinalIgnoreCase))
             {
-                var tryCandidate = TryFindPreDownscaledVariant(rel);
+                var tryCandidate = GetPreDownscaledVariantPath(rel);
                 if (!string.IsNullOrWhiteSpace(tryCandidate))
                 {
                     return tryCandidate;
@@ -179,27 +158,17 @@ namespace Veilborne.Core.TerrainTexture
 
         private string NormalizeToAssets(string rel)
         {
-            // Most configs store paths relative to assets/ (e.g., "textures/terrain/...")
-            var norm = rel.Replace('/', Path.DirectorySeparatorChar);
-            // Ensure it is under assets root if not absolute and not already prefixed with assets
-            if (!Path.IsPathRooted(norm))
-            {
-                if (!norm.StartsWith("assets" + Path.DirectorySeparatorChar) && !norm.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
-                {
-                    norm = Path.Combine("assets", norm);
-                }
-            }
-            return norm;
+            // Just normalize separators to forward slashes for internal consistency
+            return rel.Replace('\\', '/');
         }
 
-        private string? TryFindPreDownscaledVariant(string rel)
+        private string? GetPreDownscaledVariantPath(string rel)
         {
-            // Replace a trailing "_4k" token with "_2k" in the filename, if present
+            // Simple heuristic to find 2k variant path string
             try
             {
-                var norm = NormalizeToAssets(rel);
-                var dir = Path.GetDirectoryName(norm) ?? string.Empty;
-                var fname = Path.GetFileName(norm);
+                var fname = Path.GetFileName(rel);
+                var dir = Path.GetDirectoryName(rel) ?? string.Empty;
                 var candidateName = fname;
                 int idx = fname.LastIndexOf("_4k", StringComparison.OrdinalIgnoreCase);
                 if (idx >= 0)
@@ -208,21 +177,16 @@ namespace Veilborne.Core.TerrainTexture
                 }
                 else
                 {
-                    // Otherwise try a simple heuristic: insert _2k before extension
                     var stem = Path.GetFileNameWithoutExtension(fname);
                     var ext = Path.GetExtension(fname);
                     candidateName = stem + "_2k" + ext;
                 }
-                var candidateRel = Path.Combine(dir, candidateName);
-                // Check if exists under base directory
-                var full = Path.Combine(AppContext.BaseDirectory, candidateRel);
-                if (File.Exists(full)) return candidateRel;
+                return Path.Combine(dir, candidateName).Replace('\\', '/');
             }
             catch
             {
-                // ignore errors and fall back
+                return null;
             }
-            return null;
         }
 
         public float GetTileSizeOrDefault(string id, float fallback = 6f)

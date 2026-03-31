@@ -211,28 +211,40 @@ namespace Veilborne.Core.Terrain
 
         private void QueueChunkGeneration((int cx, int cz) key)
         {
-            _ = Task.Run(() =>
+            _ = Task.Run(async () =>
             {
-                float originX = key.cx * ChunkSize * TileSize;
-                float originZ = key.cz * ChunkSize * TileSize;
-                var origin = new Vector2(originX, originZ);
-                float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
-                for (int z = 0; z <= ChunkSize; z++)
-                for (int x = 0; x <= ChunkSize; x++)
+                try
                 {
-                    float wx = originX + x * TileSize;
-                    float wz = originZ + z * TileSize;
-                    float baseHeight = _terrainGen.ComputeHeight(wx, wz);
-                    heights[x, z] = BiomeTerrainHeightBlender.ComputeHeight(wx, wz, baseHeight, _biomeProvider, _terrainGen);
-                }
+                    float originX = key.cx * ChunkSize * TileSize;
+                    float originZ = key.cz * ChunkSize * TileSize;
+                    var origin = new Vector2(originX, originZ);
+                    float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
+                    for (int z = 0; z <= ChunkSize; z++)
+                    {
+                        for (int x = 0; x <= ChunkSize; x++)
+                        {
+                            float wx = originX + x * TileSize;
+                            float wz = originZ + z * TileSize;
+                            float baseHeight = _terrainGen.ComputeHeight(wx, wz, 1.0f);
+                            heights[x, z] = BiomeTerrainHeightBlender.ComputeHeight(wx, wz, baseHeight, _biomeProvider, _terrainGen, 1.0f);
+                        }
+                        // Yield every few rows to keep the UI responsive in single-threaded WASM
+                        if (z % 4 == 0) await Task.Yield();
+                    }
 
-                var center = new Vector2(
-                    originX + ChunkSize * TileSize * 0.5f,
-                    originZ + ChunkSize * TileSize * 0.5f);
-                var (primaryBiome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
-                var spawnBiome = _biomeProvider.GetBiomeAt(center, _terrainGen);
-                var objects = spawnBiome.ObjectSpawner.GenerateObjects(spawnBiome.Id, _terrainGen, heights, origin, 18);
-                _completed.Enqueue(new GeneratedEditableChunk(key, heights, origin, primaryBiome, secondaryBiome, secondaryBlend, objects));
+                    var center = new Vector2(
+                        originX + ChunkSize * TileSize * 0.5f,
+                        originZ + ChunkSize * TileSize * 0.5f);
+                    var (primaryBiome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
+                    var spawnBiome = _biomeProvider.GetBiomeAt(center, _terrainGen);
+                    var objects = spawnBiome.ObjectSpawner.GenerateObjects(spawnBiome.Id, _terrainGen, heights, origin, 18);
+                    _completed.Enqueue(new GeneratedEditableChunk(key, heights, origin, primaryBiome, secondaryBiome, secondaryBlend, objects));
+                }
+                catch (Exception ex)
+                {
+                    System.Console.WriteLine($"[DEBUG_LOG] Error generating chunk {key}: {ex}");
+                    _generating.Remove(key);
+                }
             });
         }
 
@@ -286,7 +298,10 @@ namespace Veilborne.Core.Terrain
             }
         }
 
-        public float SampleHeight(float worldX, float worldZ)
+        public float SampleHeight(Vector3 worldPos, float detailLevel = 1f)
+            => SampleHeight(worldPos.X, worldPos.Z, detailLevel);
+
+        public float SampleHeight(float worldX, float worldZ, float detailLevel = 1f)
         {
             // If this position is in a loaded editable chunk, bilinearly sample from its heightmap (includes edits).
             // Use TryEnter to avoid blocking the render/probe thread when PumpAsyncJobs holds the lock.
@@ -308,8 +323,8 @@ namespace Veilborne.Core.Terrain
 
             // Fallback to procedural world height when this editable chunk isn't loaded or lock is contended.
             // Blend biome influences in world-space to keep transitions organic and decoupled from chunk bounds.
-            float baseHeight = _terrainGen.ComputeHeight(worldX, worldZ);
-            return BiomeTerrainHeightBlender.ComputeHeight(worldX, worldZ, baseHeight, _biomeProvider, _terrainGen);
+            float baseHeight = _terrainGen.ComputeHeight(worldX, worldZ, detailLevel);
+            return BiomeTerrainHeightBlender.ComputeHeight(worldX, worldZ, baseHeight, _biomeProvider, _terrainGen, detailLevel);
         }
 
         private float SampleFromChunk(TerrainChunk chunk, float worldX, float worldZ)
@@ -776,6 +791,7 @@ namespace Veilborne.Core.Terrain
         {
             if (string.IsNullOrWhiteSpace(data.Id))
                 return;
+            data.InitializeSeedsOnce();
             _biomeConfigById[data.Id] = data;
         }
 
@@ -876,18 +892,23 @@ namespace Veilborne.Core.Terrain
             }
         }
 
-        public Task PumpAsyncJobs(bool warmupMode = false)
+        public async Task PumpAsyncJobs(bool warmupMode = false)
         {
             _isWarmupMode = warmupMode;
+            // Limit main-thread work per frame to avoid browser hangs in WASM.
+            // Warmup mode uses larger budgets but still yields between batches.
+            int installBudget = warmupMode ? 32 : MaxEditableChunkInstallsPerFrame;
+            int editBudget = warmupMode ? 10 : Math.Max(1, _config.Config.Dig.MaxTerrainEditsPerFrame);
+            int spawnBudget = warmupMode ? 100 : MaxObjectSpawnsPerFrame;
+
             lock (_lock)
             {
-                int installBudget = warmupMode ? int.MaxValue : MaxEditableChunkInstallsPerFrame;
                 InstallCompletedChunks(installBudget);
-                ProcessPendingTerrainEdits(Math.Max(1, _config.Config.Dig.MaxTerrainEditsPerFrame));
-                int spawnBudget = warmupMode ? int.MaxValue : MaxObjectSpawnsPerFrame;
+                ProcessPendingTerrainEdits(editBudget);
                 ProcessPendingObjectSpawns(spawnBudget);
             }
-            return Task.CompletedTask;
+            // Ensure the browser event loop can run even during heavy loading
+            await Task.Yield();
         }
 
         private void EnqueueTerrainEdit(TerrainEditCommand command)

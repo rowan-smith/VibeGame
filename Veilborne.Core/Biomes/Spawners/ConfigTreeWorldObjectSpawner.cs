@@ -263,8 +263,7 @@ namespace Veilborne.Core.Biomes.Spawners
         private static string NormalizePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return string.Empty;
-            if (Path.IsPathRooted(path)) return path;
-            return Path.Combine(AppContext.BaseDirectory, "assets", path.Replace('/', Path.DirectorySeparatorChar));
+            return path.Replace('\\', '/');
         }
 
         private static Vector3 SanitizeScale(Vector3 scale, string? category)

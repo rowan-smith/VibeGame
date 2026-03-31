@@ -8,6 +8,9 @@ using Veilborne.Core.Interfaces;
 using Veilborne.Core.Logging;
 using Veilborne.Core.Objects;
 using Veilborne.Core.Stubs;
+using Veilborne.Core.Items;
+using Veilborne.Core.WorldObjects;
+using Veilborne.Core.TerrainTexture;
 using Veilborne.Desktop.Ecs;
 using Veilborne.Desktop.MonoGameImpl;
 
@@ -28,6 +31,9 @@ internal static class Program
 
         // Register all core services via extension
         builder.Services.AddVeilborneCoreServices();
+
+        // Load and register registries (host-specific file loading)
+        RegisterRegistries(builder.Services);
 
         // Platform-specific and MonoGame-specific registrations
         builder.Services.AddSingleton<ProxyTerrainRenderer>();
@@ -54,6 +60,89 @@ internal static class Program
         var host = builder.Build();
         await host.StartAsync();
         await host.WaitForShutdownAsync();
+    }
+
+    private static void RegisterRegistries(IServiceCollection services)
+    {
+        string baseDir = AppContext.BaseDirectory;
+        
+        // 1. World Config
+        string worldJsonPath = Path.Combine(baseDir, "assets", "config", "world.json");
+        if (!File.Exists(worldJsonPath))
+        {
+            // Try dev path
+            worldJsonPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "world.json"));
+        }
+        
+        if (File.Exists(worldJsonPath))
+        {
+            var config = JsonModelLoader.LoadFile<WorldConfig>(worldJsonPath);
+            services.AddSingleton<IWorldConfigService>(new WorldConfigService(config));
+        }
+        else
+        {
+            throw new FileNotFoundException("world.json not found", worldJsonPath);
+        }
+
+        // 2. Items
+        string itemsDir = Path.Combine(baseDir, "assets", "config", "items");
+        if (!Directory.Exists(itemsDir))
+        {
+            itemsDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "items"));
+        }
+
+        var itemSets = new List<ItemConfigSet>();
+        if (Directory.Exists(itemsDir))
+        {
+            foreach (var file in Directory.GetFiles(itemsDir, "*.json"))
+            {
+                itemSets.Add(JsonModelLoader.LoadFile<ItemConfigSet>(file));
+            }
+        }
+        services.AddSingleton<IItemRegistry>(new ItemRegistry(itemSets));
+
+        // 3. World Objects
+        string woDir = Path.Combine(baseDir, "assets", "config", "world_objects");
+        if (!Directory.Exists(woDir))
+        {
+            woDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "world_objects"));
+        }
+
+        var woConfigs = new List<WorldObjectsConfig>();
+        if (Directory.Exists(woDir))
+        {
+            foreach (var file in Directory.GetFiles(woDir, "*.json"))
+            {
+                woConfigs.Add(JsonModelLoader.LoadFile<WorldObjectsConfig>(file));
+            }
+        }
+        services.AddSingleton<IWorldObjectRegistry>(new WorldObjectRegistry(woConfigs));
+
+        // 4. Terrain Textures
+        string terrainDir = Path.Combine(baseDir, "assets", "config", "terrain");
+        if (!Directory.Exists(terrainDir))
+        {
+            terrainDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "terrain"));
+        }
+
+        var textureDefs = new List<TerrainTextureDef>();
+        if (Directory.Exists(terrainDir))
+        {
+            foreach (var file in Directory.GetFiles(terrainDir, "*.json"))
+            {
+                // Some files might be root world.json, skip if it doesn't look like a texture def
+                try
+                {
+                    var def = JsonModelLoader.LoadFile<TerrainTextureDef>(file);
+                    if (!string.IsNullOrEmpty(def.Id))
+                    {
+                        textureDefs.Add(def);
+                    }
+                }
+                catch { /* skip non-texture JSON files */ }
+            }
+        }
+        services.AddSingleton<ITerrainTextureRegistry>(new TerrainTextureRegistry(textureDefs));
     }
 
     private static void RegisterBiomes(IServiceCollection services)
