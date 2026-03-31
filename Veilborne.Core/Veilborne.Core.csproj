@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <RootNamespace>Veilborne</RootNamespace>
+    <RootNamespace>Veilborne.Core</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
