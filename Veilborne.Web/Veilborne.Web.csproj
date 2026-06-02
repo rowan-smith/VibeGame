@@ -22,7 +22,26 @@
     <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0" />
   </ItemGroup>
 
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="wwwroot\textures\terrain\brown_mud\" />
+    <Folder Include="wwwroot\textures\terrain\brown_mud_leaves\" />
+    <Folder Include="wwwroot\textures\terrain\lichen_rock\" />
+    <Folder Include="wwwroot\textures\terrain\rock_3\" />
+    <Folder Include="wwwroot\textures\terrain\snow\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="wwwroot\textures\terrain\snow\snow_02_disp_4k.png" />
+    <Content Remove="wwwroot\textures\terrain\snow\snow_02_diff_4k.png" />
+    <Content Remove="wwwroot\textures\terrain\rock_3\rock_3_rough_4k.jpg" />
+    <Content Remove="wwwroot\textures\terrain\rock_3\rock_3_nor_gl_4k.jpg" />
+    <Content Remove="wwwroot\textures\terrain\lichen_rock\lichen_rock_nor_gl_4k.png" />
+    <Content Remove="wwwroot\textures\terrain\lichen_rock\lichen_rock_disp_4k.png" />
+    <Content Remove="wwwroot\textures\terrain\lichen_rock\lichen_rock_diff_4k.png" />
+    <Content Remove="wwwroot\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_nor_gl_4k.png" />
+    <Content Remove="wwwroot\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_disp_4k.png" />
+    <Content Remove="wwwroot\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_diff_4k.png" />
+  </ItemGroup>
 
   <!-- Physically copy shared assets from Core into Web's wwwroot at build time.
        This ensures the Blazor DevServer finds them as physical files during development,
