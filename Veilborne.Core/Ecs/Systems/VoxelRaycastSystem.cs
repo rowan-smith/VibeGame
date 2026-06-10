@@ -23,22 +23,20 @@ namespace Veilborne.Ecs.Systems
             if (_terrain is not IEditableTerrain editable)
                 return;
 
-            foreach (var entity in _entities.GetEntitiesWith<DigInteractionComponent>())
+            _entities.ForEachWith<DigInteractionComponent>((Entity entity, ref DigInteractionComponent dig) =>
             {
                 if (!entity.TryGetComponent<MiningHitComponent>(out var mining))
                     mining = new MiningHitComponent();
 
-                var dig = entity.GetComponent<DigInteractionComponent>();
                 if (!dig.IsDigHeld || !dig.HasGroundHit)
                 {
                     mining.HasHit = false;
                     entity.SetComponent(mining);
-                    continue;
+                    return;
                 }
 
                 var samplePos = dig.GroundHit;
-                float depthProbe = 0.10f;
-                samplePos.Y -= depthProbe;
+                samplePos.Y -= 0.10f;
                 var block = editable.TryMineAt(samplePos, 0f, out var target)
                     ? target
                     : ResourceBlockType.None;
@@ -47,7 +45,7 @@ namespace Veilborne.Ecs.Systems
                 mining.HitPosition = dig.GroundHit;
                 mining.BlockType = block;
                 entity.SetComponent(mining);
-            }
+            });
         }
     }
 }

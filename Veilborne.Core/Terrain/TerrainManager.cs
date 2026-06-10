@@ -10,7 +10,7 @@ using Veilborne.Settings;
 
 namespace Veilborne.Terrain
 {
-    public class TerrainManager : IEditableTerrain, ITerrainGenerator
+    public class TerrainManager : IEditableTerrain, ITerrainGenerator, ITerrainStreaming
     {
         private static TerrainChunk[] SnapshotChunksSafe(Dictionary<(int cx, int cz), TerrainChunk> chunks)
         {
@@ -105,15 +105,6 @@ namespace Veilborne.Terrain
         private int _lastEditableRadius = -1;
         private int _lastReadOnlyRadius = -1;
         private int _lastLowLodRadius = -1;
-
-        public readonly record struct TerrainLoadingProgress(
-            float Progress01,
-            string Stage,
-            int DesiredChunks,
-            int LoadedChunks,
-            int GeneratingChunks,
-            int LoadedEntities,
-            int PendingSpawnObjects);
 
         public TerrainManager(
             EditableTerrainService editableRing,

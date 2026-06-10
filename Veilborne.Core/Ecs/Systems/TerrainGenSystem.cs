@@ -1,4 +1,4 @@
-using Veilborne.Terrain;
+using Veilborne.Interfaces;
 
 namespace Veilborne.Ecs.Systems
 {
@@ -7,14 +7,14 @@ namespace Veilborne.Ecs.Systems
     /// </summary>
     public class TerrainGenSystem : ISystem
     {
-        private readonly TerrainManager _terrainManager;
+        private readonly ITerrainStreaming _terrainStreaming;
         private float _accumulatedSeconds;
         private Task? _pumpTask;
         private const float PumpTickSeconds = 1f / 60f;
 
-        public TerrainGenSystem(TerrainManager terrainManager)
+        public TerrainGenSystem(ITerrainStreaming terrainStreaming)
         {
-            _terrainManager = terrainManager;
+            _terrainStreaming = terrainStreaming;
         }
 
         public void Update(float dt)
@@ -30,7 +30,7 @@ namespace Veilborne.Ecs.Systems
             if (_accumulatedSeconds < PumpTickSeconds)
                 return;
             _accumulatedSeconds = 0f;
-            _pumpTask = _terrainManager.PumpAsyncJobs();
+            _pumpTask = _terrainStreaming.PumpAsyncJobs();
         }
     }
 }

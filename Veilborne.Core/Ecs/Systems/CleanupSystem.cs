@@ -8,6 +8,7 @@ namespace Veilborne.Ecs.Systems
     public class CleanupSystem : ISystem
     {
         private readonly EntityRegistry _entities;
+        private readonly List<Entity> _toDestroy = new();
 
         public CleanupSystem(EntityRegistry entities)
         {
@@ -16,28 +17,19 @@ namespace Veilborne.Ecs.Systems
 
         public void Update(float dt)
         {
-            var toDestroy = new List<Entity>();
-            foreach (var entity in _entities.GetEntitiesWith<LifetimeComponent>())
+            _toDestroy.Clear();
+            _entities.ForEachWith<LifetimeComponent>((Entity entity, ref LifetimeComponent lifetime) =>
             {
-                var lifetime = entity.GetComponent<LifetimeComponent>();
                 if (lifetime.RemainingSeconds <= 0f)
-                    continue;
+                    return;
 
                 lifetime.RemainingSeconds -= dt;
                 if (lifetime.RemainingSeconds <= 0f)
-                {
-                    toDestroy.Add(entity);
-                }
-                else
-                {
-                    entity.SetComponent(lifetime);
-                }
-            }
+                    _toDestroy.Add(entity);
+            });
 
-            foreach (var entity in toDestroy)
-            {
+            foreach (var entity in _toDestroy)
                 _entities.DestroyEntity(entity);
-            }
         }
     }
 }

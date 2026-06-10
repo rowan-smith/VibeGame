@@ -26,7 +26,7 @@ namespace Veilborne.Ecs.Systems
         {
             var keyboard = _settings.Current.Keyboard;
 
-            foreach (var entity in _entities.GetEntitiesWith<PlayerComponent, DigInteractionComponent>())
+            _entities.ForEachWith<PlayerComponent, DigInteractionComponent>(entity =>
             {
                 if (!entity.TryGetComponent<HotbarSelectionComponent>(out var hotbar))
                 {
@@ -61,7 +61,7 @@ namespace Veilborne.Ecs.Systems
                 dig.ToolBreakSpeedMultiplier = Math.Clamp(item?.BreakSpeedMultiplier ?? 1f, 0.1f, 5f);
                 dig.ToolStaminaCost = Math.Max(0, item?.StaminaCost ?? 0);
                 entity.SetComponent(dig);
-            }
+            });
         }
 
         private static InputBindingSettings GetHotbarBinding(KeyboardSettings keyboard, int index)

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Numerics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -68,8 +67,8 @@ internal static class Program
         builder.Services.AddSingleton<DigInputSystem>();
         builder.Services.AddSingleton<DigProbeSystem>();
         builder.Services.AddSingleton<VoxelRaycastSystem>();
+        builder.Services.AddSingleton<IRandomSource, SystemRandomSource>();
         builder.Services.AddSingleton<DepleteSystem>();
-        builder.Services.AddSingleton<PatchRegenSystem>();
         builder.Services.AddSingleton<DigExecutionSystem>();
         builder.Services.AddSingleton<DigParticleSystem>();
         builder.Services.AddSingleton<CameraSystem>();
@@ -88,6 +87,9 @@ internal static class Program
         builder.Services.AddSingleton<WorldObjectSpatialIndexSystem>();
         builder.Services.AddSingleton<CollisionFrameBuffer>();
         builder.Services.AddSingleton<EcsPerformanceMonitor>();
+        builder.Services.AddSingleton<EcsFrameContext>();
+        builder.Services.AddSingleton<FrustumCullSystem>();
+        builder.Services.AddSingleton<SortSystem>();
         builder.Services.AddSingleton<CollisionDetectionSystem>();
         builder.Services.AddSingleton<CollisionResolutionSystem>();
         builder.Services.AddSingleton<ConstraintSystem>();
@@ -101,8 +103,6 @@ internal static class Program
         builder.Services.AddSingleton<ShadowMapSystem>();
         builder.Services.AddSingleton<EffectSystem>();
         builder.Services.AddSingleton<UISystem>();
-        builder.Services.AddSingleton<DebugDrawSystem>();
-        builder.Services.AddSingleton<CompositeRenderSystem>();
         builder.Services.AddSingleton<EcsManager>();
         builder.Services.AddSingleton<IEcsRuntime>(sp => sp.GetRequiredService<EcsManager>());
 
@@ -147,6 +147,7 @@ internal static class Program
                 sp.GetRequiredService<LowLodTerrainService>());
         });
         builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
+        builder.Services.AddSingleton<ITerrainStreaming>(sp => sp.GetRequiredService<TerrainManager>());
 
         // Game engine & state
         builder.Services.AddSingleton<IGameSettingsService, GameSettingsService>();
@@ -156,21 +157,8 @@ internal static class Program
         builder.Services.AddSingleton<HudUiController>();
         builder.Services.AddSingleton<DebugOverlayUiController>();
 
-        builder.Services.AddSingleton(sp => new ObjectSpawner(
-            sp.GetRequiredService<IWorldConfigService>().Seed,
-            sp.GetRequiredService<ITerrainGenerator>(),
-            sp.GetRequiredService<IBiomeProvider>()));
-
         // ECS
         builder.Services.AddSingleton<EntityRegistry>();
-        builder.Services.AddSingleton(new Player(Vector3.Zero));
-        builder.Services.AddSingleton(sp => new World(
-            sp.GetRequiredService<IWorldConfigService>().Seed,
-            sp.GetRequiredService<Player>(),
-            sp.GetRequiredService<TerrainManager>(),
-            sp.GetRequiredService<IBiomeProvider>(),
-            sp.GetRequiredService<ObjectSpawner>(),
-            sp.GetRequiredService<EntityRegistry>()));
 
         builder.Services.AddHostedService<Entry>();
         builder.Services.AddTransient<IGameEngine, VeilborneEngine>();

@@ -16,15 +16,11 @@ namespace Veilborne.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var entity in _entities.GetEntitiesWith<MoveInputComponent>())
+            _entities.ForEachWith<MoveInputComponent>((Entity entity, ref MoveInputComponent input) =>
             {
-                var input = entity.GetComponent<MoveInputComponent>();
                 if (input.HorizontalDisplacement != System.Numerics.Vector3.Zero)
-                {
                     input.HorizontalDisplacement = System.Numerics.Vector3.Zero;
-                    entity.SetComponent(input);
-                }
-            }
+            });
         }
     }
 }

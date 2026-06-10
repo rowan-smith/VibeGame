@@ -20,12 +20,10 @@ namespace Veilborne.Ecs.Systems
         public void Update(float dt)
         {
             bool anyCamera = false;
-            _entities.ForEachWith<CameraComponent>(entity =>
+            _entities.ForEachWith<CameraComponent>((Entity entity, ref CameraComponent cam) =>
             {
                 anyCamera = true;
-                var cam = entity.GetComponent<CameraComponent>();
                 _cameraController.UpdateAndGetHorizontalMove(ref cam, dt);
-                entity.SetComponent(cam);
             });
 
             if (!anyCamera && !_loggedMissingCamera)

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Veilborne.Ecs;
 using Veilborne.Ecs.Components;
 
 namespace Veilborne.Ecs.Systems
@@ -9,45 +10,28 @@ namespace Veilborne.Ecs.Systems
     public class FrustumCullSystem : ISystem
     {
         private readonly EntityRegistry _entities;
-        private readonly RenderFrameState _renderFrameState;
+        private readonly EcsFrameContext _frameContext;
 
-        public FrustumCullSystem(EntityRegistry entities, RenderFrameState renderFrameState)
+        public FrustumCullSystem(EntityRegistry entities, EcsFrameContext frameContext)
         {
             _entities = entities;
-            _renderFrameState = renderFrameState;
+            _frameContext = frameContext;
         }
 
         public void Update(float dt)
         {
-            _renderFrameState.WasSortedThisFrame = false;
-
-            Vector3 cameraPos = Vector3.Zero;
-            bool hasCamera = false;
-            foreach (var cameraEntity in _entities.GetEntitiesWith<CameraComponent>())
-            {
-                cameraPos = cameraEntity.GetComponent<CameraComponent>().Position;
-                hasCamera = true;
-                break;
-            }
-
-            if (!hasCamera)
+            if (!_frameContext.HasPrimaryCamera)
                 return;
 
+            var cameraPos = _frameContext.PrimaryCameraPosition;
             const float maxVisibleDistance = 120f;
             const float maxVisibleDistanceSq = maxVisibleDistance * maxVisibleDistance;
 
-            foreach (var entity in _entities.GetEntitiesWith<RenderComponent, TransformComponent>())
+            _entities.ForEachWith<RenderComponent, TransformComponent>((Entity entity, ref RenderComponent render, ref TransformComponent transform) =>
             {
-                var render = entity.GetComponent<RenderComponent>();
-                var transform = entity.GetComponent<TransformComponent>();
                 var distSq = Vector3.DistanceSquared(transform.Position, cameraPos);
-                var shouldBeVisible = distSq <= maxVisibleDistanceSq;
-                if (render.Visible != shouldBeVisible)
-                {
-                    render.Visible = shouldBeVisible;
-                    entity.SetComponent(render);
-                }
-            }
+                render.Visible = distSq <= maxVisibleDistanceSq;
+            });
         }
     }
 }
