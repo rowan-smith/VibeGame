@@ -24,6 +24,9 @@ namespace Veilborne.MonoGameImpl
         private readonly GraphicsDevice _graphicsDevice;
         private readonly BasicEffect _basicEffect;
         private readonly RasterizerState _wireframeRasterizer;
+        private readonly RasterizerState _rasterizerNear;
+        private readonly RasterizerState _rasterizerMid;
+        private readonly RasterizerState _rasterizerFar;
         private readonly Dictionary<string, Texture2D?> _textureCache = new();
         private readonly ILogger _log = Log.ForContext<MonoGameTerrainRenderer>();
         private readonly IBiomeProvider? _biomeProvider;
@@ -120,6 +123,19 @@ namespace Veilborne.MonoGameImpl
             _secondaryPassDistanceScale = Math.Clamp(terrainRuntime?.SecondaryPassDistanceScale ?? 0.40f, 0.1f, 1.0f);
             _basicEffect = new BasicEffect(graphicsDevice) { LightingEnabled = false };
             _wireframeRasterizer = new RasterizerState { FillMode = FillMode.WireFrame, CullMode = CullMode.CullCounterClockwiseFace };
+            _rasterizerNear = RasterizerState.CullCounterClockwise;
+            _rasterizerMid = new RasterizerState
+            {
+                CullMode = CullMode.CullCounterClockwiseFace,
+                DepthBias = 1,
+                SlopeScaleDepthBias = 1f
+            };
+            _rasterizerFar = new RasterizerState
+            {
+                CullMode = CullMode.CullCounterClockwiseFace,
+                DepthBias = 2,
+                SlopeScaleDepthBias = 2f
+            };
             _biomeBlendShaderAvailable = DetectBiomeBlendShaderAssets();
         }
 
@@ -684,6 +700,13 @@ namespace Veilborne.MonoGameImpl
             return Math.Clamp(depth / MathF.Max(0.05f, config.SubsurfaceDepth), 0f, 1f);
         }
 
+        private RasterizerState SelectRasterizerForTileSize(float tileSize)
+        {
+            if (tileSize <= 1.5f) return _rasterizerNear;
+            if (tileSize <= 3f) return _rasterizerMid;
+            return _rasterizerFar;
+        }
+
         private static float ComputeLayerBlendAlphaFromSplat(Vector4 splat, ChunkData.LayerBlendMode mode)
         {
             if (mode == ChunkData.LayerBlendMode.SubsurfaceToDeep)
@@ -805,6 +828,8 @@ namespace Veilborne.MonoGameImpl
 
                 _graphicsDevice.SetVertexBuffer(chunk.Vb);
                 _graphicsDevice.Indices = chunk.Ib;
+                if (!wireframe)
+                    _graphicsDevice.RasterizerState = SelectRasterizerForTileSize(key.Item3);
                 bool isLayeredChunk = chunk.UseSplatLayering &&
                                       chunk.LayerMode != ChunkData.LayerBlendMode.None;
 
@@ -842,7 +867,9 @@ namespace Veilborne.MonoGameImpl
                 float secondaryPassDistance = drawDistance * _secondaryPassDistanceScale;
                 float layeredCutoffSq = secondaryPassDistance * secondaryPassDistance * 0.25f; // 50% distance for layered
                 float crossfadeCutoffSq = secondaryPassDistance * secondaryPassDistance;
-                bool shouldDrawSecondary = chunk.SecondaryTexture != null &&
+                bool hasVisibleLayerBlend = !isLayeredChunk || chunk.LayerBlendCoverage > 0.02f;
+                bool shouldDrawSecondary = hasVisibleLayerBlend &&
+                                            chunk.SecondaryTexture != null &&
                                             ((isLayeredChunk && distanceSq <= layeredCutoffSq) ||
                                              (crossfadeEnabled && !isLayeredChunk && distanceSq <= crossfadeCutoffSq));
                 if (shouldDrawSecondary)

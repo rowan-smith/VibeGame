@@ -583,6 +583,21 @@ namespace Veilborne.Terrain
             return _editableRing.SampleHeight(worldPos.X, worldPos.Z);
         }
 
+        private static bool IsParentChunkFullyCovered(
+            int parentCx, int parentCz, int childChunksPerAxis,
+            Dictionary<(int cx, int cz), TerrainChunk> childChunks)
+        {
+            int baseCx = parentCx * childChunksPerAxis;
+            int baseCz = parentCz * childChunksPerAxis;
+            for (int dz = 0; dz < childChunksPerAxis; dz++)
+            for (int dx = 0; dx < childChunksPerAxis; dx++)
+            {
+                if (!childChunks.ContainsKey((baseCx + dx, baseCz + dz)))
+                    return false;
+            }
+            return true;
+        }
+
         // -----------------------------
         // Render
         // -----------------------------
@@ -598,13 +613,23 @@ namespace Veilborne.Terrain
 
             _roExcludeScratch.Clear();
             _lodExcludeScratch.Clear();
-            // Only exclude RO/LOD under editable chunks when the editable ring is hidden for
-            // debugging. Editable chunks are 32m while RO/LOD chunks are 128m/512m, so excluding
-            // an entire RO/LOD chunk for partial editable overlap leaves uncovered gaps that show
-            // as sky holes. When editable is visible it renders last and depth testing resolves overlap.
-            if (!showEditableRing)
+            var editableChunks = _editableRing.GetLoadedChunks();
+            var readOnlyChunks = _readOnlyRing.GetLoadedChunks();
+
+            if (showEditableRing)
             {
-                var editableChunks = _editableRing.GetLoadedChunks();
+                // Exclude RO chunks only when every editable sub-chunk inside them is loaded.
+                // Partial exclusion left sky holes at mid-distance; full overlap caused z-fighting.
+                int editablePerRo = Math.Max(1, (int)MathF.Round(roChunkWorld / eChunkWorld));
+                foreach (var (roCx, roCz) in SnapshotKeysSafe(readOnlyChunks))
+                {
+                    if (IsParentChunkFullyCovered(roCx, roCz, editablePerRo, editableChunks))
+                        _roExcludeScratch.Add((roCx, roCz));
+                }
+            }
+            else
+            {
+                // Editable ring hidden for debugging: exclude any RO/LOD touched by loaded editable.
                 var editableChunkKeys = SnapshotKeysSafe(editableChunks);
                 foreach (var (ecx, ecz) in editableChunkKeys)
                 {
@@ -634,7 +659,16 @@ namespace Veilborne.Terrain
                 }
             }
 
-            // Do not exclude LOD where RO exists; overlap prevents transient ring holes under streaming churn.
+            if (showLowLodRing && _lowLodRing is not null && showReadOnlyRing)
+            {
+                // Exclude LOD chunks fully covered by loaded RO chunks.
+                int roPerLod = Math.Max(1, (int)MathF.Round(lodChunkWorld / roChunkWorld));
+                foreach (var (lodCx, lodCz) in SnapshotKeysSafe(_lowLodRing.GetLoadedChunks()))
+                {
+                    if (IsParentChunkFullyCovered(lodCx, lodCz, roPerLod, readOnlyChunks))
+                        _lodExcludeScratch.Add((lodCx, lodCz));
+                }
+            }
 
             // Far
             if (showLowLodRing)
