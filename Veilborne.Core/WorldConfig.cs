@@ -1,7 +1,7 @@
-using Veilborne.Core.Biomes;
-using Veilborne.Core.Biomes.Environment;
+using Veilborne.Biomes;
+using Veilborne.Biomes.Environment;
 
-namespace Veilborne.Core
+namespace Veilborne
 {
     public sealed class WorldConfig
     {

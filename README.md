@@ -1,10 +1,51 @@
-# Veilborne
-Horizons dissolve before they arrive.
+<p align="center">
+  <img src="Veilborne.Core/assets/logo.svg" alt="Veilborne logo" width="280"/>
+</p>
 
-## Information
-A game created by vibe coding, there is no objective for the game. We will just see where this ends up over time.
+<h1 align="center">Veilborne</h1>
 
-## Rules
+<p align="center"><em>Horizons dissolve before they arrive.</em></p>
+
+---
+
+## About the game
+
+**Veilborne** is a first-person, open-world voxel sandbox set in a surreal fantasy world where horizons never quite hold. Procedurally generated terrain stretches in every direction, stitched together from twelve distinct biomes — from the void-hummed **Nullscape** between worlds to glowing jungles, blood-hungry wilds, frozen tundras, and deserts of shattered glass.
+
+There is no fixed quest or end goal. Walk the land, dig into the earth, and watch the world evolve over time.
+
+### What you can do
+
+- **Explore** an infinite procedurally generated world with biome blending, varied terrain, and procedural vegetation
+- **Dig and sculpt** voxel terrain in real time with configurable tools
+- **Discover** hidden ores — coal, iron, copper, and gold — buried at depth across different biomes
+- **Traverse** forests, marshes, tundras, deserts, and stranger places where reality wears thin
+
+### The world
+
+Each biome carries its own character, terrain, flora, and buried resources. A few examples:
+
+| Biome | Character |
+|---|---|
+| **Nullscape** | The void between worlds — static hums, and reality unravels |
+| **Aetherwild Grove** | A magical jungle pulsing with radiant life |
+| **Bloodpetal Wilds** | A lush jungle of beauty and horror, where every flower hungers |
+| **Frostveil Tundra** | A frozen land of silence and pale light |
+| **Obsidian Expanse** | A vast sea of cooled glass, reflecting fire and stars alike |
+| **Shatterglass Desert** | Sunlight fractures through dunes of shimmering glass |
+
+Veilborne is an open-ended experiment — a game created through vibe coding with no predetermined destination. We will just see where this ends up over time.
+
+---
+
+<p align="center">
+  <a href="#contributing-rules"><strong>Contributing Rules</strong></a>
+</p>
+
+---
+
+## Contributing Rules
+
 1. The majority of code is to be written by an AI
 2. You can do minor code changes to optimise what the AI has produced.
    - Example 1: The AI was asked to refactor code into a class and dependency inject. It does but keep the old code as a fallback in a try catch. You can remove the catch (and old code), and just use the new class.

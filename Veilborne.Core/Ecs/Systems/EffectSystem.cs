@@ -1,6 +1,6 @@
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Maintains lightweight visual-effect state derived from lifetime.
@@ -16,19 +16,11 @@ namespace Veilborne.Core.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var entity in _entities.GetEntitiesWith<LifetimeComponent, RenderComponent>())
+            _entities.ForEachWith<LifetimeComponent, RenderComponent>((Entity entity, ref LifetimeComponent lifetime, ref RenderComponent render) =>
             {
-                var lifetime = entity.GetComponent<LifetimeComponent>();
                 if (lifetime.RemainingSeconds > 0f && lifetime.RemainingSeconds < 0.15f)
-                {
-                    var render = entity.GetComponent<RenderComponent>();
-                    if (render.Visible)
-                    {
-                        render.Visible = false;
-                        entity.SetComponent(render);
-                    }
-                }
-            }
+                    render.Visible = false;
+            });
         }
     }
 }

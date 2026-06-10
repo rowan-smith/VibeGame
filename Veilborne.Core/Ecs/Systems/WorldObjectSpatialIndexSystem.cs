@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Rebuilds the world-object spatial index at a fixed cadence for stable collision cost.

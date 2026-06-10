@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
 /// <summary>
 /// Represents a pending terrain chunk load request with queue priority.

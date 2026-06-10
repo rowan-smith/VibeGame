@@ -1,10 +1,10 @@
 using System.Numerics;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Sky;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
+using Veilborne.Sky;
 
-namespace Veilborne.Core.UI
+namespace Veilborne.UI
 {
     public sealed class DebugOverlayUiController
     {

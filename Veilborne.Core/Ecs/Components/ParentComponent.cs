@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
 /// <summary>
 /// Stores the parent entity identifier for hierarchy relationships.

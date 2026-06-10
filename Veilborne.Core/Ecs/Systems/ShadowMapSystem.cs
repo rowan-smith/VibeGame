@@ -1,7 +1,7 @@
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Sky;
+using Veilborne.Ecs.Components;
+using Veilborne.Sky;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Flags shadow casters as clean after post-physics updates.

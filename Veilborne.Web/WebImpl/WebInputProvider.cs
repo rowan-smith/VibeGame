@@ -1,6 +1,6 @@
 using Microsoft.JSInterop;
 using System.Numerics;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 using System.Collections.Generic;
 
 namespace Veilborne.Web.MonoGameImpl

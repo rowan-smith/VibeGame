@@ -1,10 +1,11 @@
 using System.Numerics;
-using Veilborne.Core.Biomes.Environment;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Objects;
-using Veilborne.Core.WorldObjects;
+using Veilborne.Biomes.Environment;
+using Veilborne.Interfaces;
+using Veilborne.Objects;
+using Veilborne.Terrain;
+using Veilborne.WorldObjects;
 
-namespace Veilborne.Core.Biomes.Spawners
+namespace Veilborne.Biomes.Spawners
 {
     public sealed class AllowedObjectsTreeSpawner : ITreeSpawner
     {

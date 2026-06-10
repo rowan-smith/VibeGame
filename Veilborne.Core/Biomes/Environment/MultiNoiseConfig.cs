@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Biomes.Environment
+namespace Veilborne.Biomes.Environment
 {
     public sealed class MultiNoiseConfig
     {

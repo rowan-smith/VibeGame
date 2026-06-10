@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Terrain
+namespace Veilborne.Terrain
 {
     /// <summary>
     /// Wrapper around FastNoiseLite to implement INoiseSource with 3D sampling.

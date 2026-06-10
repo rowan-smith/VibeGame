@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Biomes
+namespace Veilborne.Biomes
 {
     public class SurfaceTextureLayer
     {

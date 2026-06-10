@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
 /// <summary>
 /// Stores a lightweight categorical tag for gameplay queries.

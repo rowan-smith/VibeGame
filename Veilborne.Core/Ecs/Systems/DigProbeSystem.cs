@@ -1,8 +1,8 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Probes terrain under camera look direction and stores the dig target.

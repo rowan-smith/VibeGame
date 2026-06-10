@@ -1,6 +1,7 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace Veilborne.Core.Biomes.Environment
+namespace Veilborne.Biomes.Environment
 {
     public readonly struct EnvironmentSample
     {

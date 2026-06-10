@@ -1,7 +1,9 @@
+using System;
+using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 
-namespace Veilborne.Core.Logging;
+namespace Veilborne.Logging;
 
 internal static class LoggingUtils
 {

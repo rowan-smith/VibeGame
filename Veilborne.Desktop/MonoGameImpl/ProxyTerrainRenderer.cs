@@ -1,11 +1,10 @@
 using System.Numerics;
-using Veilborne.Core;
-using Veilborne.Core.Biomes;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Stubs;
+using Veilborne.Biomes;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
+using Veilborne.Stubs;
 
-namespace Veilborne.Desktop.MonoGameImpl
+namespace Veilborne.MonoGameImpl
 {
     /// <summary>
     /// Proxy ITerrainRenderer registered in DI. Delegates to a stub until the real

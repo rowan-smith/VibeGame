@@ -1,8 +1,9 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
+using Veilborne.Terrain;
 
-namespace Veilborne.Core.Objects
+namespace Veilborne.Objects
 {
     public sealed class SpawnedObject
     {

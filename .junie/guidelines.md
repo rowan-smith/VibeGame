@@ -6,10 +6,10 @@ Replace this text with any project-level instructions for Junie, e.g.:
 * What is the project structure
 
 * Whether Junie should run tests to check the correctness of the proposed solution
-  * No unit tests exit do not run
+  * Run `dotnet test VibeGame.sln -c Release` after ECS or gameplay changes
 
 * How does Junie run tests (once it requires any non-standard approach)
-  * No unit tests exit do not run
+  * `dotnet test VibeGame.sln -c Release` from the repository root
 
 * Whether Junie should build the project before submitting the result
   * Should build the project after all the changes to ensure no build errors exist

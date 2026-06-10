@@ -1,11 +1,12 @@
 using System.Numerics;
+using Veilborne.Biomes.Environment;
+using Veilborne.Interfaces;
+using Veilborne.Objects;
+using Veilborne.Terrain;
 using Serilog;
-using Veilborne.Core.Biomes.Environment;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Objects;
-using Veilborne.Core.WorldObjects;
+using Veilborne.WorldObjects;
 
-namespace Veilborne.Core.Biomes.Spawners
+namespace Veilborne.Biomes.Spawners
 {
     /// <summary>
     /// Config-driven spawner for trees as world objects.
@@ -263,7 +264,8 @@ namespace Veilborne.Core.Biomes.Spawners
         private static string NormalizePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return string.Empty;
-            return path.Replace('\\', '/');
+            if (Path.IsPathRooted(path)) return path;
+            return Path.Combine(AppContext.BaseDirectory, "assets", path.Replace('/', Path.DirectorySeparatorChar));
         }
 
         private static Vector3 SanitizeScale(Vector3 scale, string? category)

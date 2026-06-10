@@ -1,13 +1,13 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface IInfiniteTerrain : IDebugTerrain
     {
         void UpdateCenter(Vector3 cameraPosition);
 
-        float SampleHeight(Vector3 worldPos, float detailLevel = 1f);
+        float SampleHeight(Vector3 worldPos);
 
         void Update();
 

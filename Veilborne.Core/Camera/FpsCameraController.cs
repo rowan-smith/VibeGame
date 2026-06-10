@@ -1,9 +1,9 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Settings;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
+using Veilborne.Settings;
 
-namespace Veilborne.Core.Camera
+namespace Veilborne.Camera
 {
     public class FpsCameraController : ICameraController
     {

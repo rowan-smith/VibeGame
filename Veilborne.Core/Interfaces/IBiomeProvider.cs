@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     /// <summary>
     /// A single biome with its normalized blend weight at a world position.

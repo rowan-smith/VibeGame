@@ -1,23 +1,27 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Settings.Configuration;
+using Veilborne;
+using Veilborne.Biomes;
+using Veilborne.Biomes.Environment;
+using Veilborne.Biomes.Spawners;
+using Veilborne.Camera;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Systems;
+using Veilborne.Interfaces;
+using Veilborne.Items;
+using Veilborne.Objects;
+using Veilborne.Settings;
+using Veilborne.Sky;
+using Veilborne.Stubs;
+using Veilborne.Terrain;
+using Veilborne.TerrainTexture;
+using Veilborne.UI;
+using Veilborne.WorldObjects;
 using Veilborne.Web.MonoGameImpl;
-using Veilborne.Core;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Settings;
-using Veilborne.Core.Sky;
-using Veilborne.Core.UI;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Objects;
-using Veilborne.Core.Items;
-using Veilborne.Core.Camera;
-using Veilborne.Core.Stubs;
 using Veilborne.Web.WebImpl;
-using Veilborne.Core.Biomes;
-using Veilborne.Core.Biomes.Spawners;
-using Veilborne.Core.TerrainTexture;
-using Veilborne.Core.WorldObjects;
 
 namespace Veilborne.Web;
 
@@ -37,8 +41,6 @@ internal static class Program
             .WriteTo.Console(outputTemplate: "[{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
-        Log.Information("Serilog initialized in Blazor WASM. BrowserConsole and Console sinks active.");
-
         builder.Logging.ClearProviders();
         builder.Logging.AddSerilog();
 
@@ -50,151 +52,171 @@ internal static class Program
             BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
         });
 
-        builder.Services.AddVeilborneCoreServices();
+        await PreloadAndRegisterConfigurationsAsync(builder);
 
-        // 2. Register Web-specific implementations as overrides
+        RegisterCoreServices(builder.Services);
+
         builder.Services.AddSingleton<WebUiProvider>(sp => new WebUiProvider(
             sp.GetRequiredService<Microsoft.JSInterop.IJSRuntime>(),
-            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<WebUiProvider>>()
-        ));
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<WebUiProvider>>()));
         builder.Services.AddSingleton<IUiProvider>(sp => sp.GetRequiredService<WebUiProvider>());
         builder.Services.AddSingleton<IGraphicsProvider, WebGraphicsProvider>();
         builder.Services.AddSingleton<IGameLoopHost>(sp => new WebGameLoopHost(
             sp.GetRequiredService<Microsoft.JSInterop.IJSRuntime>(),
-            sp.GetRequiredService<IUiProvider>()
-        ));
+            sp.GetRequiredService<IUiProvider>()));
         builder.Services.AddSingleton<IInputProvider, WebInputProvider>();
         builder.Services.AddSingleton<IEcsRuntime>(sp => new WebEcsRuntime(
             sp.GetRequiredService<Microsoft.JSInterop.IJSRuntime>(),
-            sp.GetRequiredService<IUiProvider>()
-        ));
+            sp.GetRequiredService<IUiProvider>()));
         builder.Services.AddSingleton<IGameSettingsService, WebGameSettingsService>();
         builder.Services.AddSingleton<ISkyLightingService, WebSkyLightingService>();
         builder.Services.AddSingleton<ITimeService, WebTimeService>();
 
-        // Pre-load all required configuration from assets via HttpClient and register overrides
-        await PreloadAndRegisterConfigurationsAsync(builder);
-
-        // Register implementations for core interface overrides/missing services
-        builder.Services.AddSingleton<ICameraController, FpsCameraController>();
-        builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
-        
-        // Use Stub for 3D renderers for now, Proxy for Terrain
-        builder.Services.AddSingleton<ITerrainRenderer, StubTerrainRenderer>();
-        builder.Services.AddSingleton<IWorldObjectRenderer, StubWorldObjectRenderer>();
-
-        // Use WebProxyTerrainRenderer and ensure it's the one registered for ITerrainRenderer
         builder.Services.AddSingleton<WebProxyTerrainRenderer>();
         builder.Services.AddSingleton<ITerrainRenderer>(sp => sp.GetRequiredService<WebProxyTerrainRenderer>());
-
-        // Register GameMenuRenderer
-        builder.Services.AddSingleton<GameMenuRenderer>(sp =>
-        {
-            var settings = sp.GetRequiredService<IGameSettingsService>();
-            var input = sp.GetRequiredService<IInputProvider>();
-            var isDevelopment = builder.HostEnvironment.IsDevelopment();
-            var renderer = new GameMenuRenderer(settings, input, isDevelopment);
-            renderer.Initialize(sp.GetRequiredService<IUiProvider>(), sp.GetRequiredService<IGraphicsProvider>());
-            return renderer;
-        });
+        builder.Services.AddSingleton<IWorldObjectRenderer, StubWorldObjectRenderer>();
 
         var host = builder.Build();
-        // After Blazor is ready, start the game engine
         _ = StartEngineAsync(host);
 
-        // Register menu/game assets for the web UI
         var uiProvider = host.Services.GetRequiredService<IUiProvider>() as WebUiProvider;
         uiProvider?.RegisterMenuAssets();
-        
+
         await host.RunAsync();
+    }
+
+    private static void RegisterCoreServices(IServiceCollection services)
+    {
+        services.AddSingleton<CleanupSystem>();
+        services.AddSingleton<DependencySystem>();
+        services.AddSingleton<InputSystem>();
+        services.AddSingleton<DigInputSystem>();
+        services.AddSingleton<DigProbeSystem>();
+        services.AddSingleton<VoxelRaycastSystem>();
+        services.AddSingleton<IRandomSource, SystemRandomSource>();
+        services.AddSingleton<DepleteSystem>();
+        services.AddSingleton<DigExecutionSystem>();
+        services.AddSingleton<DigParticleSystem>();
+        services.AddSingleton<CameraSystem>();
+        services.AddSingleton<HotbarSelectionSystem>();
+        services.AddSingleton<PlayerSystem>();
+        services.AddSingleton<PlayerInputSystem>();
+        services.AddSingleton<AISystem>();
+        services.AddSingleton<AnimationSystem>();
+        services.AddSingleton<ParticleSystem>();
+        services.AddSingleton<BiomeAssetTracker>();
+        services.AddSingleton<BiomeDiscoverySystem>();
+        services.AddSingleton<AssetLoadSystem>();
+        services.AddSingleton<BiomePrepSystem>();
+        services.AddSingleton<AssetUnloadSystem>();
+        services.AddSingleton<WorldObjectSpatialIndex>();
+        services.AddSingleton<WorldObjectSpatialIndexSystem>();
+        services.AddSingleton<CollisionFrameBuffer>();
+        services.AddSingleton<EcsPerformanceMonitor>();
+        services.AddSingleton<EcsFrameContext>();
+        services.AddSingleton<FrustumCullSystem>();
+        services.AddSingleton<SortSystem>();
+        services.AddSingleton<CollisionDetectionSystem>();
+        services.AddSingleton<CollisionResolutionSystem>();
+        services.AddSingleton<ConstraintSystem>();
+        services.AddSingleton<ForceSystem>();
+        services.AddSingleton<IntegrationSystem>();
+        services.AddSingleton<TerrainLoadSystem>();
+        services.AddSingleton<TerrainLoadQueueSystem>();
+        services.AddSingleton<TerrainLoadRequestTracker>();
+        services.AddSingleton<TerrainGenSystem>();
+        services.AddSingleton<VegetationSystem>();
+        services.AddSingleton<ShadowMapSystem>();
+        services.AddSingleton<EffectSystem>();
+        services.AddSingleton<UISystem>();
+
+        services.AddSingleton<ITerrainGenerator>(sp =>
+            new TerrainGenerator(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
+        services.AddSingleton<IShadowMapService, CpuShadowMapService>();
+
+        services.AddSingleton<IBiomeProvider>(sp =>
+        {
+            var config = sp.GetRequiredService<IWorldConfigService>();
+            var bcfg = config.BiomeProviderConfig;
+            return new SimpleBiomeProvider(
+                sp.GetServices<IBiome>(),
+                bcfg.AverageCellSize,
+                config.Seed,
+                bcfg.Jitter,
+                bcfg.WarpFrequencyScale,
+                bcfg.WarpAmplitudeScale,
+                bcfg.BlendWidthWorld);
+        });
+
+        services.AddSingleton<EditableTerrainService>();
+        services.AddSingleton<ReadOnlyTerrainService>();
+        services.AddSingleton<LowLodTerrainService>();
+        services.AddSingleton(sp => sp.GetRequiredService<IWorldConfigService>().TerrainConfig);
+
+        services.AddSingleton<IInfiniteTerrain>(sp =>
+        {
+            var config = sp.GetRequiredService<IWorldConfigService>();
+            return new TerrainManager(
+                sp.GetRequiredService<EditableTerrainService>(),
+                sp.GetRequiredService<ReadOnlyTerrainService>(),
+                config.TerrainConfig,
+                sp.GetRequiredService<IBiomeProvider>(),
+                sp.GetRequiredService<ITerrainRenderer>(),
+                config,
+                sp.GetRequiredService<ITimeService>(),
+                sp.GetRequiredService<IGameSettingsService>(),
+                sp.GetRequiredService<LowLodTerrainService>());
+        });
+        services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
+        services.AddSingleton<ITerrainStreaming>(sp => sp.GetRequiredService<TerrainManager>());
+
+        services.AddSingleton<ICameraController, FpsCameraController>();
+        services.AddSingleton<IPhysicsController, SimplePhysicsController>();
+        services.AddSingleton<HudUiController>();
+        services.AddSingleton<DebugOverlayUiController>();
+        services.AddSingleton<EntityRegistry>();
     }
 
     private static async Task PreloadAndRegisterConfigurationsAsync(WebAssemblyHostBuilder builder)
     {
         var http = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
 
-        // 1. Fetch world.json
-        string worldJson = "";
-        try
-        {
-            var url = $"assets/config/world.json?v={DateTime.Now.Ticks}";
-            Console.WriteLine($"[Program] Fetching {url} (BaseAddress: {http.BaseAddress})");
-            var response = await http.GetAsync(url);
-            
-            Console.WriteLine($"[Program] Response for world.json: {response.StatusCode}, Content-Length: {response.Content.Headers.ContentLength}, Content-Type: {response.Content.Headers.ContentType}");
+        var response = await http.GetAsync($"assets/config/world.json?v={DateTime.Now.Ticks}");
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Failed to load world.json: {response.StatusCode}");
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorBody = await response.Content.ReadAsStringAsync();
-                throw new InvalidOperationException($"Server returned status code {response.StatusCode} for world.json. Body: {(errorBody.Length > 200 ? errorBody[..200] : errorBody)}");
-            }
+        var worldJson = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(worldJson))
+            throw new InvalidOperationException("world.json is empty");
 
-            worldJson = await response.Content.ReadAsStringAsync();
-            if (string.IsNullOrWhiteSpace(worldJson))
-            {
-                throw new InvalidOperationException($"world.json is empty. Length: {worldJson.Length}");
-            }
-            
-            if (worldJson.Trim().StartsWith("<"))
-            {
-                throw new InvalidOperationException($"world.json seems to be HTML instead of JSON. Preview: {(worldJson.Length > 100 ? worldJson[..100] : worldJson)}");
-            }
+        var worldConfig = WebJsonUtils.LoadString<WorldConfig>(worldJson)
+            ?? throw new InvalidOperationException("Failed to deserialize world.json");
 
-            var worldConfig = WebJsonUtils.LoadString<WorldConfig>(worldJson);
-            if (worldConfig == null) throw new InvalidOperationException("Failed to deserialize world.json");
+        worldConfig.LowLodRadius = 6;
+        worldConfig.ReadOnlyRadius = 3;
+        worldConfig.TerrainRuntime.MaxLowLodRadius = 8;
+        worldConfig.TerrainRuntime.MaxReadOnlyRadius = 5;
+        Log.Information("WASM radius overrides: LowLod={LowLod}, ReadOnly={ReadOnly}",
+            worldConfig.LowLodRadius, worldConfig.ReadOnlyRadius);
 
-            // Override radii for WASM to ensure significantly faster initial loading
-            // and more cooperative memory/CPU usage in the single-threaded browser environment.
-            worldConfig.LowLodRadius = 6; 
-            worldConfig.ReadOnlyRadius = 3;
-            worldConfig.TerrainRuntime.MaxLowLodRadius = 8;
-            worldConfig.TerrainRuntime.MaxReadOnlyRadius = 5;
-            Log.Information("WASM Radius Overrides: LowLod={LowLod}, ReadOnly={ReadOnly}", worldConfig.LowLodRadius, worldConfig.ReadOnlyRadius);
+        builder.Services.AddSingleton<IWorldConfigService>(new WebWorldConfigService(worldConfig));
 
-            builder.Services.AddSingleton<IWorldConfigService>(new WorldConfigService(worldConfig));
-        }
-        catch (Exception ex)
-        {
-            var preview = string.IsNullOrEmpty(worldJson) ? "EMPTY" : (worldJson.Length > 100 ? worldJson[..100] : worldJson);
-            Console.WriteLine($"[Program] Failed to load world.json: {ex.Message}");
-            throw;
-        }
+        var toolsJson = await http.GetStringAsync("assets/config/items/tools.json");
+        var toolsSet = WebJsonUtils.LoadString<ItemConfigSet>(toolsJson)
+            ?? throw new InvalidOperationException("Failed to deserialize tools.json");
+        builder.Services.AddSingleton<IItemRegistry>(new WebItemRegistry(toolsSet));
 
-        // 2. Fetch all item config sets
-        try
-        {
-            var toolsJson = await http.GetStringAsync("assets/config/items/tools.json");
-            var toolsSet = WebJsonUtils.LoadString<ItemConfigSet>(toolsJson);
-            if (toolsSet == null) throw new InvalidOperationException("Failed to deserialize tools.json");
-            builder.Services.AddSingleton<IItemRegistry>(new ItemRegistry(new[] { toolsSet }));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Program] Failed to load item configs: {ex.Message}");
-            throw;
-        }
+        var foliageJson = await http.GetStringAsync("assets/config/world_objects/foliage.json");
+        var treesJson = await http.GetStringAsync("assets/config/world_objects/trees.json");
+        var foliageConfig = WebJsonUtils.LoadString<WorldObjectsConfig>(foliageJson);
+        var treesConfig = WebJsonUtils.LoadString<WorldObjectsConfig>(treesJson);
+        if (foliageConfig == null || treesConfig == null)
+            throw new InvalidOperationException("Failed to deserialize world object configs");
 
-        // 3. Fetch all world object configs
-        try
-        {
-            var foliageJson = await http.GetStringAsync("assets/config/world_objects/foliage.json");
-            var foliageConfig = WebJsonUtils.LoadString<WorldObjectsConfig>(foliageJson);
-            var treesJson = await http.GetStringAsync("assets/config/world_objects/trees.json");
-            var treesConfig = WebJsonUtils.LoadString<WorldObjectsConfig>(treesJson);
-            if (foliageConfig == null || treesConfig == null) throw new InvalidOperationException("Failed to deserialize world object configs");
-            var woRegistry = new WorldObjectRegistry(new[] { foliageConfig, treesConfig });
-            builder.Services.AddSingleton<IWorldObjectRegistry>(woRegistry);
+        var woRegistry = new WebWorldObjectRegistry(new[] { foliageConfig, treesConfig });
+        builder.Services.AddSingleton<IWorldObjectRegistry>(woRegistry);
 
-            // 4. Fetch and register biomes
-            await RegisterWebBiomesAsync(builder.Services, http, woRegistry);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Program] Failed to load world object configs: {ex.Message}");
-            throw;
-        }
-
-        // 5. Fetch and register terrain textures
+        await RegisterWebBiomesAsync(builder.Services, http, woRegistry);
         await RegisterWebTerrainTexturesAsync(builder.Services, http);
     }
 
@@ -213,15 +235,15 @@ internal static class Program
             {
                 var json = await http.GetStringAsync($"assets/config/biomes/{file}");
                 var dto = WebJsonUtils.LoadString<BiomeData>(json);
-                if (dto == null) continue;
-                if (!dto.Enabled) continue;
+                if (dto == null || !dto.Enabled) continue;
 
                 services.AddSingleton<IBiome>(sp =>
                 {
                     var sampler = sp.GetRequiredService<IEnvironmentSampler>();
                     var envTerrain = sp.GetRequiredService<ITerrainGenerator>();
                     var config = sp.GetRequiredService<IWorldConfigService>();
-                    return new ConfigBiome(dto.Id, dto, new ConfigTreeWorldObjectSpawner(woRegistry, sampler, envTerrain, config, dto.AllowedObjects));
+                    return new ConfigBiome(dto.Id, dto,
+                        new ConfigTreeWorldObjectSpawner(woRegistry, sampler, envTerrain, config, dto.AllowedObjects));
                 });
             }
             catch (Exception ex)
@@ -229,6 +251,9 @@ internal static class Program
                 Console.WriteLine($"[Program] Failed to load biome {file}: {ex.Message}");
             }
         }
+
+        services.AddSingleton<IEnvironmentSampler>(sp =>
+            new MultiNoiseSampler(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
     }
 
     private static async Task RegisterWebTerrainTexturesAsync(IServiceCollection services, HttpClient http)
@@ -253,17 +278,18 @@ internal static class Program
             }
         }
 
-        services.AddSingleton<ITerrainTextureRegistry>(new TerrainTextureRegistry(defs));
+        services.AddSingleton<ITerrainTextureRegistry>(new WebTerrainTextureRegistry(defs));
     }
+
     private static async Task StartEngineAsync(WebAssemblyHost host)
     {
         try
         {
-            Console.WriteLine("[Program] Starting VeilborneEngine...");
             using var scope = host.Services.CreateScope();
             var services = scope.ServiceProvider;
             var engine = new VeilborneEngine(
                 services.GetRequiredService<IInfiniteTerrain>(),
+                services.GetRequiredService<ITerrainStreaming>(),
                 services.GetRequiredService<ITimeService>(),
                 services.GetRequiredService<EntityRegistry>(),
                 services.GetRequiredService<IGraphicsProvider>(),
@@ -273,10 +299,9 @@ internal static class Program
                 services.GetRequiredService<IGameSettingsService>(),
                 services.GetRequiredService<ISkyLightingService>(),
                 services.GetRequiredService<HudUiController>(),
-                services.GetRequiredService<DebugOverlayUiController>()
-            );
+                services.GetRequiredService<DebugOverlayUiController>(),
+                services.GetRequiredService<EcsPerformanceMonitor>());
             await engine.RunAsync();
-            Console.WriteLine("[Program] VeilborneEngine.RunAsync() completed (Task.CompletedTask).");
         }
         catch (Exception ex)
         {

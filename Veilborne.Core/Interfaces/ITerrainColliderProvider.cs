@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface ITerrainColliderProvider
     {

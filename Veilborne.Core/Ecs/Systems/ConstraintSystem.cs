@@ -1,6 +1,6 @@
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Applies lightweight constraints to keep transient state coherent.

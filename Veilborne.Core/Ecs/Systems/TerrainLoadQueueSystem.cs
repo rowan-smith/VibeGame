@@ -1,8 +1,8 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Terrain;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Prepares terrain load priorities around the active camera.
@@ -10,20 +10,20 @@ namespace Veilborne.Core.Ecs.Systems
     public class TerrainLoadQueueSystem : ISystem
     {
         private readonly EntityRegistry _entities;
-        private readonly TerrainManager _terrainManager;
+        private readonly ITerrainStreaming _terrainStreaming;
         private readonly IWorldConfigService _config;
         private float _accumulatedSeconds;
         private Vector3 _lastCameraPos;
         private bool _hasLastCameraPos;
-        private const float StreamingTickSeconds = 1f / 10f;       // idle: 10 Hz
-        private const float MovingStreamingTickSeconds = 1f / 8f;  // moving: 8 Hz
-        private const float DigStreamingTickSeconds = 1f / 12f;    // digging: 12 Hz
+        private const float StreamingTickSeconds = 1f / 10f;
+        private const float MovingStreamingTickSeconds = 1f / 8f;
+        private const float DigStreamingTickSeconds = 1f / 12f;
         private bool _wasDigActive;
 
-        public TerrainLoadQueueSystem(EntityRegistry entities, TerrainManager terrainManager, IWorldConfigService config)
+        public TerrainLoadQueueSystem(EntityRegistry entities, ITerrainStreaming terrainStreaming, IWorldConfigService config)
         {
             _entities = entities;
-            _terrainManager = terrainManager;
+            _terrainStreaming = terrainStreaming;
             _config = config;
         }
 
@@ -66,8 +66,7 @@ namespace Veilborne.Core.Ecs.Systems
 
             _accumulatedSeconds = 0f;
             int queueRadius = Math.Max(0, _config.Config.TerrainLoadQueueRadius);
-            _terrainManager.UpdateAround(cameraPos, queueRadius);
+            _terrainStreaming.UpdateAround(cameraPos, queueRadius);
         }
     }
 }
-

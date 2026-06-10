@@ -1,4 +1,4 @@
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 
 namespace Veilborne.Web.MonoGameImpl;
 

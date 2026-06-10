@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Serilog;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Core
+namespace Veilborne
 {
     public class Entry : IHostedService
     {

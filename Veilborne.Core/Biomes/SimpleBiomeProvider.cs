@@ -1,9 +1,10 @@
-using System.Collections.Concurrent;
 using System.Numerics;
+using System.Collections.Concurrent;
 using Serilog;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
+using Veilborne.Terrain;
 
-namespace Veilborne.Core.Biomes
+namespace Veilborne.Biomes
 {
     /// <summary>
     /// World-space Voronoi-style biome provider.
@@ -102,12 +103,12 @@ namespace Veilborne.Core.Biomes
             int cx = (int)MathF.Floor(warped.X / _cellSize);
             int cy = (int)MathF.Floor(warped.Y / _cellSize);
 
-            float bestDistSq = float.MaxValue;
-            float secondDistSq = float.MaxValue;
+            float bestDist = float.MaxValue;
+            float secondDist = float.MaxValue;
             int bestSX = 0, bestSY = 0;
             int secondSX = 0, secondSY = 0;
 
-            const int searchRadius = 1;
+            const int searchRadius = 2;
             for (int dy = -searchRadius; dy <= searchRadius; dy++)
             for (int dx = -searchRadius; dx <= searchRadius; dx++)
             {
@@ -117,18 +118,18 @@ namespace Veilborne.Core.Biomes
                 var site = cell.Site;
                 float dxw = warped.X - site.X;
                 float dyw = warped.Y - site.Y;
-                float distSq = (dxw * dxw + dyw * dyw) * (cell.Scale * cell.Scale);
+                float dist = MathF.Sqrt((dxw * dxw + dyw * dyw) * (cell.Scale * cell.Scale));
 
-                if (distSq < bestDistSq)
+                if (dist < bestDist)
                 {
-                    secondDistSq = bestDistSq;
+                    secondDist = bestDist;
                     secondSX = bestSX; secondSY = bestSY;
-                    bestDistSq = distSq;
+                    bestDist = dist;
                     bestSX = sx; bestSY = sy;
                 }
-                else if (distSq < secondDistSq)
+                else if (dist < secondDist)
                 {
-                    secondDistSq = distSq;
+                    secondDist = dist;
                     secondSX = sx; secondSY = sy;
                 }
             }
@@ -136,11 +137,9 @@ namespace Veilborne.Core.Biomes
             var primary = _biomes[GetCellData(bestSX, bestSY).BiomeIndex];
             IBiome? secondary = null;
             float blend = 0f;
-            if (secondDistSq < float.MaxValue && secondDistSq > bestDistSq)
+            if (secondDist < float.MaxValue && secondDist > bestDist)
             {
                 secondary = _biomes[GetCellData(secondSX, secondSY).BiomeIndex];
-                float bestDist = MathF.Sqrt(bestDistSq);
-                float secondDist = MathF.Sqrt(secondDistSq);
                 float delta = secondDist - bestDist;
                 blend = 1f - Math.Clamp(delta / _blendWidthWorld, 0f, 1f);
                 blend = SmoothStep(blend) * 0.49f;
@@ -271,7 +270,7 @@ namespace Veilborne.Core.Biomes
             Span<(int sx, int sy, float dist)> candidates = stackalloc (int, int, float)[25];
             int candidateCount = 0;
 
-            const int searchRadius = 1;
+            const int searchRadius = 2;
             for (int dy = -searchRadius; dy <= searchRadius; dy++)
             for (int dx = -searchRadius; dx <= searchRadius; dx++)
             {
@@ -280,8 +279,8 @@ namespace Veilborne.Core.Biomes
                 var cell = GetCellData(sx, sy);
                 float dxw = warped.X - cell.Site.X;
                 float dyw = warped.Y - cell.Site.Y;
-                float distSq = (dxw * dxw + dyw * dyw) * (cell.Scale * cell.Scale);
-                candidates[candidateCount++] = (sx, sy, distSq);
+                float dist = MathF.Sqrt((dxw * dxw + dyw * dyw) * (cell.Scale * cell.Scale));
+                candidates[candidateCount++] = (sx, sy, dist);
             }
 
             // Sort by distance (simple insertion sort for small N)
@@ -321,13 +320,12 @@ namespace Veilborne.Core.Biomes
             }
 
             // Inverse-distance weighting with the blend width as falloff
-            float nearestDist = MathF.Sqrt(unique[0].dist);
+            float nearestDist = unique[0].dist;
             float totalWeight = 0f;
             Span<float> rawWeights = stackalloc float[uniqueCount];
             for (int i = 0; i < uniqueCount; i++)
             {
-                float dist = MathF.Sqrt(unique[i].dist);
-                float delta = dist - nearestDist;
+                float delta = unique[i].dist - nearestDist;
                 float t = 1f - Math.Clamp(delta / _blendWidthWorld, 0f, 1f);
                 t = SmoothStep(t);
                 rawWeights[i] = t;

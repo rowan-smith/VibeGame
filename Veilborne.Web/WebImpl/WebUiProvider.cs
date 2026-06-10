@@ -2,7 +2,7 @@ using System.Numerics;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 
 namespace Veilborne.Web.MonoGameImpl
 {
@@ -176,9 +176,9 @@ namespace Veilborne.Web.MonoGameImpl
 
         public void RegisterMenuAssets()
         {
-            RegisterSvgTexture("logo", "logo.svg", 512, 512);
-            RegisterSvgTexture(Veilborne.Core.UI.GameMenuRenderer.SplashTextureKey, "splash.svg", 2000, 1200);
-            RegisterSvgTexture("shovel_icon", "textures/items/icons/shovel.png", 128, 128);
+            RegisterSvgTexture("logo", "assets/logo.svg", 512, 512);
+            RegisterSvgTexture(Veilborne.UI.GameMenuRenderer.SplashTextureKey, "assets/splash.svg", 2000, 1200);
+            RegisterSvgTexture("shovel_icon", "assets/textures/items/icons/shovel.png", 128, 128);
         }
 
         public bool RegisterSvgTexture(string key, string path, int maxWidth, int maxHeight)

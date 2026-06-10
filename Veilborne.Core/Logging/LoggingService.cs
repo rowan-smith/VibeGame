@@ -1,7 +1,8 @@
+using System;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 
-namespace Veilborne.Core.Logging;
+namespace Veilborne.Logging;
 
 public sealed class LoggingService : IDisposable
 {

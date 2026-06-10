@@ -22,47 +22,11 @@
     <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="wwwroot\textures\terrain\brown_mud\" />
-    <Folder Include="wwwroot\textures\terrain\brown_mud_leaves\" />
-    <Folder Include="wwwroot\textures\terrain\lichen_rock\" />
-    <Folder Include="wwwroot\textures\terrain\rock_3\" />
-    <Folder Include="wwwroot\textures\terrain\snow\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Remove="wwwroot\textures\terrain\snow\snow_02_disp_4k.png" />
-    <Content Remove="wwwroot\textures\terrain\snow\snow_02_diff_4k.png" />
-    <Content Remove="wwwroot\textures\terrain\rock_3\rock_3_rough_4k.jpg" />
-    <Content Remove="wwwroot\textures\terrain\rock_3\rock_3_nor_gl_4k.jpg" />
-    <Content Remove="wwwroot\textures\terrain\lichen_rock\lichen_rock_nor_gl_4k.png" />
-    <Content Remove="wwwroot\textures\terrain\lichen_rock\lichen_rock_disp_4k.png" />
-    <Content Remove="wwwroot\textures\terrain\lichen_rock\lichen_rock_diff_4k.png" />
-    <Content Remove="wwwroot\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_nor_gl_4k.png" />
-    <Content Remove="wwwroot\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_disp_4k.png" />
-    <Content Remove="wwwroot\textures\terrain\brown_mud_leaves\brown_mud_leaves_01_diff_4k.png" />
-  </ItemGroup>
-
-  <!-- Physically copy shared assets from Core into Web's wwwroot at build time.
-       This ensures the Blazor DevServer finds them as physical files during development,
-       avoiding "0 byte" responses that can happen with linked files in WASM. -->
   <Target Name="CopySharedAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
     <ItemGroup>
       <CoreAssets Include="..\Veilborne.Core\assets\**" />
-      <CoreTextures Include="..\Veilborne.Core\textures\**" />
-      <CoreModels Include="..\Veilborne.Core\models\**" />
-      <CoreShaders Include="..\Veilborne.Core\shaders\**" />
-      <CoreFonts Include="..\Veilborne.Core\fonts\**" />
-      <CoreSvgs Include="..\Veilborne.Core\*.svg" />
-      <CoreAppsettings Include="..\Veilborne.Core\appsettings.json" />
     </ItemGroup>
-
     <Copy SourceFiles="@(CoreAssets)" DestinationFiles="@(CoreAssets->'wwwroot\assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(CoreTextures)" DestinationFiles="@(CoreTextures->'wwwroot\textures\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(CoreModels)" DestinationFiles="@(CoreModels->'wwwroot\models\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(CoreShaders)" DestinationFiles="@(CoreShaders->'wwwroot\shaders\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(CoreFonts)" DestinationFiles="@(CoreFonts->'wwwroot\fonts\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(CoreSvgs)" DestinationFiles="@(CoreSvgs->'wwwroot\%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(CoreAppsettings)" DestinationFiles="@(CoreAppsettings->'wwwroot\appsettings.json')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\Veilborne.Core\appsettings.json" DestinationFiles="wwwroot\appsettings.json" SkipUnchangedFiles="true" Condition="Exists('..\Veilborne.Core\appsettings.json')" />
   </Target>
 </Project>

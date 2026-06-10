@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Core.Terrain
+namespace Veilborne.Terrain
 {
     // Builds a triangle list for visible faces of a voxel chunk using greedy meshing.
     // Density convention: >0 solid, <=0 empty

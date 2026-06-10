@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
 /// <summary>
 /// Marks whether an entity requires a deferred update or rebuild.

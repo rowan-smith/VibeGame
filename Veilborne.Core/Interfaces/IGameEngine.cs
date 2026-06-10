@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface IGameEngine
     {

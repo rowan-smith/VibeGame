@@ -1,7 +1,7 @@
 using Serilog;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Items
+namespace Veilborne.Items
 {
     public sealed class ItemRegistry : IItemRegistry
     {
@@ -12,48 +12,11 @@ namespace Veilborne.Core.Items
         // Hotbar with 9 slots
         private readonly ItemDef?[] _hotbarSlots = new ItemDef?[9];
 
-        public ItemRegistry(IEnumerable<ItemConfigSet> sets)
+        public ItemRegistry()
         {
             try
             {
-                foreach (var set in sets)
-                {
-                    foreach (var ic in set.Items)
-                    {
-                        if (string.IsNullOrWhiteSpace(ic.Id)) continue;
-
-                        var iconPath = NormalizeAssetPath(ic.Assets?.Icon ?? string.Empty);
-                        var modelPath = NormalizeAssetPath(ic.Assets?.Model ?? string.Empty);
-
-                        var def = new ItemDef
-                        {
-                            Id = ic.Id.Trim(),
-                            DisplayName = string.IsNullOrWhiteSpace(ic.DisplayName) ? ic.Id.Trim() : ic.DisplayName.Trim(),
-                            Description = ic.Description ?? string.Empty,
-                            Type = ic.Type ?? string.Empty,
-                            Category = ic.Category ?? string.Empty,
-                            Stackable = ic.Stackable,
-                            MaxStack = Math.Max(1, ic.MaxStack),
-                            Weight = ic.Weight,
-                            Value = ic.Value,
-                            BreakSpeedMultiplier = ic.ToolProperties?.BreakSpeedMultiplier > 0f ? ic.ToolProperties.BreakSpeedMultiplier : 1f,
-                            StaminaCost = Math.Max(0, ic.ToolProperties?.StaminaCost ?? 0),
-                            IconPath = iconPath,
-                            ModelPath = modelPath,
-                        };
-
-                        if (!_byId.TryAdd(def.Id, def))
-                        {
-                            _logger.Warning("Duplicate item id '{Id}'; ignoring", def.Id);
-                            continue;
-                        }
-
-                        _items.Add(def);
-                    }
-                }
-
-                // Stable order by DisplayName
-                _items.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
+                LoadAll();
 
                 // Assign first 3 items to hotbar as a simple example
                 for (int i = 0; i < Math.Min(3, _items.Count); i++)
@@ -61,7 +24,7 @@ namespace Veilborne.Core.Items
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to initialize items registry");
+                _logger.Error(ex, "Failed to load items");
             }
         }
 
@@ -88,11 +51,76 @@ namespace Veilborne.Core.Items
             };
         }
 
+        private void LoadAll()
+        {
+            string baseDir = AppContext.BaseDirectory;
+            string itemsDir = Path.Combine(baseDir, "assets", "config", "items");
+
+            if (!Directory.Exists(itemsDir))
+            {
+                _logger.Warning("Items directory not found: {Dir}", itemsDir);
+                return;
+            }
+
+            var files = Directory.GetFiles(itemsDir, "*.json", SearchOption.TopDirectoryOnly);
+            foreach (var file in files)
+            {
+                try
+                {
+                    var set = JsonModelLoader.LoadFile<ItemConfigSet>(file);
+                    foreach (var ic in set.Items)
+                    {
+                        if (string.IsNullOrWhiteSpace(ic.Id)) continue;
+
+                        var iconPath = NormalizeAssetPath(ic.Assets?.Icon ?? string.Empty);
+                        var modelPath = NormalizeAssetPath(ic.Assets?.Model ?? string.Empty);
+
+                        var def = new ItemDef
+                        {
+                            Id = ic.Id.Trim(),
+                            DisplayName = string.IsNullOrWhiteSpace(ic.DisplayName) ? ic.Id.Trim() : ic.DisplayName.Trim(),
+                            Description = ic.Description ?? string.Empty,
+                            Type = ic.Type ?? string.Empty,
+                            Category = ic.Category ?? string.Empty,
+                            Stackable = ic.Stackable,
+                            MaxStack = Math.Max(1, ic.MaxStack),
+                            Weight = ic.Weight,
+                            Value = ic.Value,
+                            BreakSpeedMultiplier = ic.ToolProperties?.BreakSpeedMultiplier > 0f ? ic.ToolProperties.BreakSpeedMultiplier : 1f,
+                            StaminaCost = Math.Max(0, ic.ToolProperties?.StaminaCost ?? 0),
+                            IconPath = iconPath,
+                            ModelPath = modelPath,
+                        };
+
+                        if (!_byId.TryAdd(def.Id, def))
+                        {
+                            _logger.Warning("Duplicate item id '{Id}' in {File}; ignoring", def.Id, file);
+                            continue;
+                        }
+
+                        _items.Add(def);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error loading items file {File}", file);
+                }
+            }
+
+            // Stable order by DisplayName
+            _items.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
+        }
+
         private static string NormalizeAssetPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return string.Empty;
-            // Ensure forward slashes for internal path consistency
-            return path.Replace('\\', '/');
+
+            // Already rooted
+            if (Path.IsPathRooted(path)) return path;
+
+            // Combine with assets root
+            string combined = Path.Combine(AppContext.BaseDirectory, "assets", path.Replace('/', Path.DirectorySeparatorChar));
+            return combined;
         }
     }
 

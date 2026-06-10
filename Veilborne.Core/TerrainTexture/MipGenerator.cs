@@ -3,7 +3,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace Veilborne.Core.TerrainTexture
+namespace Veilborne.TerrainTexture
 {
     public static class MipGenerator
     {

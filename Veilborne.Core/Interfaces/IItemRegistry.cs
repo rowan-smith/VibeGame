@@ -1,6 +1,6 @@
-using Veilborne.Core.Items;
+using Veilborne.Items;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface IItemRegistry
     {

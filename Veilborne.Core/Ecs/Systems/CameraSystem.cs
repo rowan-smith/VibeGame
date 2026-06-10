@@ -1,8 +1,9 @@
 using System.Numerics;
 using Serilog;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Maintains valid camera vectors before input/physics phases execute.
@@ -10,23 +11,28 @@ namespace Veilborne.Core.Ecs.Systems
     public class CameraSystem : ISystem
     {
         private readonly EntityRegistry _entities;
+        private readonly EcsFrameContext _frameContext;
         private readonly ILogger _log = Log.ForContext<CameraSystem>();
         private bool _loggedMissingCamera;
         private bool _loggedCameraCorrection;
         private bool _loggedUpCorrection;
 
-        public CameraSystem(EntityRegistry entities)
+        public CameraSystem(EntityRegistry entities, EcsFrameContext frameContext)
         {
             _entities = entities;
+            _frameContext = frameContext;
         }
 
         public void Update(float dt)
         {
+            _frameContext.BeginFrame();
             bool anyCamera = false;
-            foreach (var entity in _entities.GetEntitiesWith<CameraComponent>())
+
+            _entities.ForEachWith<CameraComponent>((Entity entity, ref CameraComponent cam) =>
             {
                 anyCamera = true;
-                var cam = entity.GetComponent<CameraComponent>();
+                if (!_frameContext.HasPrimaryCamera)
+                    _frameContext.SetPrimaryCamera(cam.Position);
 
                 if (Vector3.DistanceSquared(cam.Target, cam.Position) < 1e-6f)
                 {
@@ -47,9 +53,7 @@ namespace Veilborne.Core.Ecs.Systems
                         _loggedUpCorrection = true;
                     }
                 }
-
-                entity.SetComponent(cam);
-            }
+            });
 
             if (!anyCamera && !_loggedMissingCamera)
             {

@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
     public struct TerrainPatchDirtyComponent : IComponent
     {

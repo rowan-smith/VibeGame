@@ -1,7 +1,7 @@
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Objects;
+using Veilborne.Ecs.Components;
+using Veilborne.Objects;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Render-phase adapter for world object mesh drawing.

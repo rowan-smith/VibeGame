@@ -3,9 +3,9 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using SkiaSharp;
 using Svg.Skia;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Desktop.MonoGameImpl
+namespace Veilborne.MonoGameImpl
 {
     public class MonoGameUiProvider : IUiProvider
     {
@@ -34,9 +34,9 @@ namespace Veilborne.Desktop.MonoGameImpl
             if (!string.IsNullOrEmpty(requested) && System.IO.File.Exists(requested))
                 return requested;
 
-            // Look in fonts/ relative to the executable
+            // Look in assets/fonts relative to the executable
             string assetsFont = System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "fonts", "font.ttf");
+                AppDomain.CurrentDomain.BaseDirectory, "assets", "fonts", "font.ttf");
             if (System.IO.File.Exists(assetsFont)) return assetsFont;
 
             // Windows system font fallbacks

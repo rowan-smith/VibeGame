@@ -1,4 +1,4 @@
-﻿namespace Veilborne.Core.Interfaces
+﻿namespace Veilborne.Interfaces
 {
     public interface ITerrainGenerator
     {
@@ -15,6 +15,6 @@
         float SampleHeight(float[,] heights, float worldX, float worldZ);
 
         // Compute base infinite height at arbitrary world position
-        float ComputeHeight(float worldX, float worldZ, float detailLevel = 1f);
+        float ComputeHeight(float worldX, float worldZ);
     }
 }

@@ -1,8 +1,8 @@
 using Microsoft.JSInterop;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Objects;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
+using Veilborne.Objects;
 using Microsoft.Extensions.Logging;
 
 namespace Veilborne.Web.MonoGameImpl

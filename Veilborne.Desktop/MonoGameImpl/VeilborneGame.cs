@@ -5,7 +5,7 @@ using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using XnaColor = Microsoft.Xna.Framework.Color;
 
-namespace Veilborne.Desktop.MonoGameImpl
+namespace Veilborne.MonoGameImpl
 {
     public class VeilborneGame : Game
     {

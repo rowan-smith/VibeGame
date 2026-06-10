@@ -1,20 +1,30 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Veilborne.Core;
-using Veilborne.Core.Biomes;
-using Veilborne.Core.Biomes.Spawners;
-using Veilborne.Core.Camera;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Logging;
-using Veilborne.Core.Objects;
-using Veilborne.Core.Stubs;
-using Veilborne.Core.Items;
-using Veilborne.Core.WorldObjects;
-using Veilborne.Core.TerrainTexture;
-using Veilborne.Desktop.Ecs;
-using Veilborne.Desktop.MonoGameImpl;
+using Veilborne.Biomes;
+using Veilborne.Biomes.Environment;
+using Veilborne.Biomes.Spawners;
+using Veilborne.Camera;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Systems;
+using Veilborne.Interfaces;
+using Veilborne.Items;
+using Veilborne.Logging;
+using Veilborne.MonoGameImpl;
+using Veilborne.Objects;
+using Veilborne.Settings;
+using Veilborne.Sky;
+using Veilborne.Stubs;
+using Veilborne.Terrain;
+using Veilborne.TerrainTexture;
+using Veilborne.UI;
+using Veilborne.WorldObjects;
 
-namespace Veilborne.Desktop;
+namespace Veilborne;
 
 internal static class Program
 {
@@ -29,18 +39,12 @@ internal static class Program
         using var logging = new LoggingService();
         var builder = Host.CreateApplicationBuilder(args);
 
-        // Register all core services via extension
-        builder.Services.AddVeilborneCoreServices();
+        // Bootstrap Core configuration
+        var configService = new WorldConfigService();
+        builder.Services.AddSingleton<IWorldConfigService>(configService);
 
-        // Load and register registries (host-specific file loading)
-        RegisterRegistries(builder.Services);
-
-        // Platform-specific and MonoGame-specific registrations
-        builder.Services.AddSingleton<ProxyTerrainRenderer>();
-        builder.Services.AddSingleton<ITerrainRenderer>(sp => sp.GetRequiredService<ProxyTerrainRenderer>());
-        builder.Services.AddSingleton<IWorldObjectRenderer, StubWorldObjectRenderer>();
-        builder.Services.AddSingleton<EcsManager>();
-        builder.Services.AddSingleton<IEcsRuntime>(sp => sp.GetRequiredService<EcsManager>());
+        // Core Input, Time, Graphics and UI
+        // Core providers (no MonoGame dependencies)
         builder.Services.AddSingleton<IInputProvider, MonoGameInputProvider>();
         builder.Services.AddSingleton<ITimeService, MonoGameTimeService>();
         builder.Services.AddSingleton<MonoGameGraphicsProvider>();
@@ -48,11 +52,113 @@ internal static class Program
         builder.Services.AddSingleton<IGameLoopHost>(sp => sp.GetRequiredService<MonoGameGraphicsProvider>());
         // UI provider will be initialized after MonoGame is ready
 
-        // Load biomes dynamically (host-specific)
+        // Core terrain & environment — proxy renderer: starts as stub, swapped to real MonoGame renderer after graphics init
+        builder.Services.AddSingleton<ProxyTerrainRenderer>();
+        builder.Services.AddSingleton<ITerrainRenderer>(sp => sp.GetRequiredService<ProxyTerrainRenderer>());
+        builder.Services.AddSingleton<IWorldObjectRenderer, StubWorldObjectRenderer>(); // Stub for DI, real one from ECS manager
+        builder.Services.AddSingleton<ITerrainGenerator>(sp => new TerrainGenerator(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
+        builder.Services.AddSingleton<ITerrainTextureRegistry, TerrainTextureRegistry>();
+        builder.Services.AddSingleton<ISkyLightingService, SkyLightingService>();
+        builder.Services.AddSingleton<IShadowMapService, CpuShadowMapService>();
+        // ECS Systems (will be initialized manually after MonoGame is ready)
+        builder.Services.AddSingleton<CleanupSystem>();
+        builder.Services.AddSingleton<DependencySystem>();
+        builder.Services.AddSingleton<InputSystem>();
+        builder.Services.AddSingleton<DigInputSystem>();
+        builder.Services.AddSingleton<DigProbeSystem>();
+        builder.Services.AddSingleton<VoxelRaycastSystem>();
+        builder.Services.AddSingleton<IRandomSource, SystemRandomSource>();
+        builder.Services.AddSingleton<DepleteSystem>();
+        builder.Services.AddSingleton<DigExecutionSystem>();
+        builder.Services.AddSingleton<DigParticleSystem>();
+        builder.Services.AddSingleton<CameraSystem>();
+        builder.Services.AddSingleton<HotbarSelectionSystem>();
+        builder.Services.AddSingleton<PlayerSystem>(); // still used as implementation detail
+        builder.Services.AddSingleton<PlayerInputSystem>();
+        builder.Services.AddSingleton<AISystem>();
+        builder.Services.AddSingleton<AnimationSystem>();
+        builder.Services.AddSingleton<ParticleSystem>();
+        builder.Services.AddSingleton<BiomeAssetTracker>();
+        builder.Services.AddSingleton<BiomeDiscoverySystem>();
+        builder.Services.AddSingleton<AssetLoadSystem>();
+        builder.Services.AddSingleton<BiomePrepSystem>();
+        builder.Services.AddSingleton<AssetUnloadSystem>();
+        builder.Services.AddSingleton<WorldObjectSpatialIndex>();
+        builder.Services.AddSingleton<WorldObjectSpatialIndexSystem>();
+        builder.Services.AddSingleton<CollisionFrameBuffer>();
+        builder.Services.AddSingleton<EcsPerformanceMonitor>();
+        builder.Services.AddSingleton<EcsFrameContext>();
+        builder.Services.AddSingleton<FrustumCullSystem>();
+        builder.Services.AddSingleton<SortSystem>();
+        builder.Services.AddSingleton<CollisionDetectionSystem>();
+        builder.Services.AddSingleton<CollisionResolutionSystem>();
+        builder.Services.AddSingleton<ConstraintSystem>();
+        builder.Services.AddSingleton<ForceSystem>();
+        builder.Services.AddSingleton<IntegrationSystem>();
+        builder.Services.AddSingleton<TerrainLoadSystem>();
+        builder.Services.AddSingleton<TerrainLoadQueueSystem>();
+        builder.Services.AddSingleton<TerrainLoadRequestTracker>();
+        builder.Services.AddSingleton<TerrainGenSystem>();
+        builder.Services.AddSingleton<VegetationSystem>();
+        builder.Services.AddSingleton<ShadowMapSystem>();
+        builder.Services.AddSingleton<EffectSystem>();
+        builder.Services.AddSingleton<UISystem>();
+        builder.Services.AddSingleton<EcsManager>();
+        builder.Services.AddSingleton<IEcsRuntime>(sp => sp.GetRequiredService<EcsManager>());
+
+        builder.Services.AddSingleton<IWorldObjectRegistry, WorldObjectRegistry>();
+        builder.Services.AddSingleton<IEnvironmentSampler>(sp => new MultiNoiseSampler(sp.GetRequiredService<IWorldConfigService>().NoiseConfig));
+
+        // Load biomes dynamically
         RegisterBiomes(builder.Services);
 
+        builder.Services.AddSingleton<IBiomeProvider>(sp =>
+        {
+            var config = sp.GetRequiredService<IWorldConfigService>();
+            var bcfg = config.BiomeProviderConfig;
+            return new SimpleBiomeProvider(
+                sp.GetServices<IBiome>(),
+                bcfg.AverageCellSize,
+                config.Seed,
+                bcfg.Jitter,
+                bcfg.WarpFrequencyScale,
+                bcfg.WarpAmplitudeScale,
+                bcfg.BlendWidthWorld);
+        });
+
+        // Terrain services
+        builder.Services.AddSingleton<EditableTerrainService>();
+        builder.Services.AddSingleton<ReadOnlyTerrainService>();
+        builder.Services.AddSingleton<LowLodTerrainService>();
+        builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorldConfigService>().TerrainConfig);
+
+        builder.Services.AddSingleton<IInfiniteTerrain>(sp =>
+        {
+            var config = sp.GetRequiredService<IWorldConfigService>();
+            return new TerrainManager(
+                sp.GetRequiredService<EditableTerrainService>(),
+                sp.GetRequiredService<ReadOnlyTerrainService>(),
+                config.TerrainConfig,
+                sp.GetRequiredService<IBiomeProvider>(),
+                sp.GetRequiredService<ITerrainRenderer>(),
+                config,
+                sp.GetRequiredService<ITimeService>(),
+                sp.GetRequiredService<IGameSettingsService>(),
+                sp.GetRequiredService<LowLodTerrainService>());
+        });
+        builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
+        builder.Services.AddSingleton<ITerrainStreaming>(sp => sp.GetRequiredService<TerrainManager>());
+
+        // Game engine & state
+        builder.Services.AddSingleton<IGameSettingsService, GameSettingsService>();
         builder.Services.AddSingleton<ICameraController, FpsCameraController>();
         builder.Services.AddSingleton<IPhysicsController, SimplePhysicsController>();
+        builder.Services.AddSingleton<IItemRegistry, ItemRegistry>();
+        builder.Services.AddSingleton<HudUiController>();
+        builder.Services.AddSingleton<DebugOverlayUiController>();
+
+        // ECS
+        builder.Services.AddSingleton<EntityRegistry>();
 
         builder.Services.AddHostedService<Entry>();
         builder.Services.AddTransient<IGameEngine, VeilborneEngine>();
@@ -60,89 +166,6 @@ internal static class Program
         var host = builder.Build();
         await host.StartAsync();
         await host.WaitForShutdownAsync();
-    }
-
-    private static void RegisterRegistries(IServiceCollection services)
-    {
-        string baseDir = AppContext.BaseDirectory;
-        
-        // 1. World Config
-        string worldJsonPath = Path.Combine(baseDir, "assets", "config", "world.json");
-        if (!File.Exists(worldJsonPath))
-        {
-            // Try dev path
-            worldJsonPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "world.json"));
-        }
-        
-        if (File.Exists(worldJsonPath))
-        {
-            var config = JsonModelLoader.LoadFile<WorldConfig>(worldJsonPath);
-            services.AddSingleton<IWorldConfigService>(new WorldConfigService(config));
-        }
-        else
-        {
-            throw new FileNotFoundException("world.json not found", worldJsonPath);
-        }
-
-        // 2. Items
-        string itemsDir = Path.Combine(baseDir, "assets", "config", "items");
-        if (!Directory.Exists(itemsDir))
-        {
-            itemsDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "items"));
-        }
-
-        var itemSets = new List<ItemConfigSet>();
-        if (Directory.Exists(itemsDir))
-        {
-            foreach (var file in Directory.GetFiles(itemsDir, "*.json"))
-            {
-                itemSets.Add(JsonModelLoader.LoadFile<ItemConfigSet>(file));
-            }
-        }
-        services.AddSingleton<IItemRegistry>(new ItemRegistry(itemSets));
-
-        // 3. World Objects
-        string woDir = Path.Combine(baseDir, "assets", "config", "world_objects");
-        if (!Directory.Exists(woDir))
-        {
-            woDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "world_objects"));
-        }
-
-        var woConfigs = new List<WorldObjectsConfig>();
-        if (Directory.Exists(woDir))
-        {
-            foreach (var file in Directory.GetFiles(woDir, "*.json"))
-            {
-                woConfigs.Add(JsonModelLoader.LoadFile<WorldObjectsConfig>(file));
-            }
-        }
-        services.AddSingleton<IWorldObjectRegistry>(new WorldObjectRegistry(woConfigs));
-
-        // 4. Terrain Textures
-        string terrainDir = Path.Combine(baseDir, "assets", "config", "terrain");
-        if (!Directory.Exists(terrainDir))
-        {
-            terrainDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "Veilborne.Core", "assets", "config", "terrain"));
-        }
-
-        var textureDefs = new List<TerrainTextureDef>();
-        if (Directory.Exists(terrainDir))
-        {
-            foreach (var file in Directory.GetFiles(terrainDir, "*.json"))
-            {
-                // Some files might be root world.json, skip if it doesn't look like a texture def
-                try
-                {
-                    var def = JsonModelLoader.LoadFile<TerrainTextureDef>(file);
-                    if (!string.IsNullOrEmpty(def.Id))
-                    {
-                        textureDefs.Add(def);
-                    }
-                }
-                catch { /* skip non-texture JSON files */ }
-            }
-        }
-        services.AddSingleton<ITerrainTextureRegistry>(new TerrainTextureRegistry(textureDefs));
     }
 
     private static void RegisterBiomes(IServiceCollection services)

@@ -1,11 +1,14 @@
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
-using Veilborne.Core.Biomes;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
+using Veilborne.Biomes;
+using Veilborne.Ecs.Components;
 using Vector4 = System.Numerics.Vector4;
 
-namespace Veilborne.Core.Terrain
+namespace Veilborne.Terrain
 {
     public class LowLodTerrainService
     {
@@ -143,35 +146,24 @@ namespace Veilborne.Core.Terrain
                     var origin = new Vector2(originX, originZ);
 
                     _generating.Add(key);
-                    _ = Task.Run(async () =>
+                    _ = Task.Run(() =>
                     {
-                        try
+                        // Coarse sampling in background
+                        float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
+                        for (int zz = 0; zz <= ChunkSize; zz++)
+                        for (int xx = 0; xx <= ChunkSize; xx++)
                         {
-                            // Coarse sampling in background
-                            float[,] heights = new float[ChunkSize + 1, ChunkSize + 1];
-                            for (int zz = 0; zz <= ChunkSize; zz++)
-                            {
-                                for (int xx = 0; xx <= ChunkSize; xx++)
-                                {
-                                    float wx = origin.X + xx * TileSize;
-                                    float wz = origin.Y + zz * TileSize;
-                                    heights[xx, zz] = _editable.SampleHeight(wx, wz, 0.2f);
-                                }
-                                if (zz % 2 == 0) await Task.Yield();
-                            }
-                            var center = new Vector2(
-                                origin.X + ChunkSize * TileSize * 0.5f,
-                                origin.Y + ChunkSize * TileSize * 0.5f);
-                            var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
-                            lock (_biomeBlendByChunk)
-                                _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
-                            _completed.Enqueue((key, heights, origin, biome.Data));
+                            float wx = origin.X + xx * TileSize;
+                            float wz = origin.Y + zz * TileSize;
+                            heights[xx, zz] = _editable.SampleHeight(wx, wz);
                         }
-                        catch (Exception ex)
-                        {
-                            System.Console.WriteLine($"[DEBUG_LOG] Error generating LOD chunk {key}: {ex}");
-                            _generating.Remove(key);
-                        }
+                        var center = new Vector2(
+                            origin.X + ChunkSize * TileSize * 0.5f,
+                            origin.Y + ChunkSize * TileSize * 0.5f);
+                        var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
+                        lock (_biomeBlendByChunk)
+                            _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
+                        _completed.Enqueue((key, heights, origin, biome.Data));
                     });
                 }
             }

@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Ecs
+namespace Veilborne.Ecs
 {
     public readonly record struct EcsSystemTiming(
         string Name,

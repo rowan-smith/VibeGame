@@ -1,9 +1,9 @@
 using System.Drawing;
 using System.Numerics;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Objects;
+using Veilborne.Interfaces;
+using Veilborne.Objects;
 
-namespace Veilborne.Core.Biomes
+namespace Veilborne.Biomes
 {
     public sealed class ConfigBiomeFromData : IBiome
     {

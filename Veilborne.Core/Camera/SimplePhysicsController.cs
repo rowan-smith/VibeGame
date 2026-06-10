@@ -1,8 +1,8 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Camera
+namespace Veilborne.Camera
 {
     public class SimplePhysicsController : IPhysicsController
     {

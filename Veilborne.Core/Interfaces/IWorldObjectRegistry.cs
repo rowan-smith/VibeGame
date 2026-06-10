@@ -1,6 +1,6 @@
-using Veilborne.Core.WorldObjects;
+using Veilborne.WorldObjects;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface IWorldObjectRegistry
     {

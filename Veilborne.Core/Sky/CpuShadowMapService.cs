@@ -1,9 +1,9 @@
 using System.Numerics;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Core.Sky
+namespace Veilborne.Sky
 {
     /// <summary>
     /// CPU directional shadow map approximation in light-space for terrain + world object casters.

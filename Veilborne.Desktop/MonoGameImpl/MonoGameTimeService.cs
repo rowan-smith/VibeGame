@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Microsoft.Xna.Framework;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Desktop.MonoGameImpl
+namespace Veilborne.MonoGameImpl
 {
     public class MonoGameTimeService : ITimeService
     {

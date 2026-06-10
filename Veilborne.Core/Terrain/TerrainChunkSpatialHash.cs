@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Veilborne.Core.Terrain
+namespace Veilborne.Terrain
 {
     internal static class TerrainChunkSpatialHash
     {

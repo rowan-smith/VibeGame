@@ -1,9 +1,9 @@
 using System.Drawing;
 using System.Numerics;
-using Veilborne.Core.Biomes;
-using Veilborne.Core.Objects;
+using Veilborne.Biomes;
+using Veilborne.Objects;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface IBiome
     {

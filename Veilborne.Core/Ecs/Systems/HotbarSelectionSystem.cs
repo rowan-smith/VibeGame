@@ -1,8 +1,8 @@
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Settings;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
+using Veilborne.Settings;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Handles hotbar slot selection and applies current tool modifiers to dig interaction.
@@ -26,7 +26,7 @@ namespace Veilborne.Core.Ecs.Systems
         {
             var keyboard = _settings.Current.Keyboard;
 
-            foreach (var entity in _entities.GetEntitiesWith<PlayerComponent, DigInteractionComponent>())
+            _entities.ForEachWith<PlayerComponent, DigInteractionComponent>(entity =>
             {
                 if (!entity.TryGetComponent<HotbarSelectionComponent>(out var hotbar))
                 {
@@ -61,7 +61,7 @@ namespace Veilborne.Core.Ecs.Systems
                 dig.ToolBreakSpeedMultiplier = Math.Clamp(item?.BreakSpeedMultiplier ?? 1f, 0.1f, 5f);
                 dig.ToolStaminaCost = Math.Max(0, item?.StaminaCost ?? 0);
                 entity.SetComponent(dig);
-            }
+            });
         }
 
         private static InputBindingSettings GetHotbarBinding(KeyboardSettings keyboard, int index)

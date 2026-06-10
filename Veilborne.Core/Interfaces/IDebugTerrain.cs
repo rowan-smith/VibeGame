@@ -1,8 +1,8 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Terrain;
+using Veilborne.Ecs.Components;
+using Veilborne.Terrain;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface IDebugTerrain
     {

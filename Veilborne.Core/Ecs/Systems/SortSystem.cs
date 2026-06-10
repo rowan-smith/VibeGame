@@ -1,7 +1,8 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Computes a simple near/far ordering hint used by object rendering.
@@ -9,43 +10,33 @@ namespace Veilborne.Core.Ecs.Systems
     public class SortSystem : ISystem
     {
         private readonly EntityRegistry _entities;
-        private readonly RenderFrameState _renderFrameState;
+        private readonly EcsFrameContext _frameContext;
+        private readonly List<(Entity Entity, float DistanceSq)> _sortEntries = new();
 
-        public SortSystem(EntityRegistry entities, RenderFrameState renderFrameState)
+        public SortSystem(EntityRegistry entities, EcsFrameContext frameContext)
         {
             _entities = entities;
-            _renderFrameState = renderFrameState;
+            _frameContext = frameContext;
         }
 
         public void Update(float dt)
         {
-            Vector3 cameraPos = Vector3.Zero;
-            bool hasCamera = false;
-            foreach (var cameraEntity in _entities.GetEntitiesWith<CameraComponent>())
-            {
-                cameraPos = cameraEntity.GetComponent<CameraComponent>().Position;
-                hasCamera = true;
-                break;
-            }
-
-            if (!hasCamera)
+            if (!_frameContext.HasPrimaryCamera)
                 return;
 
-            var sortEntries = new List<(Entity Entity, float DistanceSq)>();
-            foreach (var entity in _entities.GetEntitiesWith<RenderComponent, TransformComponent>())
+            var cameraPos = _frameContext.PrimaryCameraPosition;
+            _sortEntries.Clear();
+
+            _entities.ForEachWith<RenderComponent, TransformComponent>((Entity entity, ref RenderComponent render, ref TransformComponent transform) =>
             {
-                var render = entity.GetComponent<RenderComponent>();
                 if (!render.Visible)
-                    continue;
+                    return;
 
-                var transform = entity.GetComponent<TransformComponent>();
-                var distSq = Vector3.DistanceSquared(transform.Position, cameraPos);
-                sortEntries.Add((entity, distSq));
-            }
+                _sortEntries.Add((entity, Vector3.DistanceSquared(transform.Position, cameraPos)));
+            });
 
-            sortEntries.Sort((a, b) => a.DistanceSq.CompareTo(b.DistanceSq));
-
-            _renderFrameState.WasSortedThisFrame = sortEntries.Count > 0;
+            _sortEntries.Sort(static (a, b) => a.DistanceSq.CompareTo(b.DistanceSq));
+            _frameContext.WasSortedThisFrame = _sortEntries.Count > 0;
         }
     }
 }

@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Updates dig debris particles: applies velocity, gravity, and removes expired ones.

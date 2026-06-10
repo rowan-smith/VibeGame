@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Veilborne.Core.Ecs.Components
+namespace Veilborne.Ecs.Components
 {
 /// <summary>
 /// Stores linear acceleration for motion integration.

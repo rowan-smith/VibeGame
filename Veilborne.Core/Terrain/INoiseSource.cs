@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Terrain
+namespace Veilborne.Terrain
 {
     /// <summary>
     /// Abstraction over a noise function so different noise types/presets can be selected.

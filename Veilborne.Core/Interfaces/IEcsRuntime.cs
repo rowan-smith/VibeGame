@@ -1,8 +1,8 @@
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Objects;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
+using Veilborne.Objects;
 
-namespace Veilborne.Core.Interfaces
+namespace Veilborne.Interfaces
 {
     public interface IEcsRuntime
     {

@@ -1,5 +1,5 @@
 using System.Numerics;
-using Veilborne.Core.Sky;
+using Veilborne.Sky;
 
 namespace Veilborne.Web.MonoGameImpl
 {

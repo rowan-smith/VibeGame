@@ -1,6 +1,6 @@
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Loads biome asset references lazily and marks bundles as loaded.
@@ -9,6 +9,7 @@ namespace Veilborne.Core.Ecs.Systems
     {
         private readonly EntityRegistry _entities;
         private readonly BiomeAssetTracker _tracker;
+        private readonly List<Entity> _processedRequests = new();
 
         public AssetLoadSystem(EntityRegistry entities, BiomeAssetTracker tracker)
         {
@@ -18,7 +19,10 @@ namespace Veilborne.Core.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var reqEntity in _entities.GetEntitiesWith<BiomeLoadRequestComponent>())
+            _processedRequests.Clear();
+            _entities.ForEachWith<BiomeLoadRequestComponent>(entity => _processedRequests.Add(entity));
+
+            foreach (var reqEntity in _processedRequests)
             {
                 var req = reqEntity.GetComponent<BiomeLoadRequestComponent>();
                 if (string.IsNullOrWhiteSpace(req.BiomeId))
@@ -36,8 +40,8 @@ namespace Veilborne.Core.Ecs.Systems
                 bundle.AddComponent(new BiomeLoadedAssetsComponent
                 {
                     BiomeId = req.BiomeId,
-                    GrassTexturePath = $"textures\\{req.BiomeId}_grass.png",
-                    TreeModelPath = $"models\\tree_oak.glb",
+                    GrassTexturePath = $"assets\\textures\\{req.BiomeId}_grass.png",
+                    TreeModelPath = $"assets\\models\\tree_oak.glb",
                     ActiveChunkRefs = 1
                 });
 
@@ -48,4 +52,3 @@ namespace Veilborne.Core.Ecs.Systems
         }
     }
 }
-

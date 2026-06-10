@@ -1,5 +1,5 @@
 using System;
-using Veilborne.Core.Settings;
+using Veilborne.Settings;
 
 namespace Veilborne.Web.MonoGameImpl
 {

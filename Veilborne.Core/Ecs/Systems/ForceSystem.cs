@@ -1,6 +1,6 @@
-using Veilborne.Core.Ecs.Components;
+using Veilborne.Ecs.Components;
 
-namespace Veilborne.Core.Ecs.Systems
+namespace Veilborne.Ecs.Systems
 {
     /// <summary>
     /// Accumulates force and acceleration from gravity and drag data components.
@@ -16,19 +16,17 @@ namespace Veilborne.Core.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var entity in _entities.GetEntitiesWith<CameraComponent>())
+            _entities.ForEachWith<CameraComponent>(entity =>
             {
                 if (!entity.TryGetComponent<MassComponent>(out var mass) || mass.IsKinematic)
-                    continue;
+                    return;
                 if (!entity.TryGetComponent<ForceComponent>(out var force))
-                    continue;
+                    return;
                 if (!entity.TryGetComponent<AccelerationComponent>(out var acceleration))
-                    continue;
+                    return;
 
                 if (entity.TryGetComponent<GravityComponent>(out var gravity))
-                {
                     force.Value += gravity.Direction * mass.Value;
-                }
 
                 if (entity.TryGetComponent<VelocityComponent>(out var velocity) &&
                     entity.TryGetComponent<DragComponent>(out var drag) &&
@@ -41,7 +39,7 @@ namespace Veilborne.Core.Ecs.Systems
                 acceleration.Value = force.Value / effectiveMass;
                 entity.SetComponent(force);
                 entity.SetComponent(acceleration);
-            }
+            });
         }
     }
 }

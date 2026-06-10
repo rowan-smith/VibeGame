@@ -1,18 +1,19 @@
 using System.Numerics;
 using Serilog;
-using Veilborne.Core.Ecs;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
-using Veilborne.Core.Settings;
-using Veilborne.Core.Sky;
-using Veilborne.Core.Terrain;
-using Veilborne.Core.UI;
+using Veilborne.Ecs;
+using Veilborne.Ecs.Components;
+using Veilborne.GameFlow;
+using Veilborne.Interfaces;
+using Veilborne.Settings;
+using Veilborne.Sky;
+using Veilborne.UI;
 
-namespace Veilborne.Core
+namespace Veilborne
 {
     public class VeilborneEngine : IGameEngine
     {
         private readonly IInfiniteTerrain _terrain;
+        private readonly ITerrainStreaming _terrainStreaming;
         private readonly ITimeService _time;
         private readonly EntityRegistry _entities;
         private readonly IGraphicsProvider _graphics;
@@ -26,44 +27,22 @@ namespace Veilborne.Core
         private readonly GameMenuRenderer _menuRenderer;
         private readonly DebugVisualizationRenderer _debugVizRenderer;
         private readonly EcsPerformanceMonitor? _perfMonitor;
-        private readonly bool _isDevelopmentEnvironment;
+        private readonly GameFlowController _flow = new();
         private readonly ILogger _log = Log.ForContext<VeilborneEngine>();
 
-        // These will be initialized by ECS manager after MonoGame is ready
         private IUiProvider _ui;
-
         private bool _showDebugOverlay;
         private bool _isFullscreenApplied;
         private Entity _playerEntity = default!;
-        private Entity _uiCanvasEntity = default!;
         private Entity _crosshairEntity = default!;
         private float _lastGameDt;
         private float _perfLogTimer;
-
-        // Simple UI state machine
-        private enum GameState { Initialization, MainMenu, Settings, Loading, Playing, Paused }
-        private enum SettingsReturnState { MainMenu, Paused }
-        private GameState _state = GameState.MainMenu;
-        private SettingsReturnState _settingsReturnState = SettingsReturnState.MainMenu;
-
-        // Loading state
-        private float _loadingProgress;
-        private string _loadingStageText = "Preparing world";
-        private int _loadingLoadedChunks;
-        private int _loadingDesiredChunks;
-        private int _loadingGeneratingChunks;
-        private int _loadingEntities;
-        private int _loadingPendingSpawnObjects;
-        private double _loadingCompleteTime;
-        private Task? _loadingPumpTask;
-        private bool _requestedExit;
-        private GameState _lastLoggedState = (GameState)(-1);
+        private GameFlowState _lastLoggedState = (GameFlowState)(-1);
         private volatile bool _splashReady;
-
-        private const double LoadingCompletionDelay = 0.10;
 
         public VeilborneEngine(
             IInfiniteTerrain terrain,
+            ITerrainStreaming terrainStreaming,
             ITimeService time,
             EntityRegistry entities,
             IGraphicsProvider graphics,
@@ -77,6 +56,7 @@ namespace Veilborne.Core
             EcsPerformanceMonitor? perfMonitor = null)
         {
             _terrain = terrain;
+            _terrainStreaming = terrainStreaming;
             _time = time;
             _entities = entities;
             _graphics = graphics;
@@ -88,8 +68,7 @@ namespace Veilborne.Core
             _hudUi = hudUi;
             _debugOverlayUi = debugOverlayUi;
             _perfMonitor = perfMonitor;
-            _isDevelopmentEnvironment = RuntimeEnvironment.IsDevelopmentEnvironment;
-            _menuRenderer = new GameMenuRenderer(settings, input, _isDevelopmentEnvironment);
+            _menuRenderer = new GameMenuRenderer(settings, input, RuntimeEnvironment.IsDevelopmentEnvironment);
             _debugVizRenderer = new DebugVisualizationRenderer(terrain, entities);
         }
 
@@ -98,95 +77,11 @@ namespace Veilborne.Core
             _graphics.InitializeWindow(1280, 720, "Veilborne");
             ApplySettings(initialApply: true);
 
-            // Set up player entity
-            _playerEntity = _entities.CreateEntity();
-            _playerEntity.AddComponent(new PlayerComponent());
-            var transform = new TransformComponent { Position = new Vector3(0, 5, -10) };
-            _playerEntity.AddComponent(transform);
-            _playerEntity.AddComponent(new ColliderComponent { Radius = 0.5f });
-            _playerEntity.AddComponent(new CollisionFilterComponent
-            {
-                Layer = CollisionLayer.Player,
-                CollidesWith = CollisionLayer.WorldStatic
-            });
-            _playerEntity.AddComponent(new VelocityComponent { Linear = Vector3.Zero });
-            _playerEntity.AddComponent(new VerticalVelocityComponent { Value = 0f });
-            _playerEntity.AddComponent(new AccelerationComponent { Value = Vector3.Zero });
-            _playerEntity.AddComponent(new ForceComponent { Value = Vector3.Zero });
-            _playerEntity.AddComponent(new DragComponent { Linear = 0f, Angular = 0f });
-            _playerEntity.AddComponent(new MassComponent { Value = 1f, IsKinematic = false });
-            _playerEntity.AddComponent(new RigidbodyComponent { IsKinematic = false, IsSleeping = false });
-            _playerEntity.AddComponent(new GravityComponent { Direction = new Vector3(0f, -20f, 0f) });
-            _playerEntity.AddComponent(new HealthComponent { Current = 100f, Max = 100f });
-            _playerEntity.AddComponent(new TeamComponent { Id = 1 });
-            _playerEntity.AddComponent(new NameComponent { Value = "Player" });
-            _playerEntity.AddComponent(new TagComponent { Name = "Player" });
-            _playerEntity.AddComponent(new ParentComponent { EntityId = -1 });
-            _playerEntity.AddComponent(new ChildrenComponent { EntityIds = [] });
-            _playerEntity.AddComponent(new LifetimeComponent { RemainingSeconds = 0f });
-            _playerEntity.AddComponent(new DirtyComponent { NeedsUpdate = false });
-            _playerEntity.AddComponent(new BillboardComponent { FaceCamera = false });
-            _playerEntity.AddComponent(new ShadowCasterComponent { CastsShadows = true });
-            _playerEntity.AddComponent(new MaterialComponent { ShaderId = string.Empty, Tint = Vector4.One });
-            _playerEntity.AddComponent(new JumpComponent
-            {
-                JumpSpeed = 8.5f,
-                JumpBufferSeconds = 0.12f,
-                CoyoteSeconds = 0.10f,
-                JumpBufferTimer = 0f,
-                CoyoteTimer = 0f,
-                IsGrounded = false
-            });
-            _playerEntity.AddComponent(new MoveInputComponent { HorizontalDisplacement = Vector3.Zero });
-            _playerEntity.AddComponent(new HotbarSelectionComponent { SelectedSlot = 0 });
-            _playerEntity.AddComponent(new DigInteractionComponent
-            {
-                IsDigHeld = false,
-                HasGroundHit = false,
-                GroundHit = Vector3.Zero,
-                ProbeMaxDistance = 6f,
-                ProbeStep = 0.25f,
-                ProbeEpsilon = 0.05f,
-                ToolBreakSpeedMultiplier = 1f,
-                ToolStaminaCost = 0
-            });
-            _playerEntity.AddComponent(new MiningHitComponent
-            {
-                HasHit = false,
-                HitPosition = Vector3.Zero,
-                BlockType = Terrain.ResourceBlockType.None
-            });
-            var cameraComp = new CameraComponent
-            {
-                Position = transform.Position,
-                Target = Vector3.Zero,
-                Up = Vector3.UnitY,
-                FovY = 45.0f
-            };
-            _playerEntity.AddComponent(cameraComp);
+            _playerEntity = PlayerEntityFactory.CreateDefault(_entities, new Vector3(0, 5, -10));
+            var hudUi = UiEntityFactory.CreateHudUi(_entities, _playerEntity.Id);
+            _crosshairEntity = hudUi.Crosshair;
 
-            // ECS UI canvas + crosshair element
-            _uiCanvasEntity = _entities.CreateEntity();
-            _uiCanvasEntity.AddComponent(new CanvasComponent
-            {
-                TargetCameraEntityId = _playerEntity.Id,
-                Visible = true
-            });
-
-            _crosshairEntity = _entities.CreateEntity();
-            _crosshairEntity.AddComponent(new UIElementKindComponent { Kind = "Crosshair" });
-            _crosshairEntity.AddComponent(new UIElementComponent
-            {
-                Bounds = new Rect(0, 0, 0, 0),
-                Text = "idle"
-            });
-            _crosshairEntity.AddComponent(new RenderComponent
-            {
-                Visible = true,
-                ModelPath = string.Empty
-            });
-
-            _state = GameState.MainMenu;
+            _flow.SetInitialState(GameFlowState.MainMenu);
             LogBindings();
 
             _loopHost.SetLoadContentCallback(() =>
@@ -206,7 +101,11 @@ namespace Veilborne.Core
 
         private void UpdateStep(float dt)
         {
-            if (_requestedExit) { _graphics.CloseWindow(); return; }
+            if (_flow.ExitRequested)
+            {
+                _graphics.CloseWindow();
+                return;
+            }
 
             _input.UpdateStates();
             _time.Update(dt);
@@ -218,133 +117,86 @@ namespace Veilborne.Core
             HandleInput(gameDt);
             LogStateTransition();
 
-            if (_state == GameState.Playing)
+            _flow.TickInitialization();
+
+            if (_flow.ShouldUpdateEcs)
             {
                 _ecsRuntime.UpdateSystems(gameDt);
                 LogPerformanceSummary(gameDt);
             }
-            else if (_state == GameState.Initialization)
-            {
-                _state = GameState.MainMenu;
-            }
-            else if (_state == GameState.Loading)
+            else if (_flow.State == GameFlowState.Loading)
             {
                 var cam = _playerEntity.GetComponent<CameraComponent>();
-                if (_terrain is TerrainManager tm)
+                if (_flow.UpdateLoading(gameDt, _terrainStreaming, cam.Position))
                 {
-                    tm.SetWarmupMode(true);
-                    tm.UpdateAround(cam.Position, 0);
-                    if (_loadingPumpTask is { IsCompleted: true, IsFaulted: true })
-                        _ = _loadingPumpTask.Exception;
-                    if (_loadingPumpTask is null || _loadingPumpTask.IsCompleted)
-                        _loadingPumpTask = tm.PumpAsyncJobs();
-                    var loading = tm.GetLoadingProgress();
-                    // Keep loading bar monotonic to avoid visible back-and-forth flicker
-                    // when desired chunk counts/radii adjust during warmup.
-                    _loadingProgress = MathF.Max(_loadingProgress, loading.Progress01);
-                    _loadingStageText = loading.Stage;
-                    _loadingDesiredChunks = loading.DesiredChunks;
-                    _loadingLoadedChunks = loading.LoadedChunks;
-                    _loadingGeneratingChunks = loading.GeneratingChunks;
-                    _loadingEntities = loading.LoadedEntities;
-                    _loadingPendingSpawnObjects = loading.PendingSpawnObjects;
-                }
-                else
-                {
-                    _loadingPumpTask = null;
-                    _loadingProgress = 1f;
-                    _loadingStageText = "Complete";
-                    _loadingDesiredChunks = 0;
-                    _loadingLoadedChunks = 0;
-                    _loadingGeneratingChunks = 0;
-                    _loadingEntities = 0;
-                    _loadingPendingSpawnObjects = 0;
-                }
-
-                bool loadingReady = _loadingProgress >= 0.999f &&
-                                    _loadingGeneratingChunks == 0 &&
-                                    _loadingLoadedChunks >= _loadingDesiredChunks &&
-                                    _loadingPendingSpawnObjects == 0;
-                if (loadingReady)
-                    _loadingCompleteTime += dt;
-                else
-                    _loadingCompleteTime = 0;
-
-                if (_loadingCompleteTime >= LoadingCompletionDelay)
-                {
-                    if (_terrain is TerrainManager readyTm)
-                        readyTm.SetWarmupMode(false);
-                    _state = GameState.Playing;
-                    _loadingPumpTask = null;
-                    _loadingCompleteTime = 0;
-                    _loadingProgress = 0;
                     _input.HideCursor();
                     _log.Debug("Entered Playing: cursor hidden and mouse lock requested.");
                 }
-
                 _playerEntity.SetComponent(cam);
             }
         }
 
         private void Draw3DStep()
         {
-            if (_state == GameState.Playing || _state == GameState.Paused)
-            {
-                var camera = _playerEntity.GetComponent<CameraComponent>();
-                _graphics.Begin3D(camera);
-                _ecsRuntime.RenderSystems(_lastGameDt, camera);
-                _graphics.End3D();
-            }
+            if (!_flow.ShouldRender3D)
+                return;
+
+            var camera = _playerEntity.GetComponent<CameraComponent>();
+            _graphics.Begin3D(camera);
+            _ecsRuntime.RenderSystems(_lastGameDt, camera);
+            _graphics.End3D();
         }
 
         private void Draw2DStep()
         {
             _time.NotifyFrameRendered();
-            switch (_state)
+            switch (_flow.State)
             {
-                case GameState.Initialization:
+                case GameFlowState.Initialization:
                     _menuRenderer.DrawInitializationScreen();
                     break;
-                case GameState.MainMenu:
+                case GameFlowState.MainMenu:
                     ProcessMenuAction(_menuRenderer.DrawMainMenu(_splashReady));
                     break;
-                case GameState.Settings:
+                case GameFlowState.Settings:
                     ProcessMenuAction(_menuRenderer.DrawSettingsMenu(() => ApplySettings()));
                     break;
-                case GameState.Loading:
-                    _menuRenderer.DrawLoadingScreen(new LoadingScreenData(
-                        _loadingProgress, _loadingStageText,
-                        _loadingLoadedChunks, _loadingDesiredChunks,
-                        _loadingGeneratingChunks, _loadingEntities));
+                case GameFlowState.Loading:
+                    _menuRenderer.DrawLoadingScreen(_flow.Loading.ToScreenData(_terrainStreaming));
                     break;
-                case GameState.Playing:
-                    if (_showDebugOverlay) DrawDebugOverlay();
-                    if (_settings.Current.Debug.ShowPerformanceOverlay) DrawPerformanceOverlay();
-                    if (_settings.Current.Debug.ShowChunkBounds)
-                    {
-                        var cam = _playerEntity.GetComponent<CameraComponent>();
-                        _debugVizRenderer.DrawChunkBoundsOverlay(cam);
-                    }
-                    if (_settings.Current.Debug.ShowColliderRadii)
-                    {
-                        var cam = _playerEntity.GetComponent<CameraComponent>();
-                        _debugVizRenderer.DrawColliderRadiiOverlay(cam);
-                    }
-                    if (_settings.Current.General.ShowCrosshair) DrawCrosshair();
-                    DrawHotbar();
+                case GameFlowState.Playing:
+                    DrawPlayingOverlay();
                     break;
-                case GameState.Paused:
+                case GameFlowState.Paused:
                     _menuRenderer.DrawPauseOverlay();
                     ProcessMenuAction(_menuRenderer.DrawPauseMenu());
                     break;
             }
         }
 
+        private void DrawPlayingOverlay()
+        {
+            if (_showDebugOverlay) DrawDebugOverlay();
+            if (_settings.Current.Debug.ShowPerformanceOverlay) DrawPerformanceOverlay();
+            if (_settings.Current.Debug.ShowChunkBounds)
+            {
+                var cam = _playerEntity.GetComponent<CameraComponent>();
+                _debugVizRenderer.DrawChunkBoundsOverlay(cam);
+            }
+            if (_settings.Current.Debug.ShowColliderRadii)
+            {
+                var cam = _playerEntity.GetComponent<CameraComponent>();
+                _debugVizRenderer.DrawColliderRadiiOverlay(cam);
+            }
+            if (_settings.Current.General.ShowCrosshair) DrawCrosshair();
+            DrawHotbar();
+        }
+
         private void HandleInput(float dt)
         {
             _menuRenderer.BeginFrame(_input.IsMouseButtonReleased(InputKeys.MOUSE_BUTTON_LEFT));
 
-            if (_state == GameState.Settings && _menuRenderer.IsCapturingBinding)
+            if (_flow.State == GameFlowState.Settings && _menuRenderer.IsCapturingBinding)
             {
                 _menuRenderer.HandleBindingCaptureInput();
                 return;
@@ -352,66 +204,56 @@ namespace Veilborne.Core
 
             var keyboard = _settings.Current.Keyboard;
 
-            // Global toggles (available in all states)
             if (KeyBindingTokens.IsPressed(_input, keyboard.DebugOverlay))
             {
                 _showDebugOverlay = !_showDebugOverlay;
                 _settings.Update(s => s.Debug.ShowDebugOverlay = _showDebugOverlay);
             }
-            if (_input.IsKeyPressed(InputKeys.KEY_F10)) _graphics.RequestScreenshot();
-
-            // Toggle fullscreen on bound key press
+            if (_input.IsKeyPressed(InputKeys.KEY_F10))
+                _graphics.RequestScreenshot();
             if (KeyBindingTokens.IsPressed(_input, keyboard.Fullscreen))
             {
                 _settings.Update(s => s.Graphics.Fullscreen = !s.Graphics.Fullscreen);
                 ApplySettings();
             }
 
-            switch (_state)
+            switch (_flow.State)
             {
-                case GameState.MainMenu:
+                case GameFlowState.MainMenu:
                     if (_input.IsKeyPressed(InputKeys.KEY_ENTER))
                         StartGame();
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
-                        _requestedExit = true;
+                        _flow.RequestExit();
                     break;
 
-                case GameState.Loading:
+                case GameFlowState.Loading:
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
                     {
-                        if (_terrain is TerrainManager cancelTm)
-                            cancelTm.SetWarmupMode(false);
-                        _state = GameState.MainMenu;
-                        _loadingCompleteTime = 0;
-                        _loadingProgress = 0;
-                        _loadingStageText = "Preparing world";
-                        _loadingLoadedChunks = 0;
-                        _loadingDesiredChunks = 0;
-                        _loadingGeneratingChunks = 0;
-                        _loadingEntities = 0;
-                        _loadingPumpTask = null;
-                        _input.ShowCursor();
+                        var previous = _flow.State;
+                        _flow.CancelLoading(_terrainStreaming);
+                        SyncCursorAfterTransition(previous);
                     }
                     break;
 
-                case GameState.Playing:
+                case GameFlowState.Playing:
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
                     {
-                        _state = GameState.Paused;
-                        _input.ShowCursor();
-                        break;
+                        var previous = _flow.State;
+                        _flow.HandleEscapeKey(_terrainStreaming);
+                        SyncCursorAfterTransition(previous);
                     }
                     break;
 
-                case GameState.Paused:
+                case GameFlowState.Paused:
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
                     {
-                        _state = GameState.Playing;
-                        _input.HideCursor();
+                        var previous = _flow.State;
+                        _flow.HandleEscapeKey(_terrainStreaming);
+                        SyncCursorAfterTransition(previous);
                     }
                     break;
 
-                case GameState.Settings:
+                case GameFlowState.Settings:
                     _menuRenderer.HandleSettingsInput();
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
                         ReturnFromSettings();
@@ -421,16 +263,15 @@ namespace Veilborne.Core
 
         private void LoadUiAssets()
         {
-            _graphics.SetWindowIcon("logo.svg");
+            _graphics.SetWindowIcon("assets\\logo.svg");
             _menuRenderer.Initialize(_ui, _graphics);
             _debugVizRenderer.Initialize(_ui, _graphics);
-            // Load splash texture asynchronously to avoid blocking the first frame
             _splashReady = false;
             _ = Task.Run(() =>
             {
                 try
                 {
-                    _ui.RegisterSvgTexture(GameMenuRenderer.SplashTextureKey, "splash.svg", 2000, 1200);
+                    _ui.RegisterSvgTexture(GameMenuRenderer.SplashTextureKey, "assets\\splash.svg", 2000, 1200);
                 }
                 catch (Exception ex)
                 {
@@ -450,19 +291,8 @@ namespace Veilborne.Core
             cam.Target = Vector3.Zero;
             _playerEntity.SetComponent(cam);
 
-            // Begin loading/warmup
-            _state = GameState.Loading;
-            if (_terrain is TerrainManager tm)
-                tm.SetWarmupMode(true);
-            _log.Debug("State transition requested: {State}", _state);
-            _loadingProgress = 0;
-            _loadingStageText = "Preparing world";
-            _loadingLoadedChunks = 0;
-            _loadingDesiredChunks = 0;
-            _loadingGeneratingChunks = 0;
-            _loadingEntities = 0;
-            _loadingCompleteTime = 0;
-            _loadingPumpTask = null;
+            _flow.BeginLoading(_terrainStreaming);
+            _log.Debug("State transition requested: {State}", _flow.State);
         }
 
         private void LogBindings()
@@ -478,60 +308,51 @@ namespace Veilborne.Core
 
         private void LogStateTransition()
         {
-            if (_state == _lastLoggedState) return;
-            _lastLoggedState = _state;
-            _log.Debug("Game state: {State}", _state);
+            if (_flow.State == _lastLoggedState) return;
+            _lastLoggedState = _flow.State;
+            _log.Debug("Game state: {State}", _flow.State);
         }
 
         private void ProcessMenuAction(MenuAction action)
         {
-            switch (action)
-            {
-                case MenuAction.StartGame:
-                    StartGame();
-                    break;
-                case MenuAction.OpenSettings:
-                    OpenSettings(_state == GameState.Paused
-                        ? SettingsReturnState.Paused
-                        : SettingsReturnState.MainMenu);
-                    break;
-                case MenuAction.ExitApplication:
-                    _requestedExit = true;
-                    break;
-                case MenuAction.Resume:
-                    _state = GameState.Playing;
-                    _input.HideCursor();
-                    break;
-                case MenuAction.ExitToMenu:
-                    _state = GameState.MainMenu;
-                    _input.ShowCursor();
-                    break;
-                case MenuAction.Back:
-                    ReturnFromSettings();
-                    break;
-            }
-        }
+            if (action == MenuAction.None)
+                return;
 
-        private void OpenSettings(SettingsReturnState returnState)
-        {
-            _settingsReturnState = returnState;
-            _state = GameState.Settings;
-            _menuRenderer.ResetForSettings();
-            _input.ShowCursor();
+            var previous = _flow.State;
+            if (action == MenuAction.StartGame)
+                StartGame();
+            else
+            {
+                if (action == MenuAction.OpenSettings)
+                    _menuRenderer.ResetForSettings();
+                _flow.ApplyMenuAction(action, _terrainStreaming);
+            }
+
+            SyncCursorAfterTransition(previous);
         }
 
         private void ReturnFromSettings()
         {
-            _state = _settingsReturnState == SettingsReturnState.Paused ? GameState.Paused : GameState.MainMenu;
-            if (_state == GameState.Playing) _input.HideCursor();
-            else _input.ShowCursor();
+            var previous = _flow.State;
+            _flow.ReturnFromSettings();
+            SyncCursorAfterTransition(previous);
+        }
+
+        private void SyncCursorAfterTransition(GameFlowState previousState)
+        {
+            if (_flow.State == previousState)
+                return;
+
+            if (_flow.ShouldHideCursor())
+                _input.HideCursor();
+            else if (_flow.ShouldShowCursor())
+                _input.ShowCursor();
         }
 
         private void ApplySettings(bool initialApply = false)
         {
             var settings = _settings.Current;
             _graphics.SetTargetFps(settings.Graphics.TargetFps);
-
             _showDebugOverlay = settings.Debug.ShowDebugOverlay;
 
             if (!initialApply)
@@ -560,10 +381,7 @@ namespace Veilborne.Core
             _debugOverlayUi.Draw(_ui, cam);
         }
 
-        private void DrawPerformanceOverlay()
-        {
-            _debugOverlayUi.DrawPerformanceOverlay(_ui);
-        }
+        private void DrawPerformanceOverlay() => _debugOverlayUi.DrawPerformanceOverlay(_ui);
 
         private const float PerfLogIntervalSeconds = 5f;
 
@@ -625,6 +443,5 @@ namespace Veilborne.Core
             bool isHit = _crosshairEntity.TryGetComponent<UIElementComponent>(out var state) && state.Text == "hit";
             _hudUi.DrawCrosshair(_ui, _graphics.ScreenWidth, _graphics.ScreenHeight, isHit);
         }
-
     }
 }

@@ -1,7 +1,7 @@
 using System.Numerics;
-using Veilborne.Core.Interfaces;
+using Veilborne.Interfaces;
 
-namespace Veilborne.Core.UI
+namespace Veilborne.UI
 {
     public sealed class HudUiController
     {

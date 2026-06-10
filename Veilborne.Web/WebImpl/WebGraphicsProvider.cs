@@ -1,7 +1,7 @@
 using System.Numerics;
 using Microsoft.JSInterop;
-using Veilborne.Core.Ecs.Components;
-using Veilborne.Core.Interfaces;
+using Veilborne.Ecs.Components;
+using Veilborne.Interfaces;
 
 namespace Veilborne.Web.MonoGameImpl
 {

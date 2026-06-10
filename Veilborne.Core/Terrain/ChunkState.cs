@@ -1,4 +1,4 @@
-namespace Veilborne.Core.Terrain
+namespace Veilborne.Terrain
 {
     public enum ChunkState
     {
