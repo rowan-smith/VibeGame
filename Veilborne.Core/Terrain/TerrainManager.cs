@@ -659,16 +659,9 @@ namespace Veilborne.Terrain
                 }
             }
 
-            if (showLowLodRing && _lowLodRing is not null && showReadOnlyRing)
-            {
-                // Exclude LOD chunks fully covered by loaded RO chunks.
-                int roPerLod = Math.Max(1, (int)MathF.Round(lodChunkWorld / roChunkWorld));
-                foreach (var (lodCx, lodCz) in SnapshotKeysSafe(_lowLodRing.GetLoadedChunks()))
-                {
-                    if (IsParentChunkFullyCovered(lodCx, lodCz, roPerLod, readOnlyChunks))
-                        _lodExcludeScratch.Add((lodCx, lodCz));
-                }
-            }
+            // Keep LOD as a depth-biased fallback at ring boundaries. Excluding LOD when RO
+            // chunks are merely loaded leaves see-through gaps because RO streaming radius is
+            // smaller than a LOD chunk's world footprint.
 
             // Far
             if (showLowLodRing)
