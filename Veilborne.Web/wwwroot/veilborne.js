@@ -3,67 +3,8 @@ window.veilborne = {
     getCanvas: function() {
         return document.getElementById('veilborne-game-canvas');
     },
-    clearCanvas: function(color) {
-        const canvas = this.getCanvas();
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        ctx.save();
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.restore();
-    },
-    drawRect: function(x, y, w, h, color) {
-        const canvas = this.getCanvas();
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        ctx.save();
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, w, h);
-        ctx.restore();
-    },
-    drawLine: function(x1, y1, x2, y2, color) {
-        const canvas = this.getCanvas();
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        ctx.restore();
-    },
-    drawText: function(text, x, y, fontSize, color) {
-        const canvas = this.getCanvas();
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        ctx.save();
-        ctx.font = fontSize + 'px sans-serif';
-        ctx.fillStyle = color;
-        ctx.fillText(text, x, y);
-        ctx.restore();
-    },
-    drawImage: function(src, x, y, w, h) {
-        const canvas = this.getCanvas();
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const img = new window.Image();
-        img.onload = function() {
-            ctx.drawImage(img, x, y, w, h);
-        };
-        img.src = src;
-    },
     requestAnimationFrame: function(dotNetRef) {
-        if (!this._raWarn) { console.log("[JS] veilborne.requestAnimationFrame called"); this._raWarn = true; }
         function frame(ts) {
-            // Heartbeat log every 300 frames (approx 5 seconds)
-            if (!window._veilborneFrameCount) window._veilborneFrameCount = 0;
-            window._veilborneFrameCount++;
-            if (window._veilborneFrameCount % 300 === 0) {
-                console.log("[JS] requestAnimationFrame heartbeat - frame", window._veilborneFrameCount);
-            }
-
-            // Using synchronous invokeMethod for more predictable frame timing in Blazor WASM
             try {
                 if (typeof dotNetRef.invokeMethod === 'function') {
                     dotNetRef.invokeMethod('OnAnimationFrame', ts);
@@ -71,8 +12,7 @@ window.veilborne = {
                     dotNetRef.invokeMethodAsync('OnAnimationFrame', ts);
                 }
             } catch (e) {
-                console.error("[JS] Error invoking OnAnimationFrame", e);
-                // Fallback to async if sync fails or is not available
+                console.error('[veilborne] OnAnimationFrame error', e);
                 dotNetRef.invokeMethodAsync('OnAnimationFrame', ts);
             }
         }
@@ -85,21 +25,37 @@ window.veilborne = {
         window.addEventListener('keyup', e => {
             dotNetRef.invokeMethodAsync('OnKeyUp', e.keyCode);
         });
+
+        let pendingMouseX = -1;
+        let pendingMouseY = -1;
+        let mouseRafPending = false;
+
+        function flushMouseMove() {
+            mouseRafPending = false;
+            if (pendingMouseX < 0) return;
+            dotNetRef.invokeMethodAsync('OnMouseMove', pendingMouseX, pendingMouseY);
+            pendingMouseX = -1;
+            pendingMouseY = -1;
+        }
+
         window.addEventListener('mousemove', e => {
             const canvas = document.getElementById('veilborne-game-canvas');
             if (canvas) {
                 const rect = canvas.getBoundingClientRect();
-                // When using PIXI with resolution > 1, canvas.width is the physical resolution.
-                // rect.width is the CSS logical size.
-                // To get the game's logical coordinates (e.g. 1280x720), we need to account for devicePixelRatio.
-                const dpr = window.devicePixelRatio || 1;
-                const x = (e.clientX - rect.left) * (canvas.width / rect.width) / dpr;
-                const y = (e.clientY - rect.top) * (canvas.height / rect.height) / dpr;
-                dotNetRef.invokeMethodAsync('OnMouseMove', Math.round(x), Math.round(y));
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                pendingMouseX = Math.round((e.clientX - rect.left) * scaleX);
+                pendingMouseY = Math.round((e.clientY - rect.top) * scaleY);
             } else {
-                dotNetRef.invokeMethodAsync('OnMouseMove', e.clientX, e.clientY);
+                pendingMouseX = e.clientX;
+                pendingMouseY = e.clientY;
             }
-        });
+            if (!mouseRafPending) {
+                mouseRafPending = true;
+                window.requestAnimationFrame(flushMouseMove);
+            }
+        }, { passive: true });
+
         window.addEventListener('mousedown', e => {
             dotNetRef.invokeMethodAsync('OnMouseDown', e.button);
         });
@@ -107,16 +63,28 @@ window.veilborne = {
             dotNetRef.invokeMethodAsync('OnMouseUp', e.button);
         });
         window.addEventListener('wheel', e => {
-            // Negate deltaY to match engine's scroll direction (positive = away/up, negative = towards/down)
             dotNetRef.invokeMethodAsync('OnMouseWheel', -e.deltaY);
-        });
+        }, { passive: true });
     },
+    _measureCanvas: null,
+    _measureCtx: null,
+    _textWidthCache: {},
     measureText: function(text, fontSize) {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.font = fontSize + 'px Arial';
-        const metrics = ctx.measureText(text);
-        return Math.ceil(metrics.width);
+        const key = text + '|' + fontSize;
+        if (this._textWidthCache[key] !== undefined) {
+            return this._textWidthCache[key];
+        }
+        if (!this._measureCanvas) {
+            this._measureCanvas = document.createElement('canvas');
+            this._measureCtx = this._measureCanvas.getContext('2d');
+        }
+        this._measureCtx.font = fontSize + 'px Arial';
+        const width = Math.ceil(this._measureCtx.measureText(text).width);
+        this._textWidthCache[key] = width;
+        return width;
+    },
+    drawLine: function(x1, y1, x2, y2, color) {
+        window.veilborne.pixi.executeBatch([{ t: 4, x: x1, y: y1, w: x2, h: y2, c: color }]);
     },
     // --- PIXIJS INTEGRATION ---
     pixi: {
@@ -124,13 +92,17 @@ window.veilborne = {
         textures: {},
         failed: false,
         _lastCanvasWarn: 0,
-        _frameCount: 0,
+        _pools: { graphics: [], texts: [], sprites: [] },
+        _poolIdx: { g: 0, t: 0, s: 0 },
+        _cappedDpr: function() {
+            return Math.min(window.devicePixelRatio || 1, 1.5);
+        },
         ensureApp: function() {
             if (this.failed) return null;
             const canvas = document.getElementById('veilborne-game-canvas');
             if (!canvas) {
                 if (!this._lastCanvasWarn || Date.now() - this._lastCanvasWarn > 2000) {
-                    console.warn("[PIXI] Canvas 'veilborne-game-canvas' not found in DOM.");
+                    console.warn('[PIXI] Canvas not found.');
                     this._lastCanvasWarn = Date.now();
                 }
                 return null;
@@ -139,49 +111,41 @@ window.veilborne = {
             if (this.app) {
                 const appCanvas = this.app.view || this.app.renderer.view;
                 if (appCanvas !== canvas) {
-                    console.log("[PIXI] Canvas element changed, re-initializing PixiJS app.");
                     try {
                         this.app.destroy(false, { children: true });
                     } catch (e) {
-                        console.error("[PIXI] Error destroying old app", e);
+                        console.error('[PIXI] destroy error', e);
                     }
                     this.app = null;
+                    this._pools = { graphics: [], texts: [], sprites: [] };
+                    this._poolIdx = { g: 0, t: 0, s: 0 };
                 } else {
                     return this.app;
                 }
             }
 
+            const opts = {
+                view: canvas,
+                canvas: canvas,
+                width: canvas.width || 1280,
+                height: canvas.height || 720,
+                backgroundColor: 0x0F1216,
+                antialias: false,
+                resolution: this._cappedDpr(),
+                autoDensity: true,
+                autoStart: false
+            };
+
             try {
-                console.log("[PIXI] Initializing Application on canvas", canvas.id, canvas.width, "x", canvas.height);
-                // PIXI v7 uses 'view', PIXI v8 uses 'canvas'
-                this.app = new PIXI.Application({
-                    view: canvas,
-                    canvas: canvas, 
-                    width: canvas.width || 1280,
-                    height: canvas.height || 720,
-                    backgroundColor: 0x0F1216,
-                    antialias: true,
-                    resolution: window.devicePixelRatio || 1,
-                    autoDensity: true,
-                    hello: true,
-                    autoStart: false
-                });
-                console.log("[PIXI] Application initialized successfully (autoStart: false). Version:", PIXI.VERSION);
+                this.app = new PIXI.Application(opts);
             } catch (e) {
-                console.warn("[PIXI] WebGL initialization failed, trying canvas fallback", e);
                 try {
                     this.app = new PIXI.Application({
-                        view: canvas,
-                        canvas: canvas,
-                        width: canvas.width || 1280,
-                        height: canvas.height || 720,
-                        backgroundColor: 0x0F1216,
-                        forceCanvas: true,
-                        autoStart: false
+                        ...opts,
+                        forceCanvas: true
                     });
-                    console.log("[PIXI] Application initialized successfully with canvas fallback");
                 } catch (e2) {
-                    console.error("[PIXI] Rendering initialization failed entirely", e2);
+                    console.error('[PIXI] init failed', e2);
                     this.failed = true;
                     return null;
                 }
@@ -194,7 +158,6 @@ window.veilborne = {
                 if (color.startsWith('#')) {
                     return parseInt(color.substring(1), 16);
                 }
-                // Handle named colors if necessary, or just hex without #
                 const val = parseInt(color, 16);
                 if (!isNaN(val)) return val;
             }
@@ -203,41 +166,20 @@ window.veilborne = {
         registerTexture: function(key, src, width, height) {
             if (this.failed) return;
             try {
-                console.log(`[PIXI] Registering texture: ${key} from ${src} (${width}x${height})`);
-                
-                // For SVGs in Pixi v7, we can specify resource options
                 const options = {};
                 if (src.toLowerCase().endsWith('.svg') && width && height) {
-                    options.resourceOptions = {
-                        width: width,
-                        height: height
-                    };
+                    options.resourceOptions = { width: width, height: height };
                 }
-                
                 const tex = PIXI.Texture.from(src, options);
                 this.textures[key] = tex;
-                
-                if (tex.baseTexture) {
-                    if (tex.baseTexture.valid) {
-                        console.log(`[PIXI] Texture ${key} already valid: ${tex.width}x${tex.height}`);
-                    } else {
-                        tex.baseTexture.on('loaded', () => {
-                            console.log(`[PIXI] Texture ${key} loaded successfully: ${tex.width}x${tex.height}`);
-                        });
-                        tex.baseTexture.on('error', (err) => {
-                            console.error(`[PIXI] Failed to load texture ${key} from ${src}`, err);
-                        });
-                    }
-                }
             } catch (e) {
-                console.error(`[PIXI] Error registering texture ${key}`, e);
+                console.error('[PIXI] registerTexture error', key, e);
             }
         },
         hasTexture: function(key) {
             if (this.failed) return false;
             const tex = this.textures[key];
-            const isValid = !!(tex && tex.baseTexture && tex.baseTexture.valid);
-            return isValid;
+            return !!(tex && tex.baseTexture && tex.baseTexture.valid);
         },
         getTextureSize: function(key) {
             if (this.failed) return { width: 0, height: 0 };
@@ -247,100 +189,155 @@ window.veilborne = {
             }
             return { width: 0, height: 0 };
         },
+        setBackground: function(color) {
+            const app = this.ensureApp();
+            if (!app) return;
+            const hexColor = this.parseColor(color);
+            if (app.renderer.background) {
+                app.renderer.background.color = hexColor;
+            } else if (app.renderer.backgroundColor !== undefined) {
+                app.renderer.backgroundColor = hexColor;
+            }
+        },
         clear: function(color) {
-            const app = this.ensureApp();
-            if (!app) return;
-            try {
-                const hexColor = this.parseColor(color);
-                if (app.renderer.background) {
-                    app.renderer.background.color = hexColor;
-                } else if (app.renderer.backgroundColor !== undefined) {
-                    app.renderer.backgroundColor = hexColor;
-                }
-            } catch (e) {
-                console.error("[PIXI] Failed to set background color", e);
-            }
-            app.stage.removeChildren();
+            this.setBackground(color);
+            this.clearStage();
         },
-        drawRect: function(x, y, w, h, color) {
-            const app = this.ensureApp();
-            if (!app) return;
-            const hexColor = this.parseColor(color);
+        _resetPoolIndices: function() {
+            this._poolIdx = { g: 0, t: 0, s: 0 };
+        },
+        _hideUnusedPool: function() {
+            for (let i = this._poolIdx.g; i < this._pools.graphics.length; i++) {
+                this._pools.graphics[i].visible = false;
+            }
+            for (let i = this._poolIdx.t; i < this._pools.texts.length; i++) {
+                this._pools.texts[i].visible = false;
+            }
+            for (let i = this._poolIdx.s; i < this._pools.sprites.length; i++) {
+                this._pools.sprites[i].visible = false;
+            }
+        },
+        _getGraphics: function() {
+            const app = this.app;
+            const idx = this._poolIdx.g++;
+            if (idx < this._pools.graphics.length) {
+                const g = this._pools.graphics[idx];
+                g.clear();
+                g.visible = true;
+                return g;
+            }
             const g = new PIXI.Graphics();
-            g.beginFill(hexColor);
-            g.drawRect(x, y, w, h);
-            g.endFill();
             app.stage.addChild(g);
+            this._pools.graphics.push(g);
+            return g;
         },
-        drawText: function(text, x, y, fontSize, color, fontFamily) {
-            const app = this.ensureApp();
-            if (!app) return;
-            const hexColor = this.parseColor(color);
-            
-            if (this._frameCount % 60 === 0) {
-                console.log(`[PIXI] Drawing text: "${text}" at (${x}, ${y}) size ${fontSize} color ${color}`);
+        _getText: function() {
+            const app = this.app;
+            const idx = this._poolIdx.t++;
+            if (idx < this._pools.texts.length) {
+                const t = this._pools.texts[idx];
+                t.visible = true;
+                return t;
             }
-            
-            // PIXI.Text can be slow to create every frame, but for a menu it's usually okay.
-            // In a real game we would pool these or use BitmapText.
-            const style = new PIXI.TextStyle({ 
-                fontSize: fontSize, 
-                fill: hexColor, 
-                fontFamily: fontFamily || 'Arial',
-                fontWeight: 'bold'
-            });
-            const t = new PIXI.Text(text, style);
-            t.x = x; t.y = y;
+            const t = new PIXI.Text('', { fontFamily: 'Arial', fontWeight: 'bold' });
             app.stage.addChild(t);
+            this._pools.texts.push(t);
+            return t;
         },
-        drawImage: function(key, x, y, w, h) {
-            const app = this.ensureApp();
-            if (!app) return;
-            const tex = this.textures[key];
-            
-            if (this._frameCount % 60 === 0) {
-                console.log(`[PIXI] Drawing image: ${key} at (${x}, ${y}) size ${w}x${h}. Valid: ${!!(tex && tex.baseTexture && tex.baseTexture.valid)}`);
+        _getSprite: function() {
+            const app = this.app;
+            const idx = this._poolIdx.s++;
+            if (idx < this._pools.sprites.length) {
+                const s = this._pools.sprites[idx];
+                s.visible = true;
+                return s;
             }
-            
-            if (!tex || !tex.baseTexture || !tex.baseTexture.valid) {
-                // If we attempted to draw an invalid texture, draw a placeholder
-                this.drawRect(x, y, w, h, "#333333");
-                return;
-            }
-            const sprite = new PIXI.Sprite(tex);
-            sprite.x = x; sprite.y = y; sprite.width = w; sprite.height = h;
-            app.stage.addChild(sprite);
+            const s = new PIXI.Sprite();
+            app.stage.addChild(s);
+            this._pools.sprites.push(s);
+            return s;
         },
         clearStage: function() {
+            this._resetPoolIndices();
+            this._hideUnusedPool();
+        },
+        executeBatch: function(commands) {
             const app = this.ensureApp();
-            if (!app) return;
-            app.stage.removeChildren();
+            if (!app || !commands || commands.length === 0) return;
+
+            for (let i = 0; i < commands.length; i++) {
+                const c = commands[i];
+                const t = c.t;
+                if (t === 0) {
+                    const g = this._getGraphics();
+                    const hex = this.parseColor(c.c);
+                    g.beginFill(hex);
+                    g.drawRect(c.x, c.y, c.w, c.h);
+                    g.endFill();
+                } else if (t === 1) {
+                    const txt = this._getText();
+                    const hex = this.parseColor(c.c);
+                    txt.text = c.s;
+                    txt.style.fontSize = c.f || 16;
+                    txt.style.fill = hex;
+                    txt.style.fontFamily = 'Arial';
+                    txt.style.fontWeight = 'bold';
+                    txt.x = c.x;
+                    txt.y = c.y;
+                } else if (t === 2) {
+                    const tex = this.textures[c.s];
+                    if (!tex || !tex.baseTexture || !tex.baseTexture.valid) {
+                        const g = this._getGraphics();
+                        g.beginFill(0x333333);
+                        g.drawRect(c.x, c.y, c.w, c.h);
+                        g.endFill();
+                    } else {
+                        const sprite = this._getSprite();
+                        sprite.texture = tex;
+                        sprite.x = c.x;
+                        sprite.y = c.y;
+                        sprite.width = c.w;
+                        sprite.height = c.h;
+                    }
+                } else if (t === 3) {
+                    const hex = this.parseColor(c.c);
+                    const x = c.x, y = c.y, w = c.w, h = c.h;
+                    const g = this._getGraphics();
+                    g.beginFill(hex);
+                    g.drawRect(x, y, w, 2);
+                    g.drawRect(x, y, 2, h);
+                    g.drawRect(x + w - 2, y, 2, h);
+                    g.drawRect(x, y + h - 2, w, 2);
+                    g.endFill();
+                } else if (t === 4) {
+                    const g = this._getGraphics();
+                    const hex = this.parseColor(c.c);
+                    g.lineStyle(1, hex);
+                    g.moveTo(c.x, c.y);
+                    g.lineTo(c.w, c.h);
+                }
+            }
+        },
+        drawRect: function(x, y, w, h, color) {
+            this.executeBatch([{ t: 0, x: x, y: y, w: w, h: h, c: color }]);
+        },
+        drawText: function(text, x, y, fontSize, color) {
+            this.executeBatch([{ t: 1, x: x, y: y, f: fontSize, c: color, s: text }]);
+        },
+        drawImage: function(key, x, y, w, h) {
+            this.executeBatch([{ t: 2, x: x, y: y, w: w, h: h, s: key }]);
         },
         present: function() {
             const app = this.ensureApp();
             if (!app || this.failed) return;
             try {
-                this._frameCount++;
-                if (this._frameCount % 60 === 0) {
-                    console.log(`[PIXI] Frame ${this._frameCount}, Stage children: ${app.stage.children.length}`);
-                }
-                
-                // Debug: Draw a red dot in the top-left for the first few frames to verify rendering
-                if (this._frameCount < 300) {
-                    const g = new PIXI.Graphics();
-                    g.beginFill(0xFF0000);
-                    g.drawCircle(10, 10, 5);
-                    g.endFill();
-                    app.stage.addChild(g);
-                }
-
                 if (typeof app.render === 'function') {
                     app.render();
                 } else {
                     app.renderer.render(app.stage);
                 }
             } catch (e) {
-                console.error("[PIXI] Error during manual render()", e);
+                console.error('[PIXI] render error', e);
             }
         }
     }

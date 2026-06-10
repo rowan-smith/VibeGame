@@ -31,7 +31,7 @@ internal static class Program
             typeof(Serilog.ConsoleLoggerConfigurationExtensions).Assembly);
 
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Verbose()
+            .MinimumLevel.Information()
             .ReadFrom.Configuration(builder.Configuration, options)
             .WriteTo.BrowserConsole()
             .WriteTo.Console(outputTemplate: "[{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
@@ -53,11 +53,15 @@ internal static class Program
         builder.Services.AddVeilborneCoreServices();
 
         // 2. Register Web-specific implementations as overrides
-        builder.Services.AddSingleton<IGraphicsProvider, WebGraphicsProvider>();
-        builder.Services.AddSingleton<IGameLoopHost, WebGameLoopHost>();
-        builder.Services.AddSingleton<IUiProvider>(sp => new WebUiProvider(
+        builder.Services.AddSingleton<WebUiProvider>(sp => new WebUiProvider(
             sp.GetRequiredService<Microsoft.JSInterop.IJSRuntime>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<WebUiProvider>>()
+        ));
+        builder.Services.AddSingleton<IUiProvider>(sp => sp.GetRequiredService<WebUiProvider>());
+        builder.Services.AddSingleton<IGraphicsProvider, WebGraphicsProvider>();
+        builder.Services.AddSingleton<IGameLoopHost>(sp => new WebGameLoopHost(
+            sp.GetRequiredService<Microsoft.JSInterop.IJSRuntime>(),
+            sp.GetRequiredService<IUiProvider>()
         ));
         builder.Services.AddSingleton<IInputProvider, WebInputProvider>();
         builder.Services.AddSingleton<IEcsRuntime>(sp => new WebEcsRuntime(

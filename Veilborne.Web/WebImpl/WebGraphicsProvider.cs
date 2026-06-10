@@ -29,9 +29,8 @@ namespace Veilborne.Web.MonoGameImpl
         public void End3D() { }
         public void Clear(Vector3 color)
         {
-            // Use PixiJS to clear the stage/background
             string cssColor = $"#{((int)(color.X*255)):X2}{((int)(color.Y*255)):X2}{((int)(color.Z*255)):X2}";
-            _jsSync.InvokeVoid("veilborne.pixi.clear", cssColor);
+            _jsSync.InvokeVoid("veilborne.pixi.setBackground", cssColor);
         }
         public void SetSkyClearColor(Vector3 color) { }
         public void DrawCube(Vector3 position, Vector3 size, Vector3 color) { }
