@@ -219,20 +219,16 @@ namespace Veilborne.Terrain
 
             int baseEdit = _cfg.EditableRadius;
             int baseRO = _cfg.ReadOnlyRadius;
-            int baseLOD = _cfg.LowLodRadius;
             int queueHint = Math.Max(0, queueRadiusHint);
             if (queueHint > 0)
-            {
                 baseRO = Math.Max(baseRO, queueHint);
-                baseLOD = Math.Max(baseLOD, queueHint + 2);
-            }
 
             // Scale ring radii by user's terrain view distance setting
             float viewScale = _settings.Current.Graphics.TerrainViewDistance / 100f;
             baseRO = Math.Max(1, (int)MathF.Round(baseRO * viewScale));
-            baseLOD = Math.Max(2, (int)MathF.Round(baseLOD * viewScale));
+            int baseLOD = ComputeLowLodRadiusChunks(viewScale);
             int maxRO = Math.Max(2, (int)MathF.Round(_cfg.MaxReadOnly * viewScale));
-            int maxLod = Math.Max(3, (int)MathF.Round(_cfg.MaxLowLod * viewScale));
+            int maxLod = Math.Max(baseLOD, baseLOD + 1);
 
             // Editable: keep tight around player, slight expansion if moving very fast
             int e = baseEdit + (speedChunks > 3f ? 1 : 0);
@@ -264,11 +260,12 @@ namespace Veilborne.Terrain
 
             // During loading-screen warmup, keep radii deterministic and disable
             // adaptive thrash so progress can converge and complete cleanly.
+            // LOD is deferred until gameplay; it streams in once warmup ends.
             if (_isWarmupMode)
             {
                 e = Clamp(baseEdit, _cfg.MinEditable, _cfg.MaxEditable);
                 ro = Clamp(baseRO, _cfg.MinReadOnly, _cfg.MaxReadOnly);
-                lod = Clamp(Math.Max(baseLOD, ro + 1), _cfg.MinLowLod, _cfg.MaxLowLod);
+                lod = 0;
             }
 
             // Debounce: if camera hasn't moved perceptibly, keep previous radii to avoid thrashing
@@ -319,7 +316,7 @@ namespace Veilborne.Terrain
                 _readOnlyRing.UpdateAround(predictedPos, ro + 1);
             }
 
-            if (_lowLodRing is not null)
+            if (_lowLodRing is not null && lod > 0)
             {
                 // Continuity-first: never exclude inner LOD by RO radius.
                 // We allow overlap and resolve visibility with depth testing to avoid sky gaps.
@@ -755,32 +752,53 @@ namespace Veilborne.Terrain
             int generatingReadOnly = showReadOnlyRing ? _readOnlyRing.GeneratingChunkCount : 0;
             int generatingLod = (_lowLodRing is not null && showLowLodRing) ? _lowLodRing.GeneratingChunkCount : 0;
             int generatingEditable = _editableRing.GeneratingChunkCount;
-            int generatingTotal = generatingEditable + generatingReadOnly + generatingLod;
+            int generatingPlayable = generatingEditable + generatingReadOnly;
             int loadedEntities = showReadOnlyRing ? _readOnlyRing.LoadedEntityCount : 0;
             int pendingSpawnObjects = _editableRing.PendingSpawnObjectCount + (showReadOnlyRing ? _readOnlyRing.PendingSpawnObjectCount : 0);
 
-            int desiredTotal = desiredEditable + desiredReadOnly + desiredLod;
-            int loadedTotal = loadedEditable + loadedReadOnly + loadedLod;
+            int desiredPlayable = desiredEditable + desiredReadOnly;
+            int loadedPlayable = loadedEditable + loadedReadOnly;
 
-            float chunkProgress = desiredTotal > 0
-                ? Math.Clamp(loadedTotal / (float)desiredTotal, 0f, 1f)
+            float chunkProgress = desiredPlayable > 0
+                ? Math.Clamp(loadedPlayable / (float)desiredPlayable, 0f, 1f)
                 : 1f;
             float entityProgress = pendingSpawnObjects <= 0 ? 1f : 0f;
             float progress = chunkProgress * 0.88f + entityProgress * 0.12f;
-            if (generatingTotal == 0 && pendingSpawnObjects == 0 && loadedTotal >= desiredTotal)
+            if (generatingPlayable == 0 && pendingSpawnObjects == 0 && loadedPlayable >= desiredPlayable)
                 progress = 1f;
 
             string stage;
-            if (desiredTotal == 0) stage = "Preparing world";
+            if (desiredPlayable == 0) stage = "Preparing world";
             else if (loadedEditable < desiredEditable || generatingEditable > 0) stage = "Generating terrain: editable";
             else if (loadedReadOnly < desiredReadOnly || generatingReadOnly > 0) stage = "Generating terrain: read-only";
-            else if (loadedLod < desiredLod || generatingLod > 0) stage = "Generating terrain: distant LOD";
             else if (pendingSpawnObjects > 0) stage = "Spawning world objects";
             else if (loadedEntities <= 0) stage = "Adding entities and POIs";
-            else if (generatingTotal > 0) stage = "Baking lighting and finishing";
             else stage = "Complete";
 
-            return new TerrainLoadingProgress(progress, stage, desiredTotal, loadedTotal, generatingTotal, loadedEntities, pendingSpawnObjects);
+            return new TerrainLoadingProgress(
+                progress,
+                stage,
+                desiredPlayable,
+                loadedPlayable,
+                generatingPlayable,
+                loadedEntities,
+                pendingSpawnObjects,
+                desiredLod,
+                loadedLod);
+        }
+
+        private int ComputeLowLodRadiusChunks(float viewScale)
+        {
+            if (_lowLodRing is null)
+                return 0;
+
+            float drawMeters = _configService.Config.TerrainRuntime.MaxTerrainDrawDistance * viewScale;
+            float chunkWorldSize = _lowLodRing.ChunkSize * _lowLodRing.TileSize;
+            if (chunkWorldSize <= 0f)
+                return 1;
+
+            int fromDraw = Math.Max(1, (int)MathF.Ceiling(drawMeters / chunkWorldSize));
+            return Math.Clamp(fromDraw, 1, _cfg.MaxLowLod);
         }
 
         public void SetWarmupMode(bool enabled)

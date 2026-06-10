@@ -6,6 +6,7 @@ namespace Veilborne.GameFlow
 {
     /// <summary>
     /// Tracks terrain warmup progress while the loading screen is visible.
+    /// Gameplay starts once playable rings (editable + read-only) are ready; LOD streams afterward.
     /// </summary>
     public sealed class LoadingSessionController
     {
