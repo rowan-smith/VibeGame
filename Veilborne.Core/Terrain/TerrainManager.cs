@@ -226,9 +226,10 @@ namespace Veilborne.Terrain
             // Scale ring radii by user's terrain view distance setting
             float viewScale = _settings.Current.Graphics.TerrainViewDistance / 100f;
             baseRO = Math.Max(1, (int)MathF.Round(baseRO * viewScale));
-            int baseLOD = ComputeLowLodRadiusChunks(viewScale);
+            int lodDrawCap = ComputeLowLodRadiusChunks(viewScale);
+            int baseLOD = lodDrawCap;
             int maxRO = Math.Max(2, (int)MathF.Round(_cfg.MaxReadOnly * viewScale));
-            int maxLod = Math.Max(baseLOD, baseLOD + 1);
+            int maxLod = Math.Max(1, lodDrawCap + 1);
 
             // Editable: keep tight around player, slight expansion if moving very fast
             int e = baseEdit + (speedChunks > 3f ? 1 : 0);
@@ -239,33 +240,31 @@ namespace Veilborne.Terrain
             ro -= (int)MathF.Round(perfDeficit * 3f);
             ro = Clamp(ro, _cfg.MinReadOnly, maxRO);
 
-            // Low LOD: larger expansion with speed; also contract on perf
-            int lod = baseLOD + (int)MathF.Round(speedChunks * 2.0f) - (int)MathF.Round((density - 0.5f) * _cfg.DensityPenalty);
+            // Low LOD: capped to terrain draw distance; overlap with read-only is fine (depth-tested).
+            int lod = baseLOD + (int)MathF.Round(speedChunks * 1.0f) - (int)MathF.Round((density - 0.5f) * _cfg.DensityPenalty);
             lod -= (int)MathF.Round(perfDeficit * 5f);
-            lod = Math.Max(lod, ro + 1); // ensure far ring stays outside mid ring
-            lod = Clamp(lod, _cfg.MinLowLod, maxLod);
+            lod = Clamp(lod, 1, maxLod);
 
             // Hard safety clamps when under load; high configured radii can otherwise spike badly while moving.
             if (perfDeficit > 0.20f)
             {
                 ro = Math.Min(ro, 3);
-                lod = Math.Min(lod, 5);
+                lod = Math.Min(lod, Math.Min(5, maxLod));
             }
             else if (perfDeficit > 0.08f || _speedMps > 2.5f)
             {
                 ro = Math.Min(ro, 4);
-                lod = Math.Min(lod, 7);
+                lod = Math.Min(lod, Math.Min(7, maxLod));
             }
-            lod = Math.Max(lod, ro + 1);
 
             // During loading-screen warmup, keep radii deterministic and disable
             // adaptive thrash so progress can converge and complete cleanly.
-            // LOD is deferred until gameplay; it streams in once warmup ends.
+            // Playable rings gate entry; LOD uses draw-distance radius and streams in the background.
             if (_isWarmupMode)
             {
                 e = Clamp(baseEdit, _cfg.MinEditable, _cfg.MaxEditable);
                 ro = Clamp(baseRO, _cfg.MinReadOnly, _cfg.MaxReadOnly);
-                lod = 0;
+                lod = Clamp(lodDrawCap, 1, maxLod);
             }
 
             // Debounce: if camera hasn't moved perceptibly, keep previous radii to avoid thrashing

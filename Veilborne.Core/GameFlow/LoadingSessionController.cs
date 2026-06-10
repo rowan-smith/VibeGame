@@ -87,7 +87,18 @@ namespace Veilborne.GameFlow
             return CompleteTime >= CompletionDelaySeconds;
         }
 
-        public LoadingScreenData ToScreenData()
-            => new(Progress, StageText, LoadedChunks, DesiredChunks, GeneratingChunks, LoadedEntities);
+        public LoadingScreenData ToScreenData(ITerrainStreaming terrainStreaming)
+        {
+            var loading = terrainStreaming.GetLoadingProgress();
+            return new(
+                Progress,
+                StageText,
+                LoadedChunks,
+                DesiredChunks,
+                GeneratingChunks,
+                LoadedEntities,
+                loading.LoadedBackgroundChunks,
+                loading.DesiredBackgroundChunks);
+        }
     }
 }

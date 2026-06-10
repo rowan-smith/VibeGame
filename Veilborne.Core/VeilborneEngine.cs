@@ -162,7 +162,7 @@ namespace Veilborne
                     ProcessMenuAction(_menuRenderer.DrawSettingsMenu(() => ApplySettings()));
                     break;
                 case GameFlowState.Loading:
-                    _menuRenderer.DrawLoadingScreen(_flow.Loading.ToScreenData());
+                    _menuRenderer.DrawLoadingScreen(_flow.Loading.ToScreenData(_terrainStreaming));
                     break;
                 case GameFlowState.Playing:
                     DrawPlayingOverlay();
