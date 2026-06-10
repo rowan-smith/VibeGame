@@ -602,37 +602,39 @@ namespace Veilborne.Terrain
 
             _roExcludeScratch.Clear();
             _lodExcludeScratch.Clear();
-            // Always exclude areas covered by editable chunks from RO/LOD rendering.
-            // If editable ring is hidden for debugging, nearby space should remain empty
-            // instead of being filled by stale RO/LOD meshes.
-            var editableChunks = _editableRing.GetLoadedChunks();
-
-            // Exclude RO and LOD chunks that overlap editable chunks.
-            var editableChunkKeys = SnapshotKeysSafe(editableChunks);
-            foreach (var (ecx, ecz) in editableChunkKeys)
+            // Only exclude RO/LOD under editable chunks when the editable ring is hidden for
+            // debugging. Editable chunks are 32m while RO/LOD chunks are 128m/512m, so excluding
+            // an entire RO/LOD chunk for partial editable overlap leaves uncovered gaps that show
+            // as sky holes. When editable is visible it renders last and depth testing resolves overlap.
+            if (!showEditableRing)
             {
-                float eMinX = ecx * eChunkWorld;
-                float eMinZ = ecz * eChunkWorld;
-                float eMaxX = eMinX + eChunkWorld;
-                float eMaxZ = eMinZ + eChunkWorld;
-
-                int roMinX = (int)MathF.Floor(eMinX / roChunkWorld);
-                int roMaxX = (int)MathF.Floor((eMaxX - 1e-3f) / roChunkWorld);
-                int roMinZ = (int)MathF.Floor(eMinZ / roChunkWorld);
-                int roMaxZ = (int)MathF.Floor((eMaxZ - 1e-3f) / roChunkWorld);
-                for (int cz = roMinZ; cz <= roMaxZ; cz++)
-                for (int cx = roMinX; cx <= roMaxX; cx++)
-                    _roExcludeScratch.Add((cx, cz));
-
-                if (_lowLodRing is not null)
+                var editableChunks = _editableRing.GetLoadedChunks();
+                var editableChunkKeys = SnapshotKeysSafe(editableChunks);
+                foreach (var (ecx, ecz) in editableChunkKeys)
                 {
-                    int lodMinX = (int)MathF.Floor(eMinX / lodChunkWorld);
-                    int lodMaxX = (int)MathF.Floor((eMaxX - 1e-3f) / lodChunkWorld);
-                    int lodMinZ = (int)MathF.Floor(eMinZ / lodChunkWorld);
-                    int lodMaxZ = (int)MathF.Floor((eMaxZ - 1e-3f) / lodChunkWorld);
-                    for (int cz = lodMinZ; cz <= lodMaxZ; cz++)
-                    for (int cx = lodMinX; cx <= lodMaxX; cx++)
-                        _lodExcludeScratch.Add((cx, cz));
+                    float eMinX = ecx * eChunkWorld;
+                    float eMinZ = ecz * eChunkWorld;
+                    float eMaxX = eMinX + eChunkWorld;
+                    float eMaxZ = eMinZ + eChunkWorld;
+
+                    int roMinX = (int)MathF.Floor(eMinX / roChunkWorld);
+                    int roMaxX = (int)MathF.Floor((eMaxX - 1e-3f) / roChunkWorld);
+                    int roMinZ = (int)MathF.Floor(eMinZ / roChunkWorld);
+                    int roMaxZ = (int)MathF.Floor((eMaxZ - 1e-3f) / roChunkWorld);
+                    for (int cz = roMinZ; cz <= roMaxZ; cz++)
+                    for (int cx = roMinX; cx <= roMaxX; cx++)
+                        _roExcludeScratch.Add((cx, cz));
+
+                    if (_lowLodRing is not null)
+                    {
+                        int lodMinX = (int)MathF.Floor(eMinX / lodChunkWorld);
+                        int lodMaxX = (int)MathF.Floor((eMaxX - 1e-3f) / lodChunkWorld);
+                        int lodMinZ = (int)MathF.Floor(eMinZ / lodChunkWorld);
+                        int lodMaxZ = (int)MathF.Floor((eMaxZ - 1e-3f) / lodChunkWorld);
+                        for (int cz = lodMinZ; cz <= lodMaxZ; cz++)
+                        for (int cx = lodMinX; cx <= lodMaxX; cx++)
+                            _lodExcludeScratch.Add((cx, cz));
+                    }
                 }
             }
 
@@ -734,6 +736,8 @@ namespace Veilborne.Terrain
                 : Math.Max(1, _cfg.MaxMeshBuildsPerFrame);
             _renderer.ProcessBuildQueue(budget);
         }
+
+        public void ProcessPendingMeshBuilds() => ProcessBuildQueueOnly();
 
         public TerrainLoadingProgress GetLoadingProgress()
         {
