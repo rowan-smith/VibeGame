@@ -172,8 +172,10 @@ namespace Veilborne
                 TargetCameraEntityId = _playerEntity.Id,
                 Visible = true
             });
+            _uiCanvasEntity.AddComponent(new ChildrenComponent { EntityIds = [] });
 
             _crosshairEntity = _entities.CreateEntity();
+            _crosshairEntity.AddComponent(new ParentComponent { EntityId = _uiCanvasEntity.Id });
             _crosshairEntity.AddComponent(new UIElementKindComponent { Kind = "Crosshair" });
             _crosshairEntity.AddComponent(new UIElementComponent
             {

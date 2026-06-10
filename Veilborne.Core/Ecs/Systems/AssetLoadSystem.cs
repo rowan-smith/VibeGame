@@ -9,6 +9,7 @@ namespace Veilborne.Ecs.Systems
     {
         private readonly EntityRegistry _entities;
         private readonly BiomeAssetTracker _tracker;
+        private readonly List<Entity> _processedRequests = new();
 
         public AssetLoadSystem(EntityRegistry entities, BiomeAssetTracker tracker)
         {
@@ -18,7 +19,10 @@ namespace Veilborne.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var reqEntity in _entities.GetEntitiesWith<BiomeLoadRequestComponent>())
+            _processedRequests.Clear();
+            _entities.ForEachWith<BiomeLoadRequestComponent>(entity => _processedRequests.Add(entity));
+
+            foreach (var reqEntity in _processedRequests)
             {
                 var req = reqEntity.GetComponent<BiomeLoadRequestComponent>();
                 if (string.IsNullOrWhiteSpace(req.BiomeId))
@@ -48,4 +52,3 @@ namespace Veilborne.Ecs.Systems
         }
     }
 }
-

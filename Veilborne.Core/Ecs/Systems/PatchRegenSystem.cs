@@ -1,5 +1,4 @@
 using Veilborne.Ecs.Components;
-using Veilborne.Interfaces;
 
 namespace Veilborne.Ecs.Systems
 {
@@ -10,21 +9,19 @@ namespace Veilborne.Ecs.Systems
     public class PatchRegenSystem : ISystem
     {
         private readonly EntityRegistry _entities;
-        private readonly IInfiniteTerrain _terrain;
+        private readonly List<Entity> _toRemove = new();
 
-        public PatchRegenSystem(EntityRegistry entities, IInfiniteTerrain terrain)
+        public PatchRegenSystem(EntityRegistry entities)
         {
             _entities = entities;
-            _terrain = terrain;
         }
 
         public void Update(float dt)
         {
-            var toRemove = new List<Entity>();
-            foreach (var entity in _entities.GetEntitiesWith<TerrainPatchDirtyComponent>())
-                toRemove.Add(entity);
+            _toRemove.Clear();
+            _entities.ForEachWith<TerrainPatchDirtyComponent>(entity => _toRemove.Add(entity));
 
-            foreach (var entity in toRemove)
+            foreach (var entity in _toRemove)
                 _entities.DestroyEntity(entity);
         }
     }

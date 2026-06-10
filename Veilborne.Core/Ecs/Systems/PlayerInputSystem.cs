@@ -14,36 +14,29 @@ namespace Veilborne.Ecs.Systems
         private readonly EntityRegistry _entities;
         private readonly IInputProvider _input;
         private readonly IGameSettingsService _settings;
-        private readonly PlayerSystem _playerSystem;
 
         public PlayerInputSystem(
             EntityRegistry entities,
             IInputProvider input,
-            IGameSettingsService settings,
-            PlayerSystem playerSystem)
+            IGameSettingsService settings)
         {
             _entities = entities;
             _input = input;
             _settings = settings;
-            _playerSystem = playerSystem;
         }
 
         public void Update(float dt)
         {
-            _playerSystem.Update(dt);
-
             var keyboard = _settings.Current.Keyboard;
             var debug = _settings.Current.Debug;
             float speed = _input.IsKeyDown(InputKeys.KEY_LEFT_SHIFT) ? BaseMoveSpeed * 1.75f : BaseMoveSpeed;
             if (RuntimeEnvironment.IsDevelopmentEnvironment)
                 speed *= debug.RunSpeedMultiplier / 100f;
 
-            _entities.ForEachWith<PlayerComponent, CameraComponent>(entity =>
+            _entities.ForEachWith<PlayerComponent, CameraComponent>((Entity entity, ref PlayerComponent _, ref CameraComponent cam) =>
             {
                 if (!entity.TryGetComponent<MoveInputComponent>(out var moveInput))
                     return;
-
-                var cam = entity.GetComponent<CameraComponent>();
 
                 var forward = Vector3.Normalize(cam.Target - cam.Position);
                 var flatForward = new Vector3(forward.X, 0f, forward.Z);

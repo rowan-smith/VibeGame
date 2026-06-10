@@ -24,23 +24,23 @@ namespace Veilborne.Ecs.Systems
             _knownParentIds.Clear();
             _childIdsByParent.Clear();
 
-            foreach (var e in _entities.GetEntitiesWith<ChildrenComponent>())
+            _entities.ForEachWith<ChildrenComponent>(entity =>
             {
-                _parentsList.Add(e);
-                _knownParentIds.Add(e.Id);
-            }
+                _parentsList.Add(entity);
+                _knownParentIds.Add(entity.Id);
+            });
 
             if (_parentsList.Count == 0)
                 return;
 
-            foreach (var entity in _entities.GetEntitiesWith<ParentComponent>())
+            _entities.ForEachWith<ParentComponent>(entity =>
             {
                 var parent = entity.GetComponent<ParentComponent>();
                 if (parent.EntityId < 0)
-                    continue;
+                    return;
 
                 if (!_knownParentIds.Contains(parent.EntityId))
-                    continue;
+                    return;
 
                 if (!_childIdsByParent.TryGetValue(parent.EntityId, out var childIds))
                 {
@@ -49,7 +49,7 @@ namespace Veilborne.Ecs.Systems
                 }
 
                 childIds.Add(entity.Id);
-            }
+            });
 
             foreach (var parentEntity in _parentsList)
             {

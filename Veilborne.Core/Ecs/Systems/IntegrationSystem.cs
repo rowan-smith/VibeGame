@@ -28,10 +28,9 @@ namespace Veilborne.Ecs.Systems
         public void Update(float dt)
         {
             bool anyCamera = false;
-            _entities.ForEachWith<CameraComponent>(entity =>
+            _entities.ForEachWith<CameraComponent>((Entity entity, ref CameraComponent cam) =>
             {
                 anyCamera = true;
-                var cam = entity.GetComponent<CameraComponent>();
                 if (cam.Up.LengthSquared() < 1e-6f)
                 {
                     cam.Up = Vector3.UnitY;
@@ -67,6 +66,12 @@ namespace Veilborne.Ecs.Systems
                 entity.SetComponent(cam);
                 entity.SetComponent(jump);
                 entity.SetComponent(verticalVelocity);
+
+                if (entity.TryGetComponent<TransformComponent>(out var transform))
+                {
+                    transform.Position = cam.Position;
+                    entity.SetComponent(transform);
+                }
 
                 if (entity.TryGetComponent<VelocityComponent>(out var velocity) && dt > 0.0001f)
                 {

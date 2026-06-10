@@ -9,6 +9,7 @@ namespace Veilborne.Ecs.Systems
     {
         private readonly EntityRegistry _entities;
         private readonly BiomeAssetTracker _tracker;
+        private readonly List<Entity> _toUnload = new();
 
         public AssetUnloadSystem(EntityRegistry entities, BiomeAssetTracker tracker)
         {
@@ -18,18 +19,22 @@ namespace Veilborne.Ecs.Systems
 
         public void Update(float dt)
         {
-            foreach (var bundle in _entities.GetEntitiesWith<BiomeLoadedAssetsComponent>())
+            _toUnload.Clear();
+            _entities.ForEachWith<BiomeLoadedAssetsComponent>(entity =>
+            {
+                var loaded = entity.GetComponent<BiomeLoadedAssetsComponent>();
+                if (_tracker.ActiveChunkRefs.TryGetValue(loaded.BiomeId, out var refs) && refs > 0)
+                    return;
+
+                _toUnload.Add(entity);
+            });
+
+            foreach (var bundle in _toUnload)
             {
                 var loaded = bundle.GetComponent<BiomeLoadedAssetsComponent>();
-                if (_tracker.ActiveChunkRefs.TryGetValue(loaded.BiomeId, out var refs) && refs > 0)
-                    continue;
-
                 _tracker.Loaded.Remove(loaded.BiomeId);
                 _entities.DestroyEntity(bundle);
             }
-
-            _tracker.ActiveChunkRefs.Clear();
         }
     }
 }
-

@@ -5,10 +5,11 @@ using Veilborne.Terrain;
 namespace Veilborne.Ecs.Systems
 {
     /// <summary>
-    /// Depletes finite mining voxels and emits item drops/dirty patch tags.
+    /// Depletes finite mining voxels and emits item drops with bounded lifetimes.
     /// </summary>
     public class DepleteSystem : ISystem
     {
+        private const float ItemDropLifetimeSeconds = 120f;
         private readonly EntityRegistry _entities;
         private readonly IInfiniteTerrain _terrain;
 
@@ -23,18 +24,16 @@ namespace Veilborne.Ecs.Systems
             if (_terrain is not IEditableTerrain editable)
                 return;
 
-            foreach (var entity in _entities.GetEntitiesWith<DigInteractionComponent, MiningHitComponent>())
+            _entities.ForEachWith<DigInteractionComponent, MiningHitComponent>((Entity entity, ref DigInteractionComponent dig, ref MiningHitComponent mining) =>
             {
-                var dig = entity.GetComponent<DigInteractionComponent>();
-                var mining = entity.GetComponent<MiningHitComponent>();
                 if (!dig.IsDigHeld || !mining.HasHit)
-                    continue;
+                    return;
 
                 float toolPower = MathF.Max(0.1f, dig.ToolBreakSpeedMultiplier);
                 if (!editable.TryMineAt(mining.HitPosition, toolPower * MathF.Max(0.01f, dt), out var depletedType))
-                    continue;
+                    return;
                 if (depletedType == ResourceBlockType.None)
-                    continue;
+                    return;
 
                 var drop = _entities.CreateEntity();
                 drop.AddComponent(new ItemDropComponent
@@ -48,16 +47,11 @@ namespace Veilborne.Ecs.Systems
                     Rotation = System.Numerics.Quaternion.Identity,
                     Scale = System.Numerics.Vector3.One
                 });
-
-                var dirty = _entities.CreateEntity();
-                dirty.AddComponent(new TerrainPatchDirtyComponent
+                drop.AddComponent(new LifetimeComponent
                 {
-                    MinX = 0,
-                    MinZ = 0,
-                    MaxX = 0,
-                    MaxZ = 0
+                    RemainingSeconds = ItemDropLifetimeSeconds
                 });
-            }
+            });
         }
     }
 }

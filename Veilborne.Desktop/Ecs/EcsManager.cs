@@ -14,7 +14,8 @@ using Veilborne.Sky;
 namespace Veilborne.Ecs
 {
     /// <summary>
-    /// Manages ECS systems initialization after MonoGame dependencies are available
+    /// Manages ECS systems initialization after MonoGame dependencies are available.
+    /// Update order is explicit and significant — systems must not be reordered casually.
     /// </summary>
     public class EcsManager : IEcsRuntime
     {
@@ -23,8 +24,7 @@ namespace Veilborne.Ecs
         private readonly List<IRenderSystem> _renderSystems = new();
         private readonly EcsPerformanceMonitor? _perfMonitor;
         private readonly Stopwatch _systemTimer = new();
-        
-        // MonoGame-dependent services
+
         private IUiProvider? _uiProvider;
         private ITerrainRenderer? _terrainRenderer;
         private IWorldObjectRenderer? _worldObjectRenderer;
@@ -60,27 +60,18 @@ namespace Veilborne.Ecs
             var spriteBatch = monoGameProvider.GetSpriteBatch();
             var game = monoGameProvider.GetGame();
 
-            // Wire up input provider to the game so ShowCursor/HideCursor work
             if (game != null && _serviceProvider.GetService<IInputProvider>() is MonoGameInputProvider monoInput)
                 monoInput.SetGame(game);
 
-            // Use the game's built-in Content manager when available
             if (game?.Content != null)
-            {
                 Initialize(graphicsDevice, game.Content, entityRegistry, terrain);
-            }
             else
-            {
                 InitializeWithoutContent(graphicsDevice, entityRegistry, terrain);
-            }
 
-            // Wire up the UI provider with the game's SpriteBatch so draw calls work
             if (spriteBatch == null)
                 throw new InvalidOperationException("SpriteBatch is not initialized; UI cannot be constructed.");
             if (_uiProvider is MonoGameUiProvider uiProvider)
-            {
                 uiProvider.Initialize(spriteBatch, graphicsDevice);
-            }
         }
 
         private void InitializeWithoutContent(GraphicsDevice graphicsDevice, EntityRegistry entityRegistry, IInfiniteTerrain terrain)
@@ -116,25 +107,38 @@ namespace Veilborne.Ecs
 
         private void RegisterSystems()
         {
+            // Lifecycle & hierarchy
             _systems.Add(_serviceProvider.GetRequiredService<CleanupSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DependencySystem>());
+
+            // Input & interaction
             _systems.Add(_serviceProvider.GetRequiredService<InputSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigInputSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigProbeSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<VoxelRaycastSystem>());
+
+            // Camera & player
             _systems.Add(_serviceProvider.GetRequiredService<CameraSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<PlayerSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<PlayerInputSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<HotbarSelectionSystem>());
+
+            // Mining
             _systems.Add(_serviceProvider.GetRequiredService<DepleteSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigExecutionSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<DigParticleSystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<PatchRegenSystem>());
+
+            // Gameplay stubs (no-op until entities exist)
             _systems.Add(_serviceProvider.GetRequiredService<AISystem>());
             _systems.Add(_serviceProvider.GetRequiredService<AnimationSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<ParticleSystem>());
+
+            // Biome & terrain streaming
             _systems.Add(_serviceProvider.GetRequiredService<BiomeDiscoverySystem>());
             _systems.Add(_serviceProvider.GetRequiredService<AssetLoadSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<BiomePrepSystem>());
+
+            // Physics
             _systems.Add(_serviceProvider.GetRequiredService<ForceSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<IntegrationSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<WorldObjectSpatialIndexSystem>());
@@ -145,20 +149,22 @@ namespace Veilborne.Ecs
             _systems.Add(_serviceProvider.GetRequiredService<TerrainLoadSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<TerrainGenSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<VegetationSystem>());
+
+            // Render prep & asset lifecycle
+            _systems.Add(_serviceProvider.GetRequiredService<FrustumCullSystem>());
+            _systems.Add(_serviceProvider.GetRequiredService<SortSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<AssetUnloadSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<ShadowMapSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<EffectSystem>());
             _systems.Add(_serviceProvider.GetRequiredService<UISystem>());
-            _systems.Add(_serviceProvider.GetRequiredService<DebugDrawSystem>());
         }
 
         private void RegisterRenderSystems(EntityRegistry entityRegistry, IInfiniteTerrain terrain, MonoGameTerrainRenderer realRenderer)
         {
             _terrainRenderSystem = new TerrainRenderSystem(entityRegistry, terrain, realRenderer);
-            _objectRenderSystem = new ObjectRenderSystem(entityRegistry, _worldObjectRenderer);
+            _objectRenderSystem = new ObjectRenderSystem(entityRegistry, _worldObjectRenderer!);
             _renderSystems.Add(_terrainRenderSystem);
             _renderSystems.Add(_objectRenderSystem);
-            _renderSystems.Add(_serviceProvider.GetRequiredService<CompositeRenderSystem>());
         }
 
         public void UpdateSystems(float deltaTime)
@@ -178,12 +184,11 @@ namespace Veilborne.Ecs
             foreach (var renderSystem in _renderSystems)
             {
                 _systemTimer.Restart();
-                renderSystem.Draw(); // IRenderSystem uses Draw(), not Render()
+                renderSystem.Draw();
                 _systemTimer.Stop();
                 _perfMonitor?.RecordRender(renderSystem.GetType().Name, _systemTimer.Elapsed.TotalMilliseconds);
             }
 
-            // Record terrain renderer metrics for the debug overlay
             if (_perfMonitor != null && _terrainRenderer is MonoGameTerrainRenderer mtr)
             {
                 _perfMonitor.RecordCustomMetric("Chunks", mtr.LastChunksDrawn);
