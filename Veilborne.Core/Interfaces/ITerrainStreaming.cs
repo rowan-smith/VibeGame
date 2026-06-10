@@ -14,6 +14,8 @@ namespace Veilborne.Interfaces
 
         Task PumpAsyncJobs();
 
+        void ProcessPendingMeshBuilds();
+
         TerrainLoadingProgress GetLoadingProgress();
     }
 }

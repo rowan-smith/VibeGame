@@ -161,6 +161,8 @@ public sealed class FakeTerrainStreaming : ITerrainStreaming
         return Task.CompletedTask;
     }
 
+    public void ProcessPendingMeshBuilds() { }
+
     public TerrainLoadingProgress GetLoadingProgress() => LoadingProgress;
 }
 

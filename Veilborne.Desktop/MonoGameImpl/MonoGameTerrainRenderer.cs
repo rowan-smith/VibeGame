@@ -73,6 +73,7 @@ namespace Veilborne.MonoGameImpl
         }
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
+        private readonly List<(float x, float z, float tile)> _sortedActiveKeysScratch = new();
         private readonly Queue<(float x, float z, float tile)> _buildQueue = new();
         private readonly Dictionary<(float x, float z, float tile), (float[,] heights, float tileSize, System.Numerics.Vector2 origin)> _pendingBuildData = new();
         private readonly HashSet<(float x, float z, float tile)> _queuedBuildKeys = new();
@@ -773,7 +774,19 @@ namespace Veilborne.MonoGameImpl
                 : RasterizerState.CullCounterClockwise;
             _graphicsDevice.SamplerStates[0] = SamplerState.LinearWrap;  // tile textures
 
-            foreach (var key in _activeChunkKeys)
+            // Draw nearer chunks first so the per-frame draw-call budget covers visible terrain.
+            _sortedActiveKeysScratch.Clear();
+            _sortedActiveKeysScratch.AddRange(_activeChunkKeys);
+            _sortedActiveKeysScratch.Sort((a, b) =>
+            {
+                if (!_chunks.TryGetValue(a, out var ca)) return 1;
+                if (!_chunks.TryGetValue(b, out var cb)) return -1;
+                float da = (new XnaVector3(ca.OriginX + ca.WorldSize * 0.5f, (ca.MinY + ca.MaxY) * 0.5f, ca.OriginZ + ca.WorldSize * 0.5f) - pos).LengthSquared();
+                float db = (new XnaVector3(cb.OriginX + cb.WorldSize * 0.5f, (cb.MinY + cb.MaxY) * 0.5f, cb.OriginZ + cb.WorldSize * 0.5f) - pos).LengthSquared();
+                return da.CompareTo(db);
+            });
+
+            foreach (var key in _sortedActiveKeysScratch)
             {
                 if (drawCalls >= MaxDrawCallsPerFrame) break;
                 if (!_chunks.TryGetValue(key, out var chunk)) continue;

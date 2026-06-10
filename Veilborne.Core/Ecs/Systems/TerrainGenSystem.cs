@@ -30,6 +30,7 @@ namespace Veilborne.Ecs.Systems
             if (_accumulatedSeconds < PumpTickSeconds)
                 return;
             _accumulatedSeconds = 0f;
+            _terrainStreaming.ProcessPendingMeshBuilds();
             _pumpTask = _terrainStreaming.PumpAsyncJobs();
         }
     }
