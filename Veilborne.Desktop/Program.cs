@@ -67,6 +67,7 @@ internal static class Program
         builder.Services.AddSingleton<DigInputSystem>();
         builder.Services.AddSingleton<DigProbeSystem>();
         builder.Services.AddSingleton<VoxelRaycastSystem>();
+        builder.Services.AddSingleton<IRandomSource, SystemRandomSource>();
         builder.Services.AddSingleton<DepleteSystem>();
         builder.Services.AddSingleton<DigExecutionSystem>();
         builder.Services.AddSingleton<DigParticleSystem>();
@@ -146,6 +147,7 @@ internal static class Program
                 sp.GetRequiredService<LowLodTerrainService>());
         });
         builder.Services.AddSingleton<TerrainManager>(sp => (TerrainManager)sp.GetRequiredService<IInfiniteTerrain>());
+        builder.Services.AddSingleton<ITerrainStreaming>(sp => sp.GetRequiredService<TerrainManager>());
 
         // Game engine & state
         builder.Services.AddSingleton<IGameSettingsService, GameSettingsService>();

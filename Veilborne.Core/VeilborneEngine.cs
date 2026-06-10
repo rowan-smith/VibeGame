@@ -13,6 +13,7 @@ namespace Veilborne
     public class VeilborneEngine : IGameEngine
     {
         private readonly IInfiniteTerrain _terrain;
+        private readonly ITerrainStreaming _terrainStreaming;
         private readonly ITimeService _time;
         private readonly EntityRegistry _entities;
         private readonly IGraphicsProvider _graphics;
@@ -64,6 +65,7 @@ namespace Veilborne
 
         public VeilborneEngine(
             IInfiniteTerrain terrain,
+            ITerrainStreaming terrainStreaming,
             ITimeService time,
             EntityRegistry entities,
             IGraphicsProvider graphics,
@@ -77,6 +79,7 @@ namespace Veilborne
             EcsPerformanceMonitor? perfMonitor = null)
         {
             _terrain = terrain;
+            _terrainStreaming = terrainStreaming;
             _time = time;
             _entities = entities;
             _graphics = graphics;
@@ -98,95 +101,11 @@ namespace Veilborne
             _graphics.InitializeWindow(1280, 720, "Veilborne");
             ApplySettings(initialApply: true);
 
-            // Set up player entity
-            _playerEntity = _entities.CreateEntity();
-            _playerEntity.AddComponent(new PlayerComponent());
-            var transform = new TransformComponent { Position = new Vector3(0, 5, -10) };
-            _playerEntity.AddComponent(transform);
-            _playerEntity.AddComponent(new ColliderComponent { Radius = 0.5f });
-            _playerEntity.AddComponent(new CollisionFilterComponent
-            {
-                Layer = CollisionLayer.Player,
-                CollidesWith = CollisionLayer.WorldStatic
-            });
-            _playerEntity.AddComponent(new VelocityComponent { Linear = Vector3.Zero });
-            _playerEntity.AddComponent(new VerticalVelocityComponent { Value = 0f });
-            _playerEntity.AddComponent(new AccelerationComponent { Value = Vector3.Zero });
-            _playerEntity.AddComponent(new ForceComponent { Value = Vector3.Zero });
-            _playerEntity.AddComponent(new DragComponent { Linear = 0f, Angular = 0f });
-            _playerEntity.AddComponent(new MassComponent { Value = 1f, IsKinematic = false });
-            _playerEntity.AddComponent(new RigidbodyComponent { IsKinematic = false, IsSleeping = false });
-            _playerEntity.AddComponent(new GravityComponent { Direction = new Vector3(0f, -20f, 0f) });
-            _playerEntity.AddComponent(new HealthComponent { Current = 100f, Max = 100f });
-            _playerEntity.AddComponent(new TeamComponent { Id = 1 });
-            _playerEntity.AddComponent(new NameComponent { Value = "Player" });
-            _playerEntity.AddComponent(new TagComponent { Name = "Player" });
-            _playerEntity.AddComponent(new ParentComponent { EntityId = -1 });
-            _playerEntity.AddComponent(new ChildrenComponent { EntityIds = [] });
-            _playerEntity.AddComponent(new LifetimeComponent { RemainingSeconds = 0f });
-            _playerEntity.AddComponent(new DirtyComponent { NeedsUpdate = false });
-            _playerEntity.AddComponent(new BillboardComponent { FaceCamera = false });
-            _playerEntity.AddComponent(new ShadowCasterComponent { CastsShadows = true });
-            _playerEntity.AddComponent(new MaterialComponent { ShaderId = string.Empty, Tint = Vector4.One });
-            _playerEntity.AddComponent(new JumpComponent
-            {
-                JumpSpeed = 8.5f,
-                JumpBufferSeconds = 0.12f,
-                CoyoteSeconds = 0.10f,
-                JumpBufferTimer = 0f,
-                CoyoteTimer = 0f,
-                IsGrounded = false
-            });
-            _playerEntity.AddComponent(new MoveInputComponent { HorizontalDisplacement = Vector3.Zero });
-            _playerEntity.AddComponent(new HotbarSelectionComponent { SelectedSlot = 0 });
-            _playerEntity.AddComponent(new DigInteractionComponent
-            {
-                IsDigHeld = false,
-                HasGroundHit = false,
-                GroundHit = Vector3.Zero,
-                ProbeMaxDistance = 6f,
-                ProbeStep = 0.25f,
-                ProbeEpsilon = 0.05f,
-                ToolBreakSpeedMultiplier = 1f,
-                ToolStaminaCost = 0
-            });
-            _playerEntity.AddComponent(new MiningHitComponent
-            {
-                HasHit = false,
-                HitPosition = Vector3.Zero,
-                BlockType = Terrain.ResourceBlockType.None
-            });
-            var cameraComp = new CameraComponent
-            {
-                Position = transform.Position,
-                Target = Vector3.Zero,
-                Up = Vector3.UnitY,
-                FovY = 45.0f
-            };
-            _playerEntity.AddComponent(cameraComp);
-
-            // ECS UI canvas + crosshair element
-            _uiCanvasEntity = _entities.CreateEntity();
-            _uiCanvasEntity.AddComponent(new CanvasComponent
-            {
-                TargetCameraEntityId = _playerEntity.Id,
-                Visible = true
-            });
-            _uiCanvasEntity.AddComponent(new ChildrenComponent { EntityIds = [] });
-
-            _crosshairEntity = _entities.CreateEntity();
-            _crosshairEntity.AddComponent(new ParentComponent { EntityId = _uiCanvasEntity.Id });
-            _crosshairEntity.AddComponent(new UIElementKindComponent { Kind = "Crosshair" });
-            _crosshairEntity.AddComponent(new UIElementComponent
-            {
-                Bounds = new Rect(0, 0, 0, 0),
-                Text = "idle"
-            });
-            _crosshairEntity.AddComponent(new RenderComponent
-            {
-                Visible = true,
-                ModelPath = string.Empty
-            });
+            // Set up player entity and HUD UI
+            _playerEntity = PlayerEntityFactory.CreateDefault(_entities, new Vector3(0, 5, -10));
+            var hudUi = UiEntityFactory.CreateHudUi(_entities, _playerEntity.Id);
+            _uiCanvasEntity = hudUi.Canvas;
+            _crosshairEntity = hudUi.Crosshair;
 
             _state = GameState.MainMenu;
             LogBindings();
@@ -232,36 +151,22 @@ namespace Veilborne
             else if (_state == GameState.Loading)
             {
                 var cam = _playerEntity.GetComponent<CameraComponent>();
-                if (_terrain is TerrainManager tm)
-                {
-                    tm.SetWarmupMode(true);
-                    tm.UpdateAround(cam.Position, 0);
-                    if (_loadingPumpTask is { IsCompleted: true, IsFaulted: true })
-                        _ = _loadingPumpTask.Exception;
-                    if (_loadingPumpTask is null || _loadingPumpTask.IsCompleted)
-                        _loadingPumpTask = tm.PumpAsyncJobs();
-                    var loading = tm.GetLoadingProgress();
-                    // Keep loading bar monotonic to avoid visible back-and-forth flicker
-                    // when desired chunk counts/radii adjust during warmup.
-                    _loadingProgress = MathF.Max(_loadingProgress, loading.Progress01);
-                    _loadingStageText = loading.Stage;
-                    _loadingDesiredChunks = loading.DesiredChunks;
-                    _loadingLoadedChunks = loading.LoadedChunks;
-                    _loadingGeneratingChunks = loading.GeneratingChunks;
-                    _loadingEntities = loading.LoadedEntities;
-                    _loadingPendingSpawnObjects = loading.PendingSpawnObjects;
-                }
-                else
-                {
-                    _loadingPumpTask = null;
-                    _loadingProgress = 1f;
-                    _loadingStageText = "Complete";
-                    _loadingDesiredChunks = 0;
-                    _loadingLoadedChunks = 0;
-                    _loadingGeneratingChunks = 0;
-                    _loadingEntities = 0;
-                    _loadingPendingSpawnObjects = 0;
-                }
+                _terrainStreaming.SetWarmupMode(true);
+                _terrainStreaming.UpdateAround(cam.Position, 0);
+                if (_loadingPumpTask is { IsCompleted: true, IsFaulted: true })
+                    _ = _loadingPumpTask.Exception;
+                if (_loadingPumpTask is null || _loadingPumpTask.IsCompleted)
+                    _loadingPumpTask = _terrainStreaming.PumpAsyncJobs();
+                var loading = _terrainStreaming.GetLoadingProgress();
+                // Keep loading bar monotonic to avoid visible back-and-forth flicker
+                // when desired chunk counts/radii adjust during warmup.
+                _loadingProgress = MathF.Max(_loadingProgress, loading.Progress01);
+                _loadingStageText = loading.Stage;
+                _loadingDesiredChunks = loading.DesiredChunks;
+                _loadingLoadedChunks = loading.LoadedChunks;
+                _loadingGeneratingChunks = loading.GeneratingChunks;
+                _loadingEntities = loading.LoadedEntities;
+                _loadingPendingSpawnObjects = loading.PendingSpawnObjects;
 
                 bool loadingReady = _loadingProgress >= 0.999f &&
                                     _loadingGeneratingChunks == 0 &&
@@ -274,8 +179,7 @@ namespace Veilborne
 
                 if (_loadingCompleteTime >= LoadingCompletionDelay)
                 {
-                    if (_terrain is TerrainManager readyTm)
-                        readyTm.SetWarmupMode(false);
+                    _terrainStreaming.SetWarmupMode(false);
                     _state = GameState.Playing;
                     _loadingPumpTask = null;
                     _loadingCompleteTime = 0;
@@ -381,8 +285,7 @@ namespace Veilborne
                 case GameState.Loading:
                     if (_input.IsKeyPressed(InputKeys.KEY_ESCAPE))
                     {
-                        if (_terrain is TerrainManager cancelTm)
-                            cancelTm.SetWarmupMode(false);
+                        _terrainStreaming.SetWarmupMode(false);
                         _state = GameState.MainMenu;
                         _loadingCompleteTime = 0;
                         _loadingProgress = 0;
@@ -454,8 +357,7 @@ namespace Veilborne
 
             // Begin loading/warmup
             _state = GameState.Loading;
-            if (_terrain is TerrainManager tm)
-                tm.SetWarmupMode(true);
+            _terrainStreaming.SetWarmupMode(true);
             _log.Debug("State transition requested: {State}", _state);
             _loadingProgress = 0;
             _loadingStageText = "Preparing world";
