@@ -84,6 +84,25 @@ public class GameFlowControllerTests
         Assert.Equal(0.8f, loading.Progress);
         Assert.Equal("B", loading.StageText);
     }
+
+    [Fact]
+    public void LoadingSession_enters_playable_when_near_and_readonly_ready_without_lod()
+    {
+        var loading = new LoadingSessionController();
+        var streaming = new FakeTerrainStreaming
+        {
+            LoadingProgress = new TerrainLoadingProgress(1f, "Complete", 314, 314, 0, 1293, 0, 1089, 0)
+        };
+        loading.BeginWarmup(streaming);
+
+        bool ready = false;
+        for (int i = 0; i < 20 && !ready; i++)
+            ready = loading.Update(0.02f, streaming, Vector3.Zero);
+
+        Assert.True(ready);
+        Assert.Equal(314, loading.DesiredChunks);
+        Assert.Equal(1089, streaming.LoadingProgress.DesiredBackgroundChunks);
+    }
 }
 
 public class RenderSystemsTests

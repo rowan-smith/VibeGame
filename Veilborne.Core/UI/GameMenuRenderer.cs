@@ -21,7 +21,9 @@ namespace Veilborne.UI
         int LoadedChunks,
         int DesiredChunks,
         int GeneratingChunks,
-        int LoadedEntities);
+        int LoadedEntities,
+        int LoadedBackgroundChunks = 0,
+        int DesiredBackgroundChunks = 0);
 
     /// <summary>
     /// Renders all game menus (main, pause, settings, loading, initialization).
@@ -182,6 +184,13 @@ namespace Veilborne.UI
             string entityText = $"Entities/POIs: {data.LoadedEntities}";
             int etw = _ui.MeasureText(entityText, 18);
             _ui.DrawText(entityText, w / 2 - etw / 2, y + barH + 58, 18, new Vector4(0.82f, 0.88f, 0.95f, 1f));
+
+            if (data.DesiredBackgroundChunks > 0)
+            {
+                string backgroundText = $"Distant terrain: {data.LoadedBackgroundChunks}/{data.DesiredBackgroundChunks} (streaming)";
+                int btw = _ui.MeasureText(backgroundText, 18);
+                _ui.DrawText(backgroundText, w / 2 - btw / 2, y + barH + 80, 18, new Vector4(0.65f, 0.72f, 0.82f, 1f));
+            }
 
             int ptw = _ui.MeasureText(progressText, 20);
             _ui.DrawText(progressText, w / 2 - ptw / 2, y - 30, 20, Vector4.One);

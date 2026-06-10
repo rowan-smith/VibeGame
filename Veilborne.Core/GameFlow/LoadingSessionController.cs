@@ -6,6 +6,7 @@ namespace Veilborne.GameFlow
 {
     /// <summary>
     /// Tracks terrain warmup progress while the loading screen is visible.
+    /// Gameplay starts once playable rings (editable + read-only) are ready; LOD streams afterward.
     /// </summary>
     public sealed class LoadingSessionController
     {
@@ -86,7 +87,18 @@ namespace Veilborne.GameFlow
             return CompleteTime >= CompletionDelaySeconds;
         }
 
-        public LoadingScreenData ToScreenData()
-            => new(Progress, StageText, LoadedChunks, DesiredChunks, GeneratingChunks, LoadedEntities);
+        public LoadingScreenData ToScreenData(ITerrainStreaming terrainStreaming)
+        {
+            var loading = terrainStreaming.GetLoadingProgress();
+            return new(
+                Progress,
+                StageText,
+                LoadedChunks,
+                DesiredChunks,
+                GeneratingChunks,
+                LoadedEntities,
+                loading.LoadedBackgroundChunks,
+                loading.DesiredBackgroundChunks);
+        }
     }
 }
