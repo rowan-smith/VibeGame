@@ -74,6 +74,7 @@ namespace Veilborne.MonoGameImpl
             public LayerBlendMode LayerMode;
             public float LayerBlendCoverage;
             public float TileSize;
+            public string PrimarySurfaceTextureId;
         }
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
@@ -223,9 +224,11 @@ namespace Veilborne.MonoGameImpl
                 var desiredLayerMode = desiredUseSplat
                     ? ChunkData.LayerBlendMode.SurfaceToSubsurface
                     : ChunkData.LayerBlendMode.None;
+                string desiredSurfaceId = _activeBiome != null ? GetBiomeSurfaceTextureId(_activeBiome) : string.Empty;
                 bool visualsMatch =
                     string.Equals(existing.BiomeId, primaryId, StringComparison.Ordinal) &&
                     string.Equals(existing.SecondaryBiomeId, secondaryId, StringComparison.Ordinal) &&
+                    string.Equals(existing.PrimarySurfaceTextureId, desiredSurfaceId, StringComparison.Ordinal) &&
                     MathF.Abs(existing.SecondaryBlend - blend) < 0.001f &&
                     existing.LayerMode == desiredLayerMode &&
                     existing.UseSplatLayering == desiredUseSplat;
@@ -477,7 +480,8 @@ namespace Veilborne.MonoGameImpl
                 UseSplatLayering = useSplatLayering,
                 LayerMode = layerMode,
                 LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f,
-                TileSize = tileSize
+                TileSize = tileSize,
+                PrimarySurfaceTextureId = string.Empty
             };
         }
 
@@ -559,62 +563,41 @@ namespace Veilborne.MonoGameImpl
             chunk.SecondaryLightingModifier = 1f;
             chunk.Tint = ComputeStableTerrainTint(biome);
 
-            // Layered terrain mode: use per-vertex alpha as splat weight between material pairs.
+            string surfaceTextureId = GetBiomeSurfaceTextureId(biome);
+            chunk.PrimarySurfaceTextureId = surfaceTextureId ?? string.Empty;
+
+            // Layered terrain mode: primary pass always shows the biome surface color.
             if (chunk.BaseHeights != null && chunk.LayerConfig != null)
             {
-                var lc = chunk.LayerConfig;
                 chunk.LayerMode = ChunkData.LayerBlendMode.SurfaceToSubsurface;
-                // Coarse LOD chunks inflate splat rock weights — keep biome surface color on primary.
-                bool useSlopePrimary = chunk.TileSize <= 1.5f;
-                if (useSlopePrimary)
-                {
-                    float rockCoverage = EstimateRockCoverage(chunk);
-                    useSlopePrimary = rockCoverage > 0.28f && !string.IsNullOrWhiteSpace(lc.SlopeTextureId);
-                }
-                string? layeredPrimaryId = useSlopePrimary
-                    ? lc.SlopeTextureId
-                    : lc.SurfaceTextureId;
-                chunk.PrimaryTexture = LoadTexture(layeredPrimaryId) ?? GetFallbackTexture();
-                chunk.SecondaryTexture = LoadTexture(lc.SubsurfaceTextureId);
-                // Keep lighting consistent across chunk state transitions.
-                chunk.PrimaryLightingModifier = 1f;
-                chunk.SecondaryLightingModifier = 1f;
+                chunk.PrimaryTexture = LoadTexture(surfaceTextureId) ?? GetFallbackTexture();
+                chunk.SecondaryTexture = LoadTexture(chunk.LayerConfig.SubsurfaceTextureId);
                 return;
             }
 
             Texture2D? primary = null;
-            var primaryTextureId = SelectTextureForChunk(biome, chunk);
-            if (!string.IsNullOrWhiteSpace(primaryTextureId))
-                primary = LoadTexture(primaryTextureId);
+            if (!string.IsNullOrWhiteSpace(surfaceTextureId))
+                primary = LoadTexture(surfaceTextureId);
             chunk.PrimaryTexture = primary ?? GetFallbackTexture();
 
             Texture2D? secondary = null;
             if (allowBlendVisuals && secondaryBiome is not null && secondaryBlend > 0.03f)
             {
-                var secondaryTextureId = SelectTextureForChunk(secondaryBiome, chunk);
+                var secondaryTextureId = GetBiomeSurfaceTextureId(secondaryBiome);
                 if (!string.IsNullOrWhiteSpace(secondaryTextureId))
                     secondary = LoadTexture(secondaryTextureId);
             }
             chunk.SecondaryTexture = secondary;
         }
 
-        private static string? SelectTextureForChunk(BiomeData biome, ChunkData chunk)
+        private static string? GetBiomeSurfaceTextureId(BiomeData biome)
         {
-            if (biome.TextureRules is { Count: > 0 })
-            {
-                float altitude = chunk.MaxY;
-                foreach (var kv in biome.TextureRules)
-                {
-                    var rule = kv.Value;
-                    if (rule == null) continue;
-                    if (rule.MinAltitude.HasValue && altitude < rule.MinAltitude.Value) continue;
-                    if (rule.MaxAltitude.HasValue && altitude > rule.MaxAltitude.Value) continue;
-                    return kv.Key;
-                }
-            }
+            if (!string.IsNullOrWhiteSpace(biome.TerrainLayers?.SurfaceTextureId))
+                return biome.TerrainLayers.SurfaceTextureId;
 
-            if (biome.SurfaceTextures?.Count > 0)
+            if (biome.SurfaceTextures is { Count: > 0 })
                 return biome.SurfaceTextures[0].TextureId;
+
             return null;
         }
 
@@ -754,28 +737,6 @@ namespace Veilborne.MonoGameImpl
             // Surface-to-subsurface: only exposed dirt from digging (Y channel).
             // Slope rock (Z) must not trigger the semi-transparent subsurface overlay pass.
             return Math.Clamp(splat.Y, 0f, 1f);
-        }
-
-        private static float EstimateRockCoverage(ChunkData chunk)
-        {
-            if (chunk.Splatmap == null) return 0f;
-            int sw = chunk.Splatmap.GetLength(0);
-            int sh = chunk.Splatmap.GetLength(1);
-            if (sw == 0 || sh == 0) return 0f;
-
-            float sum = 0f;
-            int count = 0;
-            int stepX = Math.Max(1, sw / 8);
-            int stepZ = Math.Max(1, sh / 8);
-            for (int z = 0; z < sh; z += stepZ)
-            for (int x = 0; x < sw; x += stepX)
-            {
-                var v = chunk.Splatmap[x, z];
-                sum += MathF.Max(0f, v.Z + v.W);
-                count++;
-            }
-
-            return count > 0 ? sum / count : 0f;
         }
 
         private static XnaColor ComputeStableTerrainTint(BiomeData biome)

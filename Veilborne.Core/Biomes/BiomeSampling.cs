@@ -163,5 +163,43 @@ namespace Veilborne.Biomes
 
             return (primary, secondary, blend);
         }
+
+        /// <summary>
+        /// Resolves the dominant biome (and optional secondary blend) for a terrain chunk
+        /// by sampling across its full area. Keeps biome assignment stable across LOD rings.
+        /// </summary>
+        public static (IBiome primary, IBiome? secondary, float secondaryBlend) ResolveChunkBiomeBlend(
+            IBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 chunkOriginWorld,
+            int chunkSize,
+            float tileSize,
+            int samplesPerAxis = 0,
+            float centerExtraWeight = 2f,
+            float expandWorldMargin = 0f)
+        {
+            if (samplesPerAxis <= 0)
+            {
+                float worldSize = chunkSize * tileSize;
+                samplesPerAxis = worldSize >= 384f ? 11 : worldSize >= 128f ? 9 : 7;
+            }
+
+            var (primary, secondary, primaryWeight, secondaryWeight) = GetDominantAndSecondaryBiomeForAreaWithWeights(
+                provider,
+                terrain,
+                chunkOriginWorld,
+                chunkSize,
+                tileSize,
+                samplesPerAxis,
+                centerExtraWeight,
+                expandWorldMargin);
+
+            if (secondary is null || string.Equals(secondary.Id, primary.Id, StringComparison.OrdinalIgnoreCase))
+                return (primary, null, 0f);
+
+            float denom = primaryWeight + secondaryWeight;
+            float blend = denom > 1e-5f ? Math.Clamp(secondaryWeight / denom, 0f, 0.49f) : 0f;
+            return blend > 0.001f ? (primary, secondary, blend) : (primary, null, 0f);
+        }
     }
 }

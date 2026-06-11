@@ -157,10 +157,7 @@ namespace Veilborne.Terrain
                             float wz = origin.Y + zz * TileSize;
                             heights[xx, zz] = _editable.SampleHeight(wx, wz);
                         }
-                        var center = new Vector2(
-                            origin.X + ChunkSize * TileSize * 0.5f,
-                            origin.Y + ChunkSize * TileSize * 0.5f);
-                        var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
+                        var (biome, secondaryBiome, secondaryBlend) = ResolveChunkBiome(origin);
                         lock (_biomeBlendByChunk)
                             _biomeBlendByChunk[key] = (secondaryBiome?.Data, secondaryBlend);
                         _completed.Enqueue((key, heights, origin, biome.Data));
@@ -240,9 +237,7 @@ namespace Veilborne.Terrain
                 if (biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary))
                     primaryBiome = cachedPrimary;
                 else
-                    primaryBiome = ResolveBiomeBlend(new Vector2(
-                        chunk.Origin.X + ChunkSize * TileSize * 0.5f,
-                        chunk.Origin.Y + ChunkSize * TileSize * 0.5f)).primary.Data;
+                    primaryBiome = ResolveChunkBiome(chunk.Origin).primary.Data;
 
                 (BiomeData? secondary, float blend) blendInfo;
                 lock (_biomeBlendByChunk)
@@ -264,14 +259,8 @@ namespace Veilborne.Terrain
             // Debug chunk bounds are drawn by VeilborneEngine as projected 2D overlays.
         }
 
-        private (IBiome primary, IBiome? secondary, float blend) ResolveBiomeBlend(Vector2 centerWorld)
-        {
-            if (_biomeProvider is SimpleBiomeProvider simple)
-                return simple.GetBiomeBlendAt(centerWorld, _terrainGen);
-
-            var primary = _biomeProvider.GetBiomeAt(centerWorld, _terrainGen);
-            return (primary, null, 0f);
-        }
+        private (IBiome primary, IBiome? secondary, float blend) ResolveChunkBiome(Vector2 chunkOrigin)
+            => BiomeSampling.ResolveChunkBiomeBlend(_biomeProvider, _terrainGen, chunkOrigin, ChunkSize, TileSize);
 
         public IEnumerable<(Vector3 center, Vector3 size)> EnumerateChunkBounds()
         {

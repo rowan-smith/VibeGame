@@ -236,10 +236,7 @@ namespace Veilborne.Terrain
                         }
 
                         // Spawn world objects for this chunk using biome spawner
-                        var center = new Vector2(
-                            origin.X + ChunkSize * TileSize * 0.5f,
-                            origin.Y + ChunkSize * TileSize * 0.5f);
-                        var (biome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
+                        var (biome, secondaryBiome, secondaryBlend) = ResolveChunkBiome(origin);
                         var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
                         _completed.Enqueue((key, heights, origin, raw, biome.Data));
                         lock (_biomeBlendByChunk)
@@ -428,7 +425,7 @@ namespace Veilborne.Terrain
                 if (biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary))
                     primaryBiome = cachedPrimary;
                 else
-                    primaryBiome = GetDominantBiomeForChunk(chunk).Data;
+                    primaryBiome = ResolveChunkBiome(chunk.Origin).primary.Data;
 
                 (BiomeData? secondary, float blend) blendInfo;
                 lock (_biomeBlendByChunk)
@@ -446,22 +443,8 @@ namespace Veilborne.Terrain
             }
         }
 
-        private IBiome GetDominantBiomeForChunk(TerrainChunk chunk)
-        {
-            var center = new Vector2(
-                chunk.Origin.X + ChunkSize * TileSize * 0.5f,
-                chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
-            return ResolveBiomeBlend(center).primary;
-        }
-
-        private (IBiome primary, IBiome? secondary, float blend) ResolveBiomeBlend(Vector2 centerWorld)
-        {
-            if (_biomeProvider is SimpleBiomeProvider simple)
-                return simple.GetBiomeBlendAt(centerWorld, _terrainGen);
-
-            var primary = _biomeProvider.GetBiomeAt(centerWorld, _terrainGen);
-            return (primary, null, 0f);
-        }
+        private (IBiome primary, IBiome? secondary, float blend) ResolveChunkBiome(Vector2 chunkOrigin)
+            => BiomeSampling.ResolveChunkBiomeBlend(_biomeProvider, _terrainGen, chunkOrigin, ChunkSize, TileSize);
 
         public void Render(CameraComponent camera) => RenderTiles(camera);
 

@@ -230,11 +230,10 @@ namespace Veilborne.Terrain
                     heights[x, z] = BiomeTerrainHeightBlender.ComputeHeight(wx, wz, baseHeight, _biomeProvider, _terrainGen);
                 }
 
-                var center = new Vector2(
-                    originX + ChunkSize * TileSize * 0.5f,
-                    originZ + ChunkSize * TileSize * 0.5f);
-                var (primaryBiome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
-                var spawnBiome = _biomeProvider.GetBiomeAt(center, _terrainGen);
+                var (spawnBiome, secondaryIbiome, secondaryBlend) = BiomeSampling.ResolveChunkBiomeBlend(
+                    _biomeProvider, _terrainGen, origin, ChunkSize, TileSize);
+                var primaryBiome = spawnBiome.Data;
+                var secondaryBiome = secondaryIbiome?.Data;
                 var objects = spawnBiome.ObjectSpawner.GenerateObjects(spawnBiome.Id, _terrainGen, heights, origin, 18);
                 _completed.Enqueue(new GeneratedEditableChunk(key, heights, origin, primaryBiome, secondaryBiome, secondaryBlend, objects));
             });
@@ -342,16 +341,11 @@ namespace Veilborne.Terrain
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
-        private (BiomeData primary, BiomeData? secondary, float blend) ResolveBiomeBlend(Vector2 centerWorld)
+        private (BiomeData primary, BiomeData? secondary, float blend) ResolveChunkBiome(Vector2 chunkOrigin)
         {
-            if (_biomeProvider is SimpleBiomeProvider simple)
-            {
-                var (primary, secondary, blend) = simple.GetBiomeBlendAt(centerWorld, _terrainGen);
-                return (primary.Data, secondary?.Data, blend);
-            }
-
-            var primaryBiome = _biomeProvider.GetBiomeAt(centerWorld, _terrainGen);
-            return (primaryBiome.Data, null, 0f);
+            var (primary, secondary, blend) = BiomeSampling.ResolveChunkBiomeBlend(
+                _biomeProvider, _terrainGen, chunkOrigin, ChunkSize, TileSize);
+            return (primary.Data, secondary?.Data, blend);
         }
 
         private void RecomputeSplatmapForChunk((int cx, int cz) key, ref TerrainChunk chunk)
@@ -481,10 +475,7 @@ namespace Veilborne.Terrain
                     var chunk = kvp.Value;
                     if (!_primaryBiomeByChunk.TryGetValue(key, out var primaryBiome))
                     {
-                        var center = new Vector2(
-                            chunk.Origin.X + ChunkSize * TileSize * 0.5f,
-                            chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
-                        var (primary, secondary, blend) = ResolveBiomeBlend(center);
+                        var (primary, secondary, blend) = ResolveChunkBiome(chunk.Origin);
                         primaryBiome = primary;
                         _primaryBiomeByChunk[key] = primaryBiome;
                         _biomeBlendByChunk[key] = (secondary, blend);
