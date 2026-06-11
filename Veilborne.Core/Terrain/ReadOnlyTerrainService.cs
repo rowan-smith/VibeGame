@@ -29,12 +29,14 @@ namespace Veilborne.Terrain
         private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
         private readonly Dictionary<(int cx, int cz), BiomeData> _biomeByChunk = new();
         private readonly Dictionary<(int cx, int cz), (BiomeData? secondary, float blend)> _biomeBlendByChunk = new();
+        private readonly Dictionary<(int cx, int cz), (BiomeData? merge, float maxMerge)> _renderMergeByChunk = new();
         private readonly HashSet<(int cx, int cz)> _desiredKeysScratch = new();
         private readonly List<(int cx, int cz)> _toRemoveScratch = new();
         private readonly List<KeyValuePair<(int cx, int cz), TerrainChunk>> _pairSnapshotBuffer = new();
         private readonly List<TerrainChunk> _chunkSnapshotBuffer = new();
         private readonly Queue<(int cx, int cz)> _pendingSpawnOrder = new();
         private readonly Dictionary<(int cx, int cz), PendingSpawnBatch> _pendingSpawnsByChunk = new();
+        private readonly object _pendingSpawnsLock = new();
         private const int MaxObjectSpawnsPerFrame = 32;
 
         // Async generation state
@@ -70,7 +72,20 @@ namespace Veilborne.Terrain
         }
         public int PendingSpawnObjectCount
         {
-            get => SumPendingSpawnsSafe(_pendingSpawnsByChunk);
+            get
+            {
+                lock (_pendingSpawnsLock)
+                {
+                    int pending = 0;
+                    foreach (var batch in _pendingSpawnsByChunk.Values)
+                    {
+                        if (batch?.Objects is not { } objects)
+                            continue;
+                        pending += Math.Max(0, objects.Count - batch.Cursor);
+                    }
+                    return pending;
+                }
+            }
         }
 
         private static int SumLoadedEntitiesSafe(Dictionary<(int cx, int cz), List<Entity>> entitiesByChunk)
@@ -83,28 +98,6 @@ namespace Veilborne.Terrain
                     foreach (var entities in entitiesByChunk.Values.ToArray())
                         count += entities.Count;
                     return count;
-                }
-                catch (InvalidOperationException)
-                {
-                    // Collection changed while snapshotting; retry.
-                }
-                catch (ArgumentException)
-                {
-                    // Collection resized while copying; retry.
-                }
-            }
-        }
-
-        private static int SumPendingSpawnsSafe(Dictionary<(int cx, int cz), PendingSpawnBatch> pendingByChunk)
-        {
-            while (true)
-            {
-                try
-                {
-                    int pending = 0;
-                    foreach (var batch in pendingByChunk.Values.ToArray())
-                        pending += Math.Max(0, batch.Objects.Count - batch.Cursor);
-                    return pending;
                 }
                 catch (InvalidOperationException)
                 {
@@ -269,7 +262,9 @@ namespace Veilborne.Terrain
             {
                 _loadedChunks.Remove(key);
                 _biomeByChunk.Remove(key);
-                _pendingSpawnsByChunk.Remove(key);
+                _renderMergeByChunk.Remove(key);
+                lock (_pendingSpawnsLock)
+                    _pendingSpawnsByChunk.Remove(key);
                 lock (_biomeBlendByChunk)
                     _biomeBlendByChunk.Remove(key);
                 if (_entitiesByChunk.TryGetValue(key, out var entities))
@@ -283,7 +278,7 @@ namespace Veilborne.Terrain
             _lastDesiredChunkCount = _desiredKeysScratch.Count;
         }
 
-        public async Task PumpAsyncJobs(int maxInstallsPerFrame = int.MaxValue, bool warmupMode = false)
+        public Task PumpAsyncJobs(int maxInstallsPerFrame = int.MaxValue, bool warmupMode = false)
         {
             int installs = 0;
             while (_completed.TryDequeue(out var item))
@@ -302,7 +297,7 @@ namespace Veilborne.Terrain
                 {
                     Heights = item.heights,
                     BaseHeights = (float[,])item.heights.Clone(),
-                    Splatmap = BuildSplatmap(item.heights, item.heights, item.biome, secBiome, secBlend),
+                    Splatmap = BuildSplatmap(item.heights, item.heights, item.biome, secBiome, secBlend, item.origin),
                     Origin = item.origin,
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
@@ -311,49 +306,59 @@ namespace Veilborne.Terrain
                 _entitiesByChunk[item.key] = new List<Entity>(item.objects?.Count ?? 0);
                 if (item.objects is { Count: > 0 })
                 {
-                    _pendingSpawnsByChunk[item.key] = new PendingSpawnBatch
+                    lock (_pendingSpawnsLock)
                     {
-                        Objects = item.objects,
-                        Biome = item.biome,
-                        Cursor = 0
-                    };
-                    _pendingSpawnOrder.Enqueue(item.key);
+                        _pendingSpawnsByChunk[item.key] = new PendingSpawnBatch
+                        {
+                            Objects = item.objects,
+                            Biome = item.biome,
+                            Cursor = 0
+                        };
+                        _pendingSpawnOrder.Enqueue(item.key);
+                    }
                 }
                 installs++;
-                if (installs >= maxInstallsPerFrame) break;
-                await Task.Yield();
+                if (!warmupMode && installs >= maxInstallsPerFrame)
+                    break;
             }
 
             int spawnBudget = warmupMode ? int.MaxValue : MaxObjectSpawnsPerFrame;
             ProcessPendingObjectSpawns(spawnBudget);
+            return Task.CompletedTask;
         }
 
         private void ProcessPendingObjectSpawns(int budget)
         {
-            int remaining = Math.Max(0, budget);
-            while (remaining > 0 && _pendingSpawnOrder.Count > 0)
+            lock (_pendingSpawnsLock)
             {
-                var key = _pendingSpawnOrder.Dequeue();
-                if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch))
-                    continue;
-                if (!_entitiesByChunk.TryGetValue(key, out var entities))
+                int remaining = Math.Max(0, budget);
+                while (remaining > 0 && _pendingSpawnOrder.Count > 0)
                 {
-                    _pendingSpawnsByChunk.Remove(key);
-                    continue;
-                }
+                    var key = _pendingSpawnOrder.Dequeue();
+                    if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch) || batch.Objects is not { } objects)
+                    {
+                        _pendingSpawnsByChunk.Remove(key);
+                        continue;
+                    }
+                    if (!_entitiesByChunk.TryGetValue(key, out var entities))
+                    {
+                        _pendingSpawnsByChunk.Remove(key);
+                        continue;
+                    }
 
-                int spawnCount = Math.Min(8, remaining);
-                while (spawnCount-- > 0 && batch.Cursor < batch.Objects.Count)
-                {
-                    var obj = batch.Objects[batch.Cursor++];
-                    entities.Add(CreateWorldObjectEntity(obj, key, 1, batch.Biome.Id));
-                    remaining--;
-                }
+                    int spawnCount = Math.Min(8, remaining);
+                    while (spawnCount-- > 0 && batch.Cursor < objects.Count)
+                    {
+                        var obj = objects[batch.Cursor++];
+                        entities.Add(CreateWorldObjectEntity(obj, key, 1, batch.Biome.Id));
+                        remaining--;
+                    }
 
-                if (batch.Cursor < batch.Objects.Count)
-                    _pendingSpawnOrder.Enqueue(key);
-                else
-                    _pendingSpawnsByChunk.Remove(key);
+                    if (batch.Cursor < objects.Count)
+                        _pendingSpawnOrder.Enqueue(key);
+                    else
+                        _pendingSpawnsByChunk.Remove(key);
+                }
             }
         }
 
@@ -424,16 +429,20 @@ namespace Veilborne.Terrain
                 if (exclude != null && exclude.Contains(key))
                     continue;
 
-                BiomeData primaryBiome;
-                if (biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary))
-                    primaryBiome = cachedPrimary;
-                else
-                    primaryBiome = GetDominantBiomeForChunk(chunk).Data;
+                int gridW = chunk.Heights.GetLength(0);
+                int gridH = chunk.Heights.GetLength(1);
+                if (!_renderer.IsChunkVisibleForRender(chunk.Origin, TileSize, gridW, gridH, camera))
+                    continue;
 
-                (BiomeData? secondary, float blend) blendInfo;
-                lock (_biomeBlendByChunk)
-                    blendInfo = _biomeBlendByChunk.TryGetValue(key, out var info) ? info : (null, 0f);
-                _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
+                var (primaryBiome, mergeBiome, maxMerge) = ResolveChunkRenderBiomes(chunk, key, biomeByChunkSnapshot);
+
+                if (!_renderMergeByChunk.TryGetValue(key, out var mergeInfo))
+                {
+                    mergeInfo = (mergeBiome, maxMerge);
+                    _renderMergeByChunk[key] = mergeInfo;
+                }
+
+                _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
 
                 _renderer.RenderAt(
                     chunk.Heights,
@@ -448,6 +457,12 @@ namespace Veilborne.Terrain
 
         private IBiome GetDominantBiomeForChunk(TerrainChunk chunk)
         {
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                return BiomeSampling.GetDominantBiomeForArea(
+                    simple, _terrainGen, chunk.Origin, ChunkSize, TileSize, 7, 2f, TileSize * 2f);
+            }
+
             var center = new Vector2(
                 chunk.Origin.X + ChunkSize * TileSize * 0.5f,
                 chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
@@ -461,6 +476,57 @@ namespace Veilborne.Terrain
 
             var primary = _biomeProvider.GetBiomeAt(centerWorld, _terrainGen);
             return (primary, null, 0f);
+        }
+
+        private (BiomeData primaryBiome, BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderBiomes(
+            TerrainChunk chunk,
+            (int cx, int cz) key,
+            Dictionary<(int cx, int cz), BiomeData> biomeByChunkSnapshot)
+        {
+            int gridW = chunk.Heights.GetLength(0);
+            int gridH = chunk.Heights.GetLength(1);
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (primaryId, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, _terrainGen, chunk.Origin, gridW, gridH, TileSize, 4f);
+                if (simple.TryGetBiomeById(primaryId, out var primaryBiome) && primaryBiome is not null)
+                {
+                    BiomeData? merge = null;
+                    if (!string.IsNullOrEmpty(mergeId) &&
+                        simple.TryGetBiomeById(mergeId, out var mergeBiome) &&
+                        mergeBiome is not null)
+                        merge = mergeBiome.Data;
+                    return (primaryBiome.Data, merge, maxMerge);
+                }
+            }
+
+            BiomeData fallbackPrimary = biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary)
+                ? cachedPrimary
+                : GetDominantBiomeForChunk(chunk).Data;
+            var center = new Vector2(
+                chunk.Origin.X + (gridW - 1) * TileSize * 0.5f,
+                chunk.Origin.Y + (gridH - 1) * TileSize * 0.5f);
+            var (_, secondary, blend) = ResolveBiomeBlend(center);
+            return (fallbackPrimary, secondary?.Data, blend);
+        }
+
+        private (BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderMerge(Vector2 origin, int gridWidth, int gridHeight)
+        {
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (_, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize, 4f);
+                if (!string.IsNullOrEmpty(mergeId) &&
+                    simple.TryGetBiomeById(mergeId, out var mergeBiome) &&
+                    mergeBiome is not null)
+                    return (mergeBiome.Data, maxMerge);
+            }
+
+            var center = new Vector2(
+                origin.X + (gridWidth - 1) * TileSize * 0.5f,
+                origin.Y + (gridHeight - 1) * TileSize * 0.5f);
+            var (_, secondary, blend) = ResolveBiomeBlend(center);
+            return (secondary?.Data, blend);
         }
 
         public void Render(CameraComponent camera) => RenderTiles(camera);
@@ -498,11 +564,34 @@ namespace Veilborne.Terrain
         }
 
         private Vector4[,] BuildSplatmap(float[,] heights, float[,]? baseHeights, BiomeData biome,
-            BiomeData? secondaryBiome = null, float blendFactor = 0f)
+            BiomeData? secondaryBiome = null, float blendFactor = 0f, Vector2 origin = default)
         {
             int w = heights.GetLength(0);
             int h = heights.GetLength(1);
             var splat = new Vector4[w, h];
+
+            BiomeData? effectiveMerge = secondaryBiome;
+            float effectiveMaxMerge = blendFactor;
+            float[,]? mergeMap = null;
+            string pairPrimaryId = biome.Id;
+            string generationBiomeId = biome.Id;
+            if (_biomeProvider is SimpleBiomeProvider simpleProvider)
+            {
+                var (primaryId, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simpleProvider, _terrainGen, origin, w, h, TileSize, 4f);
+                pairPrimaryId = TerrainChunkBiomeBlendPolicy.ResolveSplatPrimaryBiomeId(primaryId, generationBiomeId);
+                if (!string.IsNullOrEmpty(mergeId) &&
+                    simpleProvider.TryGetBiomeById(mergeId, out var mergeBiome) &&
+                    mergeBiome is not null)
+                {
+                    effectiveMerge = mergeBiome.Data;
+                    effectiveMaxMerge = maxMerge;
+                    (mergeMap, _) = BiomeSampling.BuildChunkPairBlendMap(
+                        simpleProvider, _terrainGen, origin, w, h, TileSize, primaryId, mergeId, 2);
+                }
+            }
+
+            bool hasMerge = effectiveMerge != null && mergeMap != null;
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -511,54 +600,28 @@ namespace Veilborne.Terrain
                 if (baseHeights != null)
                     depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
 
-                float hL = x > 0 ? heights[x - 1, z] : heights[x, z];
-                float hR = x < w - 1 ? heights[x + 1, z] : heights[x, z];
-                float hU = z > 0 ? heights[x, z - 1] : heights[x, z];
-                float hD = z < h - 1 ? heights[x, z + 1] : heights[x, z];
-                float dx = (hR - hL) * 0.5f;
-                float dz = (hD - hU) * 0.5f;
-                float slope = MathF.Sqrt(dx * dx + dz * dz);
+                float slope = ComputeSlopeAt(heights, x, z, w, h);
+                var primaryLayers = string.Equals(biome.Id, pairPrimaryId, StringComparison.OrdinalIgnoreCase)
+                    ? biome.TerrainLayers
+                    : (_biomeProvider is SimpleBiomeProvider sp &&
+                       sp.TryGetBiomeById(pairPrimaryId, out var pairPrimary) &&
+                       pairPrimary is not null
+                        ? pairPrimary.Data.TerrainLayers
+                        : biome.TerrainLayers);
+                Vector4 primary = ComputeSplatForLayers(primaryLayers, depth, slope);
 
-                splat[x, z] = ComputeSplatForLayers(biome.TerrainLayers, depth, slope);
-            }
-
-            // Multi-biome per-vertex blend overlay: sample biome blend weights at a grid
-            // and interpolate splatmap where secondary biomes have influence.
-            if (_biomeProvider is SimpleBiomeProvider simple && w > 1 && h > 1)
-            {
-                for (int z = 0; z < h; z++)
-                for (int x = 0; x < w; x++)
+                if (hasMerge)
                 {
-                    // Skip interior vertices on even grid for LowLod perf — only every 4th
-                    // vertex gets a full biome lookup, rest are interpolated implicitly by GPU.
-                    // For RO ring we do every vertex since quality matters.
-                    float depth = 0f;
-                    if (baseHeights != null)
-                        depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
-                    float slopeVal = ComputeSlopeAt(heights, x, z, w, h);
-
-                    // World position of this vertex
-                    // (origin is set externally; we use biome to get nearest chunk origin)
-                    // We don't have origin here; use relative blend from primary
-                    if (secondaryBiome == null || blendFactor <= 0.001f)
-                        continue;
-
-                    // Spatially-varying blend using smooth gradient across chunk
-                    float tx = x / (float)(w - 1);
-                    float tz = z / (float)(h - 1);
-                    // Hermite-style blend that peaks at edges and fades to center
-                    float edgeFade = MathF.Max(
-                        MathF.Abs(tx - 0.5f) * 2f,
-                        MathF.Abs(tz - 0.5f) * 2f);
-                    float vertexBlend = blendFactor * (0.3f + 0.7f * edgeFade);
-                    vertexBlend = vertexBlend * vertexBlend * (3f - 2f * vertexBlend); // smoothstep
-
-                    if (vertexBlend > 0.005f)
+                    float vertexBlend = mergeMap![x, z];
+                    if (vertexBlend > 0.001f)
                     {
-                        Vector4 secondary = ComputeSplatForLayers(secondaryBiome.TerrainLayers, depth, slopeVal);
-                        splat[x, z] = Vector4.Lerp(splat[x, z], secondary, vertexBlend);
+                        Vector4 merged = ComputeSplatForLayers(effectiveMerge!.TerrainLayers, depth, slope);
+                        splat[x, z] = Vector4.Lerp(primary, merged, vertexBlend);
+                        continue;
                     }
                 }
+
+                splat[x, z] = primary;
             }
 
             return splat;

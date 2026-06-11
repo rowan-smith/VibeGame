@@ -16,14 +16,14 @@
                            "SpeedScale":  0.15,
                            "DensityPenalty":  0.8,
                            "FpsTarget":  60.0,
-                           "MaxMeshBuildsPerFrame":  3,
+                           "MaxMeshBuildsPerFrame":  4,
                            "MaxEditableRebuildsPerFrame":  3,
                            "MaxReadOnlyChunkUpdatesPerFrame":  2,
                            "MaxLowLodChunkUpdatesPerFrame":  2,
                            "MaxReadOnlyInstallsPerFrame":  2,
                            "MaxLowLodInstallsPerFrame":  2,
-                           "MaxReadOnlyConcurrentJobs":  6,
-                           "MaxLowLodConcurrentJobs":  6,
+                           "MaxReadOnlyConcurrentJobs":  12,
+                           "MaxLowLodConcurrentJobs":  8,
                            "MaxTerrainDrawDistance":  900.0,
                            "SecondaryPassDistanceScale":  0.30
                        },
@@ -60,7 +60,7 @@
                           "Jitter":  0.85,
                           "WarpFrequencyScale":  1.0,
                           "WarpAmplitudeScale":  1.0,
-                          "BlendWidthWorld":  120.0
+                          "BlendWidthWorld":  240.0
                       },
     "Dig":  {
                 "Radius":  0.5,

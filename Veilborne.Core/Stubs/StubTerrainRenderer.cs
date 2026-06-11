@@ -22,6 +22,9 @@ namespace Veilborne.Stubs
         public void ProcessBuildQueue(int maxBuilds = 1) { }
         public void MarkOriginDirty(Vector2 originWorld) { }
         public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int startX, int startZ, int endX, int endZ) { }
+        public bool IsChunkVisibleForRender(
+            Vector2 chunkOrigin, float tileSize, int gridWidth, int gridHeight, CameraComponent camera) => true;
         public void Flush() { }
+        public void SetWarmupMode(bool enabled) { }
     }
 }

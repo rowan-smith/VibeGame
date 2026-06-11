@@ -539,7 +539,7 @@ namespace Veilborne.Terrain
             // During warmup (loading screen), allow 3x budget to converge faster.
             int uploadBudget = _cfg.MaxMeshBuildsPerFrame;
             if (_isWarmupMode)
-                uploadBudget = Math.Max(uploadBudget, uploadBudget * 3);
+                uploadBudget = Math.Max(uploadBudget * 4, 12);
             else if (perfDeficit > 0.10f)
                 uploadBudget = Math.Max(1, uploadBudget - 1);
             if (!_isWarmupMode && anyEditableDirty && perfDeficit < 0.20f)
@@ -659,9 +659,18 @@ namespace Veilborne.Terrain
                 }
             }
 
-            // Keep LOD as a depth-biased fallback at ring boundaries. Excluding LOD when RO
-            // chunks are merely loaded leaves see-through gaps because RO streaming radius is
-            // smaller than a LOD chunk's world footprint.
+            // Hide LOD where the full RO sub-grid is loaded so both rings do not paint
+            // different biome blends over the same world footprint (sharp ring seams).
+            if (showLowLodRing && showReadOnlyRing && _lowLodRing is not null)
+            {
+                int roPerLod = Math.Max(1, (int)MathF.Round(lodChunkWorld / roChunkWorld));
+                var lowLodChunks = _lowLodRing.GetLoadedChunks();
+                foreach (var (lodCx, lodCz) in SnapshotKeysSafe(lowLodChunks))
+                {
+                    if (IsParentChunkFullyCovered(lodCx, lodCz, roPerLod, readOnlyChunks))
+                        _lodExcludeScratch.Add((lodCx, lodCz));
+                }
+            }
 
             // Far
             if (showLowLodRing)
@@ -748,14 +757,14 @@ namespace Veilborne.Terrain
                 int lodInstallBudget = _isWarmupMode
                     ? int.MaxValue
                     : Math.Max(1, _cfg.MaxLowLodInstallsPerFrame);
-                await _lowLodRing.PumpAsyncJobs(lodInstallBudget);
+                await _lowLodRing.PumpAsyncJobs(lodInstallBudget, _isWarmupMode);
             }
         }
 
         public void ProcessBuildQueueOnly()
         {
             int budget = _isWarmupMode
-                ? Math.Max(1, _cfg.MaxMeshBuildsPerFrame * 3)
+                ? Math.Max(12, _cfg.MaxMeshBuildsPerFrame * 4)
                 : Math.Max(1, _cfg.MaxMeshBuildsPerFrame);
             _renderer.ProcessBuildQueue(budget);
         }
@@ -785,13 +794,13 @@ namespace Veilborne.Terrain
             int desiredPlayable = desiredEditable + desiredReadOnly;
             int loadedPlayable = loadedEditable + loadedReadOnly;
 
-            float chunkProgress = desiredPlayable > 0
-                ? Math.Clamp(loadedPlayable / (float)desiredPlayable, 0f, 1f)
-                : 1f;
-            float entityProgress = pendingSpawnObjects <= 0 ? 1f : 0f;
-            float progress = chunkProgress * 0.88f + entityProgress * 0.12f;
-            if (generatingPlayable == 0 && pendingSpawnObjects == 0 && loadedPlayable >= desiredPlayable)
-                progress = 1f;
+            float progress = TerrainLoadingMetrics.ComputeProgress01(
+                desiredPlayable,
+                loadedPlayable,
+                generatingPlayable,
+                desiredLod,
+                loadedLod,
+                pendingSpawnObjects);
 
             string stage;
             if (desiredPlayable == 0) stage = "Preparing world";
@@ -830,6 +839,17 @@ namespace Veilborne.Terrain
         public void SetWarmupMode(bool enabled)
         {
             _isWarmupMode = enabled;
+            _renderer.SetWarmupMode(enabled);
+            int roJobs = enabled
+                ? Math.Max(12, _cfg.MaxReadOnlyConcurrentJobs * 2)
+                : Math.Max(1, _cfg.MaxReadOnlyConcurrentJobs);
+            _readOnlyRing.MaxConcurrentJobs = roJobs;
+            if (_lowLodRing is not null)
+            {
+                _lowLodRing.MaxConcurrentJobs = enabled
+                    ? Math.Max(10, _cfg.MaxLowLodConcurrentJobs * 2)
+                    : Math.Max(1, _cfg.MaxLowLodConcurrentJobs);
+            }
         }
 
         public IEnumerable<(Vector3 center, Vector3 size, Vector4 color)> EnumerateDebugChunkBounds()

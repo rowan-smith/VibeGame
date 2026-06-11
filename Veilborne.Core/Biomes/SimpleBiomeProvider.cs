@@ -142,7 +142,7 @@ namespace Veilborne.Biomes
                 secondary = _biomes[GetCellData(secondSX, secondSY).BiomeIndex];
                 float delta = secondDist - bestDist;
                 blend = 1f - Math.Clamp(delta / _blendWidthWorld, 0f, 1f);
-                blend = SmoothStep(blend) * 0.49f;
+                blend = SmoothStep(blend);
             }
 
             if (secondary is null || string.Equals(secondary.Id, primary.Id, StringComparison.OrdinalIgnoreCase))
@@ -353,6 +353,21 @@ namespace Veilborne.Biomes
                 buffer[0] = new BiomeWeight(_biomes[unique[0].biomeIdx], 1f);
                 count = 1;
             }
+        }
+
+        public bool TryGetBiomeById(string id, out IBiome? biome)
+        {
+            for (int i = 0; i < _biomes.Count; i++)
+            {
+                if (string.Equals(_biomes[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                {
+                    biome = _biomes[i];
+                    return true;
+                }
+            }
+
+            biome = null;
+            return false;
         }
 
         private static float SmoothStep(float t)

@@ -35,7 +35,18 @@ namespace Veilborne.Interfaces
         // Coordinates are in local grid indices within the provided heights array.
         void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1);
 
+        /// <summary>Fast CPU-side cull before submitting a chunk for rendering this frame.</summary>
+        bool IsChunkVisibleForRender(
+            Vector2 chunkOrigin,
+            float tileSize,
+            int gridWidth,
+            int gridHeight,
+            CameraComponent camera);
+
         // Issue the actual GPU draw for all queued RenderAt calls. Call once per frame after all RenderAt calls.
         void Flush();
+
+        /// <summary>Toggle loading warmup (fast mesh builds); no-op for stubs.</summary>
+        void SetWarmupMode(bool enabled);
     }
 }

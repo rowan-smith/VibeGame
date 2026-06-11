@@ -30,6 +30,7 @@ namespace Veilborne.Terrain
         private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
         private readonly Dictionary<(int cx, int cz), BiomeData> _primaryBiomeByChunk = new();
         private readonly Dictionary<(int cx, int cz), (BiomeData? secondary, float blend)> _biomeBlendByChunk = new();
+        private readonly Dictionary<(int cx, int cz), (BiomeData? merge, float maxMerge)> _renderMergeByChunk = new();
         private readonly Dictionary<string, BiomeData> _biomeConfigById = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<(int cx, int cz)> _desiredKeysScratch = new();
         private readonly List<(int cx, int cz)> _toRemoveScratch = new();
@@ -42,7 +43,7 @@ namespace Veilborne.Terrain
         private const int MaxTerrainEditsQueued = 16;
         private const int MaxEditableChunkInstallsPerFrame = 1;
         private const int MaxEditableConcurrentJobs = 2;
-        private const int MaxEditableConcurrentJobsWarmup = 6;
+        private const int MaxEditableConcurrentJobsWarmup = 12;
         private readonly object _lock = new();
         private int _lastDesiredChunkCount;
         private bool _isWarmupMode;
@@ -95,7 +96,20 @@ namespace Veilborne.Terrain
         public int GeneratingChunkCount => _generating.Count;
         public int PendingSpawnObjectCount
         {
-            get => SumPendingSpawnsSafe(_pendingSpawnsByChunk);
+            get
+            {
+                lock (_lock)
+                {
+                    int pending = 0;
+                    foreach (var batch in _pendingSpawnsByChunk.Values)
+                    {
+                        if (batch?.Objects is not { } objects)
+                            continue;
+                        pending += Math.Max(0, objects.Count - batch.Cursor);
+                    }
+                    return pending;
+                }
+            }
         }
         public int LoadedEntityCount
         {
@@ -112,28 +126,6 @@ namespace Veilborne.Terrain
                     foreach (var entities in entitiesByChunk.Values.ToArray())
                         count += entities.Count;
                     return count;
-                }
-                catch (InvalidOperationException)
-                {
-                    // Collection changed while snapshotting; retry.
-                }
-                catch (ArgumentException)
-                {
-                    // Collection resized while copying; retry.
-                }
-            }
-        }
-
-        private static int SumPendingSpawnsSafe(Dictionary<(int cx, int cz), PendingSpawnBatch> pendingByChunk)
-        {
-            while (true)
-            {
-                try
-                {
-                    int pending = 0;
-                    foreach (var batch in pendingByChunk.Values.ToArray())
-                        pending += Math.Max(0, batch.Objects.Count - batch.Cursor);
-                    return pending;
                 }
                 catch (InvalidOperationException)
                 {
@@ -199,6 +191,7 @@ namespace Veilborne.Terrain
                 {
                     _loadedChunks.Remove(key);
                     _primaryBiomeByChunk.Remove(key);
+                    _renderMergeByChunk.Remove(key);
                     _biomeBlendByChunk.Remove(key);
                     _pendingSpawnsByChunk.Remove(key);
                     if (_entitiesByChunk.TryGetValue(key, out var entities))
@@ -272,10 +265,11 @@ namespace Veilborne.Terrain
 
                 var newChunk = _loadedChunks[result.Key];
                 InitializeChunkLayersAndResources(result.Key, ref newChunk, result.PrimaryBiome.Id);
+                RecomputeSplatmapForChunk(result.Key, ref newChunk);
                 _loadedChunks[result.Key] = newChunk;
 
-                _entitiesByChunk[result.Key] = new List<Entity>(result.Objects.Count);
-                if (result.Objects.Count > 0)
+                _entitiesByChunk[result.Key] = new List<Entity>(result.Objects?.Count ?? 0);
+                if (result.Objects is { Count: > 0 })
                 {
                     _pendingSpawnsByChunk[result.Key] = new PendingSpawnBatch
                     {
@@ -354,6 +348,48 @@ namespace Veilborne.Terrain
             return (primaryBiome.Data, null, 0f);
         }
 
+        private BiomeData ResolveChunkPrimaryBiome(TerrainChunk chunk)
+        {
+            int gridW = chunk.Heights.GetLength(0);
+            int gridH = chunk.Heights.GetLength(1);
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (primaryId, _, _) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, _terrainGen, chunk.Origin, gridW, gridH, TileSize, 4f);
+                if (simple.TryGetBiomeById(primaryId, out var primary) && primary is not null)
+                    return primary.Data;
+            }
+
+            var center = new Vector2(
+                chunk.Origin.X + ChunkSize * TileSize * 0.5f,
+                chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
+            var (fallback, secondary, blend) = ResolveBiomeBlend(center);
+            var key = (
+                (int)MathF.Floor(chunk.Origin.X / (ChunkSize * TileSize)),
+                (int)MathF.Floor(chunk.Origin.Y / (ChunkSize * TileSize)));
+            _biomeBlendByChunk[key] = (secondary, blend);
+            return fallback;
+        }
+
+        private (BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderMerge(Vector2 origin, int gridWidth, int gridHeight)
+        {
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (_, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize, 4f);
+                if (!string.IsNullOrEmpty(mergeId) &&
+                    simple.TryGetBiomeById(mergeId, out var mergeBiome) &&
+                    mergeBiome is not null)
+                    return (mergeBiome.Data, maxMerge);
+            }
+
+            var center = new Vector2(
+                origin.X + (gridWidth - 1) * TileSize * 0.5f,
+                origin.Y + (gridHeight - 1) * TileSize * 0.5f);
+            var (_, secondary, blend) = ResolveBiomeBlend(center);
+            return (secondary, blend);
+        }
+
         private void RecomputeSplatmapForChunk((int cx, int cz) key, ref TerrainChunk chunk)
         {
             int w = chunk.Heights.GetLength(0);
@@ -361,14 +397,22 @@ namespace Veilborne.Terrain
             chunk.Splatmap ??= new Vector4[w, h];
 
             string primaryId = _primaryBiomeByChunk.TryGetValue(key, out var biome) ? biome.Id : string.Empty;
-            _biomeBlendByChunk.TryGetValue(key, out var blendInfo);
-            string secondaryId = blendInfo.secondary?.Id ?? string.Empty;
-            bool hasSecondary = !string.IsNullOrEmpty(secondaryId) && blendInfo.blend > 0.001f;
+            if (_biomeProvider is SimpleBiomeProvider simplePair)
+            {
+                var (pairPrimaryId, pairMergeId, _) = BiomeSampling.ResolveChunkBiomePair(
+                    simplePair, _terrainGen, chunk.Origin, w, h, TileSize, 4f);
+                if (!string.IsNullOrEmpty(pairPrimaryId))
+                    primaryId = pairPrimaryId;
+            }
 
-            // Compute per-vertex blend factor by sampling at chunk corners + center
-            float[,]? blendMap = null;
-            if (hasSecondary && _biomeProvider is SimpleBiomeProvider simple)
-                blendMap = BuildVertexBlendMap(simple, chunk.Origin, w, h);
+            var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, w, h);
+            string mergeId = mergeBiome?.Id ?? string.Empty;
+            bool hasMerge = !string.IsNullOrEmpty(mergeId);
+
+            float[,]? mergeMap = null;
+            if (hasMerge && _biomeProvider is SimpleBiomeProvider simple && !string.IsNullOrEmpty(primaryId))
+                (mergeMap, _) = BiomeSampling.BuildChunkPairBlendMap(
+                    simple, _terrainGen, chunk.Origin, w, h, TileSize, primaryId, mergeId, 2);
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -380,13 +424,13 @@ namespace Veilborne.Terrain
 
                 Vector4 primary = ComputeSplatWeights(depth, key, x, z, primaryId, slope);
 
-                if (hasSecondary && blendMap != null)
+                if (hasMerge && mergeMap != null)
                 {
-                    float t = blendMap[x, z];
+                    float t = mergeMap[x, z];
                     if (t > 0.001f)
                     {
-                        Vector4 secondary = ComputeSplatWeights(depth, key, x, z, secondaryId, slope);
-                        chunk.Splatmap[x, z] = Vector4.Lerp(primary, secondary, t);
+                        Vector4 merged = ComputeSplatWeights(depth, key, x, z, mergeId, slope);
+                        chunk.Splatmap[x, z] = Vector4.Lerp(primary, merged, t);
                         continue;
                     }
                 }
@@ -432,43 +476,6 @@ namespace Veilborne.Terrain
             }
         }
 
-        /// <summary>
-        /// Builds a per-vertex blend factor map by sampling the biome provider at chunk corners
-        /// and bilinearly interpolating across the chunk. Only called at chunk generation, not per frame.
-        /// </summary>
-        private float[,] BuildVertexBlendMap(SimpleBiomeProvider provider, Vector2 origin, int w, int h)
-        {
-            var map = new float[w, h];
-            float chunkW = (w - 1) * TileSize;
-            float chunkH = (h - 1) * TileSize;
-
-            // Sample blend factor at 5 points: 4 corners + center
-            float b00 = SampleBlend(provider, origin.X, origin.Y);
-            float b10 = SampleBlend(provider, origin.X + chunkW, origin.Y);
-            float b01 = SampleBlend(provider, origin.X, origin.Y + chunkH);
-            float b11 = SampleBlend(provider, origin.X + chunkW, origin.Y + chunkH);
-
-            for (int z = 0; z < h; z++)
-            {
-                float tz = h > 1 ? z / (float)(h - 1) : 0f;
-                for (int x = 0; x < w; x++)
-                {
-                    float tx = w > 1 ? x / (float)(w - 1) : 0f;
-                    // Bilinear interpolation of blend factors
-                    float top = b00 + (b10 - b00) * tx;
-                    float bot = b01 + (b11 - b01) * tx;
-                    map[x, z] = top + (bot - top) * tz;
-                }
-            }
-            return map;
-        }
-
-        private float SampleBlend(SimpleBiomeProvider provider, float wx, float wz)
-        {
-            var (_, _, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), _terrainGen);
-            return blend;
-        }
-
         public void Render(CameraComponent camera)
         {
             if (!RenderBaseHeightmap) return;
@@ -481,17 +488,22 @@ namespace Veilborne.Terrain
                     var chunk = kvp.Value;
                     if (!_primaryBiomeByChunk.TryGetValue(key, out var primaryBiome))
                     {
-                        var center = new Vector2(
-                            chunk.Origin.X + ChunkSize * TileSize * 0.5f,
-                            chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
-                        var (primary, secondary, blend) = ResolveBiomeBlend(center);
-                        primaryBiome = primary;
+                        primaryBiome = ResolveChunkPrimaryBiome(chunk);
                         _primaryBiomeByChunk[key] = primaryBiome;
-                        _biomeBlendByChunk[key] = (secondary, blend);
                     }
-                    if (!_biomeBlendByChunk.TryGetValue(key, out var blendInfo))
-                        blendInfo = (null, 0f);
-                _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
+                    int gridW = chunk.Heights.GetLength(0);
+                    int gridH = chunk.Heights.GetLength(1);
+                    if (!_renderer.IsChunkVisibleForRender(chunk.Origin, TileSize, gridW, gridH, camera))
+                        continue;
+
+                    if (!_renderMergeByChunk.TryGetValue(key, out var mergeInfo))
+                    {
+                        mergeInfo = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                        _renderMergeByChunk[key] = mergeInfo;
+                    }
+
+                    var (mergeBiome, maxMerge) = mergeInfo;
+                    _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, GetTerrainLayersForBiomeId(primaryBiome.Id), chunk.Splatmap);
                 }
             }
@@ -633,13 +645,16 @@ namespace Veilborne.Terrain
         {
             var lc = GetTerrainLayersForBiomeId(biomeId);
 
-            // Per-cell depth variation via cheap hash noise
+            // World-space smooth noise avoids blocky per-vertex grass/mud seams.
             float depthVar = lc.DepthVariation;
-            float cellNoise = DepthNoise(key.cx, key.cz, ix, iz) * depthVar;
+            float worldX = (key.cx * ChunkSize + ix) * TileSize;
+            float worldZ = (key.cz * ChunkSize + iz) * TileSize;
+            float cellNoise = SampleSmoothDepthNoise(worldX, worldZ) * depthVar;
             float effSubDepth = MathF.Max(0.05f, lc.SubsurfaceDepth + cellNoise);
             float effDeepDepth = MathF.Max(effSubDepth + 0.1f, lc.DeepDepth + cellNoise * 1.5f);
 
             float grass = Math.Clamp(1f - depth / effSubDepth, 0f, 1f);
+            grass = grass * grass * (3f - 2f * grass);
             float mud = 0f;
             float rock = 0f;
             float mineral = 0f;
@@ -672,14 +687,34 @@ namespace Veilborne.Terrain
             return new Vector4(grass / sum, mud / sum, rock / sum, mineral / sum);
         }
 
-        private static float DepthNoise(int cx, int cz, int ix, int iz)
+        private static float SampleSmoothDepthNoise(float worldX, float worldZ)
+        {
+            const float frequency = 0.14f;
+            float x = worldX * frequency;
+            float z = worldZ * frequency;
+            int ix = (int)MathF.Floor(x);
+            int iz = (int)MathF.Floor(z);
+            float fx = x - ix;
+            float fz = z - iz;
+            float sx = fx * fx * (3f - 2f * fx);
+            float sz = fz * fz * (3f - 2f * fz);
+            float n00 = DepthNoiseUnit(ix, iz);
+            float n10 = DepthNoiseUnit(ix + 1, iz);
+            float n01 = DepthNoiseUnit(ix, iz + 1);
+            float n11 = DepthNoiseUnit(ix + 1, iz + 1);
+            float nx0 = n00 + (n10 - n00) * sx;
+            float nx1 = n01 + (n11 - n01) * sx;
+            return (nx0 + (nx1 - nx0) * sz) * 2f - 1f;
+        }
+
+        private static float DepthNoiseUnit(int ix, int iz)
         {
             unchecked
             {
-                int h = cx * 374761393 ^ cz * 668265263 ^ ix * 1274126177 ^ iz * (int)2654435769;
+                int h = ix * 374761393 ^ iz * 668265263;
                 h ^= h >> 13;
                 h *= 1274126177;
-                return ((h & 0x7FFFFFFF) / (float)int.MaxValue) * 2f - 1f;
+                return (h & 0x7FFFFFFF) / (float)int.MaxValue;
             }
         }
 
@@ -1045,8 +1080,11 @@ namespace Veilborne.Terrain
             while (remaining > 0 && _pendingSpawnOrder.Count > 0)
             {
                 var key = _pendingSpawnOrder.Dequeue();
-                if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch))
+                if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch) || batch.Objects is not { } objects)
+                {
+                    _pendingSpawnsByChunk.Remove(key);
                     continue;
+                }
                 if (!_entitiesByChunk.TryGetValue(key, out var entities))
                 {
                     _pendingSpawnsByChunk.Remove(key);
@@ -1054,14 +1092,14 @@ namespace Veilborne.Terrain
                 }
 
                 int spawnCount = Math.Min(6, remaining);
-                while (spawnCount-- > 0 && batch.Cursor < batch.Objects.Count)
+                while (spawnCount-- > 0 && batch.Cursor < objects.Count)
                 {
-                    var obj = batch.Objects[batch.Cursor++];
+                    var obj = objects[batch.Cursor++];
                     entities.Add(CreateWorldObjectEntity(obj, key, 0, batch.BiomeId));
                     remaining--;
                 }
 
-                if (batch.Cursor < batch.Objects.Count)
+                if (batch.Cursor < objects.Count)
                     _pendingSpawnOrder.Enqueue(key);
                 else
                     _pendingSpawnsByChunk.Remove(key);

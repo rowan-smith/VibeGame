@@ -55,7 +55,7 @@ namespace Veilborne.Ecs
                 var entry = GetOrCreate(name);
                 entry.LastUpdateMs = elapsedMs;
                 entry.AvgUpdateMs = entry.AvgUpdateMs <= 0d ? elapsedMs : (entry.AvgUpdateMs * 0.90d + elapsedMs * 0.10d);
-                entry.PeakUpdateMs = Math.Max(entry.PeakUpdateMs * 0.995d, elapsedMs);
+                entry.PeakUpdateMs = Math.Max(entry.PeakUpdateMs * 0.97d, elapsedMs);
                 _frameUpdateTotalMs += elapsedMs;
             }
         }
@@ -67,7 +67,7 @@ namespace Veilborne.Ecs
                 var entry = GetOrCreate(name);
                 entry.LastRenderMs = elapsedMs;
                 entry.AvgRenderMs = entry.AvgRenderMs <= 0d ? elapsedMs : (entry.AvgRenderMs * 0.90d + elapsedMs * 0.10d);
-                entry.PeakRenderMs = Math.Max(entry.PeakRenderMs * 0.995d, elapsedMs);
+                entry.PeakRenderMs = Math.Max(entry.PeakRenderMs * 0.97d, elapsedMs);
                 _frameRenderTotalMs += elapsedMs;
             }
         }

@@ -25,7 +25,7 @@ namespace Veilborne.Settings
         public int TerrainViewDistance { get; set; } = 55;
         public int ObjectViewDistance { get; set; } = 55;
         public int Brightness { get; set; } = 100;
-        public bool BiomeTextureCrossfade { get; set; } = false;
+        public bool BiomeTextureCrossfade { get; set; } = true;
     }
 
     public sealed class DebugSettings

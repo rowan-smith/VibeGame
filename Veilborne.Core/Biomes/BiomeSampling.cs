@@ -159,9 +159,522 @@ namespace Veilborne.Biomes
             float blend = 0f;
             float denom = primaryWeight + secondaryWeight;
             if (secondary is not null && denom > 1e-5f)
-                blend = Math.Clamp(secondaryWeight / denom, 0f, 0.49f);
+                blend = Math.Clamp(secondaryWeight / denom, 0f, 1f);
 
             return (primary, secondary, blend);
+        }
+
+        /// <summary>
+        /// Samples corners, edge midpoints, and center to catch transitions that fall on
+        /// chunk sides between adjacent single-biome chunks.
+        /// </summary>
+        public static (float maxBlend, IBiome? secondaryBiome) ResolveBoundaryCrossfade(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize,
+            string? primaryBiomeId = null)
+        {
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+            float maxBlend = 0f;
+            IBiome? bestSecondary = null;
+            var weights = new BiomeWeight[4];
+
+            void Consider(float candidateBlend, IBiome? candidateBiome)
+            {
+                if (candidateBiome is null || candidateBlend <= maxBlend)
+                    return;
+                if (!string.IsNullOrEmpty(primaryBiomeId) &&
+                    string.Equals(candidateBiome.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    return;
+                maxBlend = candidateBlend;
+                bestSecondary = candidateBiome;
+            }
+
+            void Sample(float wx, float wz)
+            {
+                var (localPrimary, localSecondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+                if (!string.IsNullOrEmpty(primaryBiomeId))
+                {
+                    // At chunk edges the nearest Voronoi site is often the neighbor biome while
+                    // secondary is this chunk's area primary. Filtering secondary == primaryBiomeId
+                    // dropped those transitions and left one-sided hard seams.
+                    if (!string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        float towardNeighbor = blend;
+                        if (localSecondary is not null &&
+                            string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                            towardNeighbor = 1f - blend;
+                        Consider(towardNeighbor, localPrimary);
+                    }
+                    else if (localSecondary is not null &&
+                             !string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Consider(blend, localSecondary);
+                    }
+                }
+                else
+                {
+                    Consider(blend, localSecondary);
+                }
+
+                provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
+                for (int i = 0; i < count; i++)
+                {
+                    var biome = weights[i].Biome;
+                    if (!string.IsNullOrEmpty(primaryBiomeId) &&
+                        string.Equals(biome.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    float candidate = weights[i].Weight;
+                    if (!string.IsNullOrEmpty(primaryBiomeId))
+                        candidate = SamplePairBlendAlpha(
+                            provider, terrain, wx, wz, primaryBiomeId, biome.Id, weights);
+                    Consider(candidate, biome);
+                }
+            }
+
+            int edgeSamples = Math.Clamp(Math.Max(width, height) / 8, 4, 32);
+            for (int i = 0; i <= edgeSamples; i++)
+            {
+                float t = edgeSamples == 0 ? 0f : i / (float)edgeSamples;
+                float wx = origin.X + chunkW * t;
+                float wz = origin.Y + chunkH * t;
+                Sample(wx, origin.Y);
+                Sample(wx, origin.Y + chunkH);
+                Sample(origin.X, wz);
+                Sample(origin.X + chunkW, wz);
+            }
+
+            return (maxBlend, bestSecondary);
+        }
+
+        /// <summary>
+        /// Builds a per-vertex blend map from a coarse grid (default 4x4) of biome samples.
+        /// Much faster than per-vertex weight queries while catching edge transitions.
+        /// </summary>
+        public static float[,] BuildVertexBlendMapGrid(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize,
+            int samplesPerAxis = 4)
+        {
+            samplesPerAxis = Math.Max(2, samplesPerAxis);
+            var grid = new float[samplesPerAxis, samplesPerAxis];
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+
+            for (int j = 0; j < samplesPerAxis; j++)
+            {
+                float tz = samplesPerAxis > 1 ? j / (float)(samplesPerAxis - 1) : 0f;
+                for (int i = 0; i < samplesPerAxis; i++)
+                {
+                    float tx = samplesPerAxis > 1 ? i / (float)(samplesPerAxis - 1) : 0f;
+                    float wx = origin.X + tx * chunkW;
+                    float wz = origin.Y + tz * chunkH;
+                    grid[i, j] = SampleBiomeBlend(provider, terrain, wx, wz);
+                }
+            }
+
+            var map = new float[width, height];
+            for (int z = 0; z < height; z++)
+            {
+                float tz = height > 1 ? z / (float)(height - 1) : 0f;
+                float gz = tz * (samplesPerAxis - 1);
+                int j0 = (int)MathF.Floor(gz);
+                int j1 = Math.Min(j0 + 1, samplesPerAxis - 1);
+                float fz = gz - j0;
+                for (int x = 0; x < width; x++)
+                {
+                    float tx = width > 1 ? x / (float)(width - 1) : 0f;
+                    float gx = tx * (samplesPerAxis - 1);
+                    int i0 = (int)MathF.Floor(gx);
+                    int i1 = Math.Min(i0 + 1, samplesPerAxis - 1);
+                    float fx = gx - i0;
+                    float top = grid[i0, j0] + (grid[i1, j0] - grid[i0, j0]) * fx;
+                    float bot = grid[i0, j1] + (grid[i1, j1] - grid[i0, j1]) * fx;
+                    map[x, z] = top + (bot - top) * fz;
+                }
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        /// Builds a per-vertex blend factor map by sampling biome blend weights at chunk corners
+        /// and bilinearly interpolating across the chunk.
+        /// </summary>
+        public static float[,] BuildVertexBlendMap(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize)
+        {
+            var map = new float[width, height];
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+
+            float b00 = SampleBiomeBlend(provider, terrain, origin.X, origin.Y);
+            float b10 = SampleBiomeBlend(provider, terrain, origin.X + chunkW, origin.Y);
+            float b01 = SampleBiomeBlend(provider, terrain, origin.X, origin.Y + chunkH);
+            float b11 = SampleBiomeBlend(provider, terrain, origin.X + chunkW, origin.Y + chunkH);
+
+            for (int z = 0; z < height; z++)
+            {
+                float tz = height > 1 ? z / (float)(height - 1) : 0f;
+                for (int x = 0; x < width; x++)
+                {
+                    float tx = width > 1 ? x / (float)(width - 1) : 0f;
+                    float top = b00 + (b10 - b00) * tx;
+                    float bot = b01 + (b11 - b01) * tx;
+                    map[x, z] = top + (bot - top) * tz;
+                }
+            }
+
+            return map;
+        }
+
+        private static float SampleBiomeBlend(SimpleBiomeProvider provider, ITerrainGenerator terrain, float wx, float wz)
+        {
+            var (_, _, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+            return blend;
+        }
+
+        /// <summary>
+        /// Builds a per-vertex biome merge map using world-position blend weights.
+        /// Adds noise near transitions so boundaries look organic instead of straight lines.
+        /// </summary>
+        public static (float[,] mergeMap, IBiome? mergeBiome, float maxMerge) BuildVertexMergeMap(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize)
+        {
+            var map = new float[width, height];
+            float maxMerge = 0f;
+            IBiome? mergeBiome = null;
+            var weights = new BiomeWeight[4];
+
+            for (int z = 0; z < height; z++)
+            for (int x = 0; x < width; x++)
+            {
+                float wx = origin.X + x * tileSize;
+                float wz = origin.Y + z * tileSize;
+                provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain, weights, out int count, 4);
+
+                float merge = 0f;
+                if (count > 1)
+                {
+                    merge = 1f - weights[0].Weight;
+                    if (weights[1].Weight > 0.001f)
+                    {
+                        float candidate = weights[1].Weight;
+                        if (candidate > maxMerge)
+                        {
+                            maxMerge = candidate;
+                            mergeBiome = weights[1].Biome;
+                        }
+                    }
+                    merge = PerturbMergeWeight(wx, wz, merge);
+                }
+
+                map[x, z] = merge;
+                if (merge > maxMerge)
+                    maxMerge = merge;
+            }
+
+            return (map, mergeBiome, maxMerge);
+        }
+
+        /// <summary>
+        /// Picks stable primary/merge biome ids for a chunk using area voting with margin expansion.
+        /// </summary>
+        public static (string primaryId, string mergeId, float maxMerge) ResolveChunkBiomePair(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int gridWidth,
+            int gridHeight,
+            float tileSize,
+            float expandMarginTiles = 2f)
+        {
+            int chunkSize = Math.Max(1, gridWidth - 1);
+            float margin = tileSize * MathF.Max(0f, expandMarginTiles);
+            var (primary, secondary, primaryWeight, secondaryWeight) = GetDominantAndSecondaryBiomeForAreaWithWeights(
+                provider, terrain, origin, chunkSize, tileSize, 7, 2f, margin);
+
+            string primaryId = primary.Id;
+            string mergeId = secondary?.Id ?? string.Empty;
+            float maxMerge = 0f;
+            float denom = primaryWeight + secondaryWeight;
+            if (secondary is not null && denom > 1e-5f)
+                maxMerge = Math.Clamp(secondaryWeight / denom, 0f, 1f);
+
+            var (boundaryMax, boundarySecondary) = ResolveBoundaryCrossfade(
+                provider, terrain, origin, gridWidth, gridHeight, tileSize, primaryId);
+            if (boundaryMax > maxMerge)
+                maxMerge = boundaryMax;
+            if (boundarySecondary is not null &&
+                !string.Equals(boundarySecondary.Id, primaryId, StringComparison.OrdinalIgnoreCase))
+                mergeId = boundarySecondary.Id;
+
+            if (string.IsNullOrEmpty(mergeId) && boundaryMax > 0.001f && boundarySecondary is not null)
+                mergeId = boundarySecondary.Id;
+
+            if (string.Equals(mergeId, primaryId, StringComparison.OrdinalIgnoreCase))
+                mergeId = string.Empty;
+
+            return (primaryId, mergeId, maxMerge);
+        }
+
+        /// <summary>
+        /// World-consistent per-vertex blend toward <paramref name="mergeBiomeId"/> relative to
+        /// <paramref name="primaryBiomeId"/>. Uses strided sampling with bilinear upsample when stride &gt; 1.
+        /// </summary>
+        public static (float[,] map, float maxMerge) BuildChunkPairBlendMap(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            int sampleStride = 1)
+        {
+            var map = new float[width, height];
+            if (string.IsNullOrEmpty(mergeBiomeId) ||
+                string.Equals(primaryBiomeId, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                return (map, 0f);
+
+            sampleStride = Math.Max(1, sampleStride);
+            int gridW = (width - 1) / sampleStride + 1;
+            int gridH = (height - 1) / sampleStride + 1;
+            var coarse = new float[gridW, gridH];
+            float maxMerge = 0f;
+            var weights = new BiomeWeight[4];
+
+            for (int gz = 0; gz < gridH; gz++)
+            {
+                int z = Math.Min(gz * sampleStride, height - 1);
+                for (int gx = 0; gx < gridW; gx++)
+                {
+                    int x = Math.Min(gx * sampleStride, width - 1);
+                    float wx = origin.X + x * tileSize;
+                    float wz = origin.Y + z * tileSize;
+                    float alpha = SamplePairBlendAlpha(
+                        provider, terrain, wx, wz, primaryBiomeId, mergeBiomeId, weights);
+                    alpha = PerturbMergeWeight(wx, wz, alpha);
+                    coarse[gx, gz] = alpha;
+                    if (alpha > maxMerge) maxMerge = alpha;
+                }
+            }
+
+            if (sampleStride == 1)
+            {
+                for (int z = 0; z < height; z++)
+                for (int x = 0; x < width; x++)
+                    map[x, z] = coarse[x, z];
+                return (map, maxMerge);
+            }
+
+            for (int z = 0; z < height; z++)
+            {
+                float gz = height > 1 ? z / (float)(height - 1) : 0f;
+                float gzScaled = gz * (gridH - 1);
+                int j0 = (int)MathF.Floor(gzScaled);
+                int j1 = Math.Min(j0 + 1, gridH - 1);
+                float fz = gzScaled - j0;
+                for (int x = 0; x < width; x++)
+                {
+                    float gx = width > 1 ? x / (float)(width - 1) : 0f;
+                    float gxScaled = gx * (gridW - 1);
+                    int i0 = (int)MathF.Floor(gxScaled);
+                    int i1 = Math.Min(i0 + 1, gridW - 1);
+                    float fx = gxScaled - i0;
+                    float top = coarse[i0, j0] + (coarse[i1, j0] - coarse[i0, j0]) * fx;
+                    float bot = coarse[i0, j1] + (coarse[i1, j1] - coarse[i0, j1]) * fx;
+                    map[x, z] = top + (bot - top) * fz;
+                }
+            }
+
+            if (sampleStride > 1)
+                RefinePairBlendPerimeter(provider, terrain, origin, width, height, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+
+            return (map, maxMerge);
+        }
+
+        private static void RefinePairBlendPerimeter(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            float[,] map,
+            Span<BiomeWeight> weights,
+            ref float maxMerge)
+        {
+            int lastX = width - 1;
+            int lastZ = height - 1;
+            for (int x = 0; x < width; x++)
+            {
+                RefinePairBlendVertex(provider, terrain, origin, x, 0, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+                if (lastZ > 0)
+                    RefinePairBlendVertex(provider, terrain, origin, x, lastZ, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+            }
+
+            for (int z = 1; z < lastZ; z++)
+            {
+                RefinePairBlendVertex(provider, terrain, origin, 0, z, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+                if (lastX > 0)
+                    RefinePairBlendVertex(provider, terrain, origin, lastX, z, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+            }
+        }
+
+        private static void RefinePairBlendVertex(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int x,
+            int z,
+            float tileSize,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            float[,] map,
+            Span<BiomeWeight> weights,
+            ref float maxMerge)
+        {
+            float wx = origin.X + x * tileSize;
+            float wz = origin.Y + z * tileSize;
+            float alpha = SamplePairBlendAlpha(provider, terrain, wx, wz, primaryBiomeId, mergeBiomeId, weights);
+            alpha = PerturbMergeWeight(wx, wz, alpha);
+            map[x, z] = alpha;
+            if (alpha > maxMerge)
+                maxMerge = alpha;
+        }
+
+        /// <summary>
+        /// World-consistent blend toward mergeBiomeId. Uses GetBiomeBlendAt when the local
+        /// primary/secondary pair matches the chunk pair (including swapped orientation).
+        /// </summary>
+        private static float SamplePairBlendAlpha(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            float wx,
+            float wz,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            Span<BiomeWeight> weights)
+        {
+            var (localPrimary, localSecondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+            if (localSecondary is not null)
+            {
+                if (string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(localSecondary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                    return blend;
+                if (string.Equals(localPrimary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    return 1f - blend;
+            }
+
+            provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
+            float primaryW = 0f;
+            float mergeW = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                string id = weights[i].Biome.Id;
+                if (string.Equals(id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    primaryW = weights[i].Weight;
+                else if (string.Equals(id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                    mergeW = weights[i].Weight;
+            }
+
+            float pairSum = primaryW + mergeW;
+            if (pairSum > 1e-5f)
+                return mergeW / pairSum;
+
+            if (string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                return 0f;
+            if (string.Equals(localPrimary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                return 1f;
+            return 0f;
+        }
+
+        private static float PerturbMergeWeight(float worldX, float worldZ, float merge)
+        {
+            if (merge <= 0.001f || merge >= 0.999f)
+                return merge;
+
+            float noise = HashNoise(worldX * 0.08f + 41.2f, worldZ * 0.08f - 17.8f);
+            float edge = MathF.Min(merge, 1f - merge) * 4f;
+            float amplitude = 0.22f * MathF.Min(1f, edge);
+            return Math.Clamp(merge + (noise - 0.5f) * 2f * amplitude, 0f, 1f);
+        }
+
+        private static float HashNoise(float x, float y)
+        {
+            uint n = (uint)(x * 127.1f + y * 311.7f);
+            n = (n << 13) ^ n;
+            return ((n * (n * n * 15731u + 789221u) + 1376312589u) & 0x7FFFFFFF) / (float)0x7FFFFFFF;
+        }
+
+        /// <summary>
+        /// Resolves biome crossfade from chunk corners. Chunks whose center sits deep inside
+        /// one biome can still have non-zero blend at edges that touch a neighbor biome.
+        /// </summary>
+        public static (float b00, float b10, float b01, float b11, float maxBlend, IBiome? secondaryBiome)
+            ResolveCornerCrossfade(
+                SimpleBiomeProvider provider,
+                ITerrainGenerator terrain,
+                Vector2 origin,
+                int width,
+                int height,
+                float tileSize)
+        {
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+
+            float maxBlend = 0f;
+            IBiome? bestSecondary = null;
+
+            float SampleCorner(float wx, float wz)
+            {
+                var (_, secondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+                if (blend > maxBlend && secondary is not null)
+                {
+                    maxBlend = blend;
+                    bestSecondary = secondary;
+                }
+                return blend;
+            }
+
+            float b00 = SampleCorner(origin.X, origin.Y);
+            float b10 = SampleCorner(origin.X + chunkW, origin.Y);
+            float b01 = SampleCorner(origin.X, origin.Y + chunkH);
+            float b11 = SampleCorner(origin.X + chunkW, origin.Y + chunkH);
+
+            var (boundaryMax, boundarySecondary) = ResolveBoundaryCrossfade(
+                provider, terrain, origin, width, height, tileSize);
+            if (boundaryMax > maxBlend)
+            {
+                maxBlend = boundaryMax;
+                bestSecondary = boundarySecondary;
+            }
+
+            return (b00, b10, b01, b11, maxBlend, bestSecondary);
         }
     }
 }

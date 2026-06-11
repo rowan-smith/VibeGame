@@ -60,11 +60,26 @@ namespace Veilborne.GameFlow
         {
             terrainStreaming.SetWarmupMode(true);
             terrainStreaming.UpdateAround(cameraPosition, 0);
+            terrainStreaming.ProcessPendingMeshBuilds();
 
-            if (PumpTask is { IsCompleted: true, IsFaulted: true })
-                _ = PumpTask.Exception;
-            if (PumpTask is null || PumpTask.IsCompleted)
+            // Drain async install queues aggressively during warmup (one pump/frame stalls at ~94%).
+            const int maxPumpRounds = 12;
+            for (int round = 0; round < maxPumpRounds; round++)
+            {
+                if (PumpTask is { IsCompleted: false })
+                    break;
+                if (PumpTask is { IsFaulted: true })
+                    _ = PumpTask.Exception;
+
+                var before = terrainStreaming.GetLoadingProgress();
                 PumpTask = terrainStreaming.PumpAsyncJobs();
+                terrainStreaming.ProcessPendingMeshBuilds();
+                var after = terrainStreaming.GetLoadingProgress();
+                if (after.LoadedChunks == before.LoadedChunks &&
+                    after.GeneratingChunks == before.GeneratingChunks &&
+                    round > 0)
+                    break;
+            }
 
             var loading = terrainStreaming.GetLoadingProgress();
             Progress = MathF.Max(Progress, loading.Progress01);
