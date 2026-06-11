@@ -234,7 +234,7 @@ namespace Veilborne.Web.MonoGameImpl
         }
 
         private static string ToCssColor(Vector4 color) =>
-            $"#{((int)(color.X * 255)):X2}{((int)(color.Y * 255)):X2}{((int)(color.Z * 255)):X2}";
+            $"rgba({(int)(color.X * 255)},{(int)(color.Y * 255)},{(int)(color.Z * 255)},{color.W:F3})";
 
         private static string ToRgbaColor(Vector4 color) =>
             $"rgba({(int)(color.X * 255)},{(int)(color.Y * 255)},{(int)(color.Z * 255)},{color.W})";

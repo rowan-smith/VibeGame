@@ -108,7 +108,7 @@ window.veilborne = {
         _lastCanvasWarn: 0,
         _pools: { graphics: [], texts: [], sprites: [] },
         _poolIdx: { g: 0, t: 0, s: 0 },
-        _textQueue: [],
+        _uiOverlayQueue: [],
         _cappedDpr: function() {
             // Match game logical resolution (1280x720) — avoids pointer/render scale mismatch.
             return 1;
@@ -276,32 +276,46 @@ window.veilborne = {
         clearStage: function() {
             this._resetPoolIndices();
             this._hideUnusedPool();
-            this._textQueue = [];
+            this._uiOverlayQueue = [];
         },
-        drawTextOverlay: function() {
+        _overlayColor: function(color, fallback) {
+            if (!color) return fallback;
+            if (color.startsWith('#') || color.startsWith('rgba(')) return color;
+            return fallback;
+        },
+        drawUiOverlay: function() {
             const gameCanvas = document.getElementById('veilborne-game-canvas');
             const textCanvas = document.getElementById('veilborne-text-canvas');
-            if (!gameCanvas || !textCanvas || !this._textQueue.length) {
-                if (textCanvas) {
-                    const ctx = textCanvas.getContext('2d');
-                    if (ctx) ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
-                }
-                return;
-            }
-            const logicalW = parseInt(gameCanvas.getAttribute('width') || '1280', 10);
-            const logicalH = parseInt(gameCanvas.getAttribute('height') || '720', 10);
+            if (!textCanvas) return;
+            const logicalW = gameCanvas
+                ? parseInt(gameCanvas.getAttribute('width') || '1280', 10)
+                : 1280;
+            const logicalH = gameCanvas
+                ? parseInt(gameCanvas.getAttribute('height') || '720', 10)
+                : 720;
             if (textCanvas.width !== logicalW) textCanvas.width = logicalW;
             if (textCanvas.height !== logicalH) textCanvas.height = logicalH;
             const ctx = textCanvas.getContext('2d');
             if (!ctx) return;
             ctx.clearRect(0, 0, logicalW, logicalH);
-            for (let i = 0; i < this._textQueue.length; i++) {
-                const cmd = this._textQueue[i];
-                const size = cmd.f || 16;
-                ctx.font = 'bold ' + size + 'px Arial, Helvetica, sans-serif';
-                ctx.fillStyle = cmd.c && cmd.c.startsWith('#') ? cmd.c : '#ffffff';
-                ctx.textBaseline = 'top';
-                ctx.fillText(cmd.s, cmd.x, cmd.y);
+            if (!this._uiOverlayQueue.length) return;
+
+            for (let i = 0; i < this._uiOverlayQueue.length; i++) {
+                const cmd = this._uiOverlayQueue[i];
+                if (cmd.t === 0) {
+                    ctx.fillStyle = this._overlayColor(cmd.c, '#282e38');
+                    ctx.fillRect(cmd.x, cmd.y, cmd.w, cmd.h);
+                } else if (cmd.t === 3) {
+                    ctx.strokeStyle = this._overlayColor(cmd.c, '#5a6473');
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(cmd.x + 1, cmd.y + 1, Math.max(0, cmd.w - 2), Math.max(0, cmd.h - 2));
+                } else if (cmd.t === 1) {
+                    const size = cmd.f || 16;
+                    ctx.font = 'bold ' + size + 'px Arial, Helvetica, sans-serif';
+                    ctx.fillStyle = this._overlayColor(cmd.c, '#ffffff');
+                    ctx.textBaseline = 'top';
+                    ctx.fillText(cmd.s, cmd.x, cmd.y);
+                }
             }
         },
         executeBatch: function(commands) {
@@ -312,16 +326,12 @@ window.veilborne = {
                 const c = commands[i];
                 const t = c.t;
                 if (t === 0) {
-                    if (!app) continue;
-                    const g = this._getGraphics();
-                    const hex = this.parseColor(c.c);
-                    g.beginFill(hex);
-                    g.drawRect(c.x, c.y, c.w, c.h);
-                    g.endFill();
+                    this._uiOverlayQueue.push({ t: 0, x: c.x, y: c.y, w: c.w, h: c.h, c: c.c });
                 } else if (t === 1) {
                     const content = c.s || c.textOrKey || '';
                     if (!content) continue;
-                    this._textQueue.push({
+                    this._uiOverlayQueue.push({
+                        t: 1,
                         s: content,
                         x: c.x,
                         y: c.y,
@@ -345,16 +355,7 @@ window.veilborne = {
                         sprite.height = c.h;
                     }
                 } else if (t === 3) {
-                    if (!app) continue;
-                    const hex = this.parseColor(c.c);
-                    const x = c.x, y = c.y, w = c.w, h = c.h;
-                    const g = this._getGraphics();
-                    g.beginFill(hex);
-                    g.drawRect(x, y, w, 2);
-                    g.drawRect(x, y, 2, h);
-                    g.drawRect(x + w - 2, y, 2, h);
-                    g.drawRect(x, y + h - 2, w, 2);
-                    g.endFill();
+                    this._uiOverlayQueue.push({ t: 3, x: c.x, y: c.y, w: c.w, h: c.h, c: c.c });
                 } else if (t === 4) {
                     if (!app) continue;
                     const g = this._getGraphics();
@@ -401,7 +402,7 @@ window.veilborne = {
                     console.error('[PIXI] render error', e);
                 }
             }
-            this.drawTextOverlay();
+            this.drawUiOverlay();
         }
     }
 };
