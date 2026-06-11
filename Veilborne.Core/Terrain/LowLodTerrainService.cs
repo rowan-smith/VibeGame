@@ -240,6 +240,9 @@ namespace Veilborne.Terrain
                 BiomeData primaryBiome;
                 if (biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary))
                     primaryBiome = cachedPrimary;
+                else if (_biomeProvider is SimpleBiomeProvider simple)
+                    primaryBiome = BiomeSampling.GetDominantBiomeForArea(
+                        simple, _terrainGen, chunk.Origin, ChunkSize, TileSize, 7, 2f, TileSize * 2f).Data;
                 else
                     primaryBiome = ResolveBiomeBlend(new Vector2(
                         chunk.Origin.X + ChunkSize * TileSize * 0.5f,
@@ -278,9 +281,12 @@ namespace Veilborne.Terrain
         {
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
-                var (maxMerge, mergeBiome) = BiomeSampling.ResolveBoundaryCrossfade(
-                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize);
-                if (mergeBiome is not null && maxMerge > 0.015f)
+                var (_, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize, 2f);
+                if (!string.IsNullOrEmpty(mergeId) &&
+                    simple.TryGetBiomeById(mergeId, out var mergeBiome) &&
+                    mergeBiome is not null &&
+                    maxMerge > 0.015f)
                     return (mergeBiome.Data, maxMerge);
             }
 
@@ -315,14 +321,18 @@ namespace Veilborne.Terrain
             float[,]? mergeMap = null;
             if (_biomeProvider is SimpleBiomeProvider simpleProvider)
             {
-                var (maxMerge, mergeBiome) = BiomeSampling.ResolveBoundaryCrossfade(
-                    simpleProvider, _terrainGen, origin, w, h, TileSize);
-                if (mergeBiome is not null && maxMerge > 0.015f)
+                var (_, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simpleProvider, _terrainGen, origin, w, h, TileSize, 2f);
+                if (!string.IsNullOrEmpty(mergeId) &&
+                    simpleProvider.TryGetBiomeById(mergeId, out var mergeBiome) &&
+                    mergeBiome is not null &&
+                    maxMerge > 0.015f)
                 {
                     effectiveMerge = mergeBiome.Data;
                     effectiveMaxMerge = maxMerge;
+                    (mergeMap, _) = BiomeSampling.BuildChunkPairBlendMap(
+                        simpleProvider, _terrainGen, origin, w, h, TileSize, biome.Id, mergeId, 2);
                 }
-                mergeMap = BiomeSampling.BuildVertexBlendMapGrid(simpleProvider, _terrainGen, origin, w, h, TileSize, 4);
             }
 
             bool hasMerge = effectiveMerge != null && effectiveMaxMerge > 0.015f && mergeMap != null;

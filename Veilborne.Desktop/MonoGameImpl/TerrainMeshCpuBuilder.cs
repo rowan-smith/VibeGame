@@ -45,6 +45,7 @@ namespace Veilborne.MonoGameImpl
             public required float LayerBlendCoverage { get; init; }
             public required float BiomeBlendCoverage { get; init; }
             public required float CachedMaxMerge { get; init; }
+            public required string PrimaryBiomeId { get; init; }
             public required string MergeBiomeId { get; init; }
             public required LayerSnapshot Layer { get; init; }
             public required float[,] Heights { get; init; }
@@ -65,18 +66,20 @@ namespace Veilborne.MonoGameImpl
             float maxY = float.NegativeInfinity;
 
             float[,]? mergeMap = null;
+            string primaryBiomeId = string.Empty;
             string mergeBiomeId = string.Empty;
             float maxBoundaryBlend = 0f;
             if (biomeCrossfadeEnabled && biomeProvider is SimpleBiomeProvider simple)
             {
-                (maxBoundaryBlend, var mergeBiome) = BiomeSampling.ResolveBoundaryCrossfade(
-                    simple, null!, origin, width, depth, tileSize);
-                if (maxBoundaryBlend > BiomeMergeCornerThreshold)
+                (primaryBiomeId, mergeBiomeId, maxBoundaryBlend) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, null, origin, width, depth, tileSize, 2f);
+                if (!string.IsNullOrEmpty(mergeBiomeId) && maxBoundaryBlend > BiomeMergeCornerThreshold)
                 {
-                    int gridSamples = fastMeshBuild ? 3 : 4;
-                    mergeMap = BiomeSampling.BuildVertexBlendMapGrid(
-                        simple, null!, origin, width, depth, tileSize, gridSamples);
-                    mergeBiomeId = mergeBiome?.Id ?? string.Empty;
+                    int stride = fastMeshBuild ? 4 : 2;
+                    (mergeMap, float mapMax) = BiomeSampling.BuildChunkPairBlendMap(
+                        simple, null, origin, width, depth, tileSize, primaryBiomeId, mergeBiomeId, stride);
+                    if (mapMax > maxBoundaryBlend)
+                        maxBoundaryBlend = mapMax;
                 }
             }
 
@@ -145,6 +148,7 @@ namespace Veilborne.MonoGameImpl
                 LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f,
                 BiomeBlendCoverage = biomeBlendSamples > 0 ? biomeBlendNonZero / (float)biomeBlendSamples : 0f,
                 CachedMaxMerge = maxBoundaryBlend,
+                PrimaryBiomeId = primaryBiomeId,
                 MergeBiomeId = mergeBiomeId,
                 Layer = layer,
                 Heights = heights

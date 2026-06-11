@@ -355,6 +355,21 @@ namespace Veilborne.Biomes
             }
         }
 
+        public bool TryGetBiomeById(string id, out IBiome? biome)
+        {
+            for (int i = 0; i < _biomes.Count; i++)
+            {
+                if (string.Equals(_biomes[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                {
+                    biome = _biomes[i];
+                    return true;
+                }
+            }
+
+            biome = null;
+            return false;
+        }
+
         private static float SmoothStep(float t)
         {
             t = Math.Clamp(t, 0f, 1f);

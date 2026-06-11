@@ -350,6 +350,131 @@ namespace Veilborne.Biomes
             return (map, mergeBiome, maxMerge);
         }
 
+        /// <summary>
+        /// Picks stable primary/merge biome ids for a chunk using area voting with margin expansion.
+        /// </summary>
+        public static (string primaryId, string mergeId, float maxMerge) ResolveChunkBiomePair(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int gridWidth,
+            int gridHeight,
+            float tileSize,
+            float expandMarginTiles = 2f)
+        {
+            int chunkSize = Math.Max(1, gridWidth - 1);
+            float margin = tileSize * MathF.Max(0f, expandMarginTiles);
+            var (primary, secondary, primaryWeight, secondaryWeight) = GetDominantAndSecondaryBiomeForAreaWithWeights(
+                provider, terrain, origin, chunkSize, tileSize, 7, 2f, margin);
+
+            string primaryId = primary.Id;
+            string mergeId = secondary?.Id ?? string.Empty;
+            float maxMerge = 0f;
+            float denom = primaryWeight + secondaryWeight;
+            if (secondary is not null && denom > 1e-5f)
+                maxMerge = Math.Clamp(secondaryWeight / denom, 0f, 1f);
+
+            var (boundaryMax, boundarySecondary) = ResolveBoundaryCrossfade(
+                provider, terrain!, origin, gridWidth, gridHeight, tileSize);
+            if (boundaryMax > maxMerge)
+                maxMerge = boundaryMax;
+            if (boundarySecondary is not null &&
+                !string.Equals(boundarySecondary.Id, primaryId, StringComparison.OrdinalIgnoreCase))
+                mergeId = boundarySecondary.Id;
+
+            if (string.Equals(mergeId, primaryId, StringComparison.OrdinalIgnoreCase))
+                mergeId = string.Empty;
+
+            return (primaryId, mergeId, maxMerge);
+        }
+
+        /// <summary>
+        /// World-consistent per-vertex blend toward <paramref name="mergeBiomeId"/> relative to
+        /// <paramref name="primaryBiomeId"/>. Uses strided sampling with bilinear upsample when stride &gt; 1.
+        /// </summary>
+        public static (float[,] map, float maxMerge) BuildChunkPairBlendMap(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            int sampleStride = 1)
+        {
+            var map = new float[width, height];
+            if (string.IsNullOrEmpty(mergeBiomeId) ||
+                string.Equals(primaryBiomeId, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                return (map, 0f);
+
+            sampleStride = Math.Max(1, sampleStride);
+            int gridW = (width - 1) / sampleStride + 1;
+            int gridH = (height - 1) / sampleStride + 1;
+            var coarse = new float[gridW, gridH];
+            float maxMerge = 0f;
+            var weights = new BiomeWeight[4];
+
+            for (int gz = 0; gz < gridH; gz++)
+            {
+                int z = Math.Min(gz * sampleStride, height - 1);
+                for (int gx = 0; gx < gridW; gx++)
+                {
+                    int x = Math.Min(gx * sampleStride, width - 1);
+                    float wx = origin.X + x * tileSize;
+                    float wz = origin.Y + z * tileSize;
+                    provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
+
+                    float primaryW = 0f;
+                    float mergeW = 0f;
+                    for (int i = 0; i < count; i++)
+                    {
+                        string id = weights[i].Biome.Id;
+                        if (string.Equals(id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                            primaryW = weights[i].Weight;
+                        else if (string.Equals(id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                            mergeW = weights[i].Weight;
+                    }
+
+                    float pairSum = primaryW + mergeW;
+                    float alpha = pairSum > 1e-5f ? mergeW / pairSum : mergeW;
+                    alpha = PerturbMergeWeight(wx, wz, alpha);
+                    coarse[gx, gz] = alpha;
+                    if (alpha > maxMerge) maxMerge = alpha;
+                }
+            }
+
+            if (sampleStride == 1)
+            {
+                for (int z = 0; z < height; z++)
+                for (int x = 0; x < width; x++)
+                    map[x, z] = coarse[x, z];
+                return (map, maxMerge);
+            }
+
+            for (int z = 0; z < height; z++)
+            {
+                float gz = height > 1 ? z / (float)(height - 1) : 0f;
+                float gzScaled = gz * (gridH - 1);
+                int j0 = (int)MathF.Floor(gzScaled);
+                int j1 = Math.Min(j0 + 1, gridH - 1);
+                float fz = gzScaled - j0;
+                for (int x = 0; x < width; x++)
+                {
+                    float gx = width > 1 ? x / (float)(width - 1) : 0f;
+                    float gxScaled = gx * (gridW - 1);
+                    int i0 = (int)MathF.Floor(gxScaled);
+                    int i1 = Math.Min(i0 + 1, gridW - 1);
+                    float fx = gxScaled - i0;
+                    float top = coarse[i0, j0] + (coarse[i1, j0] - coarse[i0, j0]) * fx;
+                    float bot = coarse[i0, j1] + (coarse[i1, j1] - coarse[i0, j1]) * fx;
+                    map[x, z] = top + (bot - top) * fz;
+                }
+            }
+
+            return (map, maxMerge);
+        }
+
         private static float PerturbMergeWeight(float worldX, float worldZ, float merge)
         {
             if (merge <= 0.001f || merge >= 0.999f)
