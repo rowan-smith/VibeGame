@@ -63,7 +63,12 @@ body {
     position: absolute;
     left: 0;
     top: 0;
+    z-index: 2;
     pointer-events: none;
+}
+
+#veilborne-game-canvas {
+    z-index: 1;
 }
 
 @media (min-width: 900px) {

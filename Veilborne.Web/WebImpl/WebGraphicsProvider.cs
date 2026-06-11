@@ -9,6 +9,8 @@ namespace Veilborne.Web.MonoGameImpl
     {
         private readonly IJSRuntime _js;
         private readonly IJSInProcessRuntime _jsSync;
+        private Vector3 _skyClearColor = new(0.45f, 0.62f, 0.82f);
+
         public WebGraphicsProvider(IJSRuntime js)
         {
             _js = js;
@@ -25,14 +27,14 @@ namespace Veilborne.Web.MonoGameImpl
         public void BeginDrawing() { }
         public void EndDrawing() { }
         public void ToggleBorderless() { }
-        public void Begin3D(CameraComponent camera) { }
+        public void Begin3D(CameraComponent camera) => Clear(_skyClearColor);
         public void End3D() { }
         public void Clear(Vector3 color)
         {
             string cssColor = $"#{((int)(color.X*255)):X2}{((int)(color.Y*255)):X2}{((int)(color.Z*255)):X2}";
             _jsSync.InvokeVoid("veilborne.pixi.setBackground", cssColor);
         }
-        public void SetSkyClearColor(Vector3 color) { }
+        public void SetSkyClearColor(Vector3 color) => _skyClearColor = color;
         public void DrawCube(Vector3 position, Vector3 size, Vector3 color) { }
         public void DrawCubeWires(Vector3 position, Vector3 size, Vector3 color) { }
         public void ToggleFullscreen() { }

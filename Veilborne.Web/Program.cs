@@ -66,8 +66,9 @@ internal static class Program
             sp.GetRequiredService<IUiProvider>()));
         builder.Services.AddSingleton<IInputProvider, WebInputProvider>();
         builder.Services.AddSingleton<IEcsRuntime>(sp => new WebEcsRuntime(
-            sp.GetRequiredService<Microsoft.JSInterop.IJSRuntime>(),
-            sp.GetRequiredService<IUiProvider>()));
+            sp,
+            sp.GetRequiredService<IUiProvider>(),
+            sp.GetRequiredService<WebProxyTerrainRenderer>()));
         builder.Services.AddSingleton<IGameSettingsService, WebGameSettingsService>();
         builder.Services.AddSingleton<ISkyLightingService, WebSkyLightingService>();
         builder.Services.AddSingleton<ITimeService, WebTimeService>();

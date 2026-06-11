@@ -374,6 +374,20 @@ window.veilborne = {
         drawImage: function(key, x, y, w, h) {
             this.executeBatch([{ t: 2, x: x, y: y, w: w, h: h, s: key }]);
         },
+        drawTerrainBatch: function(triangles) {
+            const app = this.ensureApp();
+            if (!app || !triangles || triangles.length === 0) return;
+            const g = this._getGraphics();
+            for (let i = 0; i < triangles.length; i++) {
+                const tri = triangles[i];
+                const p = tri.p;
+                if (!p || p.length < 6) continue;
+                const hex = this.parseColor(tri.c || '#4a7a3a');
+                g.beginFill(hex);
+                g.drawPolygon(p);
+                g.endFill();
+            }
+        },
         present: function() {
             const app = this.ensureApp();
             if (app && !this.failed) {
