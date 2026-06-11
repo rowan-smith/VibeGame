@@ -194,7 +194,7 @@ internal static class Program
             ?? throw new InvalidOperationException("Failed to deserialize world.json");
 
         worldConfig.EditableRadius = 1;
-        worldConfig.ReadOnlyRadius = 1;
+        worldConfig.ReadOnlyRadius = 0;
         worldConfig.LowLodRadius = 0;
         worldConfig.TerrainLoadQueueRadius = 1;
         worldConfig.MaxActiveVoxelChunks = 32;

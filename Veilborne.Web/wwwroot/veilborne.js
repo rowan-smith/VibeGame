@@ -11,10 +11,12 @@ window.veilborne = {
     syncViewportLayout: function() {
         const viewport = this.getViewport();
         const gameCanvas = this.getCanvas();
+        const terrainCanvas = document.getElementById('veilborne-terrain-canvas');
         const textCanvas = document.getElementById('veilborne-text-canvas');
         if (!viewport || !gameCanvas || !textCanvas) return;
 
-        for (const canvas of [gameCanvas, textCanvas]) {
+        for (const canvas of [terrainCanvas, gameCanvas, textCanvas]) {
+            if (!canvas) continue;
             canvas.style.position = 'absolute';
             canvas.style.left = '0';
             canvas.style.top = '0';
@@ -146,6 +148,8 @@ window.veilborne = {
         _pools: { graphics: [], texts: [], sprites: [] },
         _poolIdx: { g: 0, t: 0, s: 0 },
         _uiOverlayQueue: [],
+        _skyColor: '#73aee8',
+        _terrainCtx: null,
         _cappedDpr: function() {
             // Match game logical resolution (1280x720) — avoids pointer/render scale mismatch.
             return 1;
@@ -183,6 +187,7 @@ window.veilborne = {
                 width: window.veilborne.LOGICAL_WIDTH,
                 height: window.veilborne.LOGICAL_HEIGHT,
                 backgroundColor: 0x0F1216,
+                backgroundAlpha: 0,
                 antialias: false,
                 resolution: this._cappedDpr(),
                 autoDensity: false,
@@ -244,13 +249,18 @@ window.veilborne = {
             return { width: 0, height: 0 };
         },
         setBackground: function(color) {
+            this._skyColor = (typeof color === 'string' && color.startsWith('#')) ? color : '#73aee8';
             const app = this.ensureApp();
             if (!app) return;
             const hexColor = this.parseColor(color);
             if (app.renderer.background) {
+                app.renderer.background.alpha = 0;
                 app.renderer.background.color = hexColor;
             } else if (app.renderer.backgroundColor !== undefined) {
                 app.renderer.backgroundColor = hexColor;
+            }
+            if (app.renderer) {
+                app.renderer.backgroundAlpha = 0;
             }
         },
         clear: function(color) {
@@ -315,6 +325,18 @@ window.veilborne = {
             this._resetPoolIndices();
             this._hideUnusedPool();
             this._uiOverlayQueue = [];
+            this.clearTerrain();
+        },
+        clearTerrain: function() {
+            const canvas = document.getElementById('veilborne-terrain-canvas');
+            if (!canvas) return;
+            if (!this._terrainCtx) {
+                this._terrainCtx = canvas.getContext('2d');
+            }
+            const ctx = this._terrainCtx;
+            if (!ctx) return;
+            ctx.fillStyle = this._skyColor || '#73aee8';
+            ctx.fillRect(0, 0, window.veilborne.LOGICAL_WIDTH, window.veilborne.LOGICAL_HEIGHT);
         },
         _overlayColor: function(color, fallback) {
             if (!color) return fallback;
@@ -413,22 +435,37 @@ window.veilborne = {
         drawImage: function(key, x, y, w, h) {
             this.executeBatch([{ t: 2, x: x, y: y, w: w, h: h, s: key }]);
         },
-        drawTerrainBatch: function(triangles) {
-            const app = this.ensureApp();
-            if (!app || !triangles || triangles.length === 0) return;
-            const g = this._getGraphics();
-            for (let i = 0; i < triangles.length; i++) {
-                const tri = triangles[i];
-                const p = tri.p;
-                if (!p || p.length < 6) continue;
-                const hex = this.parseColor(tri.c || '#4a7a3a');
-                g.beginFill(hex);
-                g.drawPolygon(p);
-                g.endFill();
+        drawTerrainBatchFlat: function(data, triCount) {
+            if (!data || triCount <= 0) return;
+            const canvas = document.getElementById('veilborne-terrain-canvas');
+            if (!canvas) return;
+            if (!this._terrainCtx) {
+                this._terrainCtx = canvas.getContext('2d');
+            }
+            const ctx = this._terrainCtx;
+            if (!ctx) return;
+
+            let lastStyle = '';
+            for (let i = 0; i < triCount; i++) {
+                const o = i * 7;
+                const c = data[o];
+                const r = (c >> 16) & 255;
+                const g = (c >> 8) & 255;
+                const b = c & 255;
+                const style = 'rgb(' + r + ',' + g + ',' + b + ')';
+                if (style !== lastStyle) {
+                    ctx.fillStyle = style;
+                    lastStyle = style;
+                }
+                ctx.beginPath();
+                ctx.moveTo(data[o + 1], data[o + 2]);
+                ctx.lineTo(data[o + 3], data[o + 4]);
+                ctx.lineTo(data[o + 5], data[o + 6]);
+                ctx.closePath();
+                ctx.fill();
             }
         },
         present: function() {
-            window.veilborne.syncViewportLayout();
             const app = this.ensureApp();
             if (app && !this.failed) {
                 try {
