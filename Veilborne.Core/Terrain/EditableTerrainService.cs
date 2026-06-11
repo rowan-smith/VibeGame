@@ -491,15 +491,6 @@ namespace Veilborne.Terrain
                         primaryBiome = ResolveChunkPrimaryBiome(chunk);
                         _primaryBiomeByChunk[key] = primaryBiome;
                     }
-                    else if (_biomeProvider is SimpleBiomeProvider simpleRefresh)
-                    {
-                        int gw = chunk.Heights.GetLength(0);
-                        int gh = chunk.Heights.GetLength(1);
-                        var (pairPrimaryId, _, _) = BiomeSampling.ResolveChunkBiomePair(
-                            simpleRefresh, _terrainGen, chunk.Origin, gw, gh, TileSize, 4f);
-                        if (simpleRefresh.TryGetBiomeById(pairPrimaryId, out var pairPrimary) && pairPrimary is not null)
-                            primaryBiome = pairPrimary.Data;
-                    }
                     int gridW = chunk.Heights.GetLength(0);
                     int gridH = chunk.Heights.GetLength(1);
                     if (!_renderer.IsChunkVisibleForRender(chunk.Origin, TileSize, gridW, gridH, camera))

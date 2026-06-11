@@ -485,6 +485,10 @@ namespace Veilborne.Biomes
                     string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
                     return 1f - blend;
             }
+            else if (string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                return 0f;
+            else if (string.Equals(localPrimary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                return 1f;
 
             provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
             float primaryW = 0f;
