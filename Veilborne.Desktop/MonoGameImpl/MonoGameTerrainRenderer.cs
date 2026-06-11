@@ -80,7 +80,6 @@ namespace Veilborne.MonoGameImpl
             public string StoredMergeBiomeId;
         }
 
-        private const float BiomeMergeCornerThreshold = 0.015f;
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
         private readonly List<VisibleTerrainChunk> _visibleChunksScratch = new(128);
@@ -349,10 +348,17 @@ namespace Veilborne.MonoGameImpl
             {
                 existing.CurrentHeights = heights;
                 existing.TileSize = tileSize;
-                if (!existing.BiomeMergeEvaluated && _settings.Current.Graphics.BiomeTextureCrossfade)
+                if (TerrainChunkBiomeBlendPolicy.ShouldEnqueueBiomeMergeBuild(
+                        _settings.Current.Graphics.BiomeTextureCrossfade,
+                        existing.BiomeMergeEvaluated))
                     EnqueueBuild(heights, tileSize, originWorld);
 
-                if (!ChunkVisualsMatch(existing, _activeBiome?.Id, _activeSecondaryBiome?.Id, existing.UseSplatLayering, existing.LayerMode))
+                if (!TerrainChunkBiomeBlendPolicy.ChunkVisualsMatch(
+                        ToVisualState(existing),
+                        _activeBiome?.Id,
+                        _activeSecondaryBiome?.Id,
+                        existing.UseSplatLayering,
+                        (byte)existing.LayerMode))
                     ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, _activeSecondaryBlend);
                 _chunks[key] = existing;
             }
@@ -385,37 +391,33 @@ namespace Veilborne.MonoGameImpl
                 // Rebuild when layer/splat data first arrives or when biome merge weights were missing from mesh.
                 if ((!hadLayerData && baseHeights != null && layerConfig != null) ||
                     (!hadSplatmap && splatmap != null) ||
-                    (!existing.BiomeMergeEvaluated && _settings.Current.Graphics.BiomeTextureCrossfade))
+                    TerrainChunkBiomeBlendPolicy.ShouldEnqueueBiomeMergeBuild(
+                        _settings.Current.Graphics.BiomeTextureCrossfade,
+                        existing.BiomeMergeEvaluated))
                     EnqueueBuild(heights, tileSize, originWorld);
 
                 bool useSplat = splatmap != null && baseHeights != null && layerConfig != null;
-                if (!ChunkVisualsMatch(existing, _activeBiome?.Id, _activeSecondaryBiome?.Id, useSplat, existing.LayerMode))
+                if (!TerrainChunkBiomeBlendPolicy.ChunkVisualsMatch(
+                        ToVisualState(existing),
+                        _activeBiome?.Id,
+                        _activeSecondaryBiome?.Id,
+                        useSplat,
+                        (byte)existing.LayerMode))
                     ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, _activeSecondaryBlend);
                 _chunks[key] = existing;
             }
         }
 
-        private static bool ChunkVisualsMatch(
-            ChunkData chunk,
-            string? activePrimaryId,
-            string? activeMergeId,
-            bool useSplatLayering,
-            TerrainChunkLayerBlendMode layerMode)
+        private static TerrainChunkVisualState ToVisualState(ChunkData chunk) => new()
         {
-            if (chunk.PrimaryTexture == null)
-                return false;
-
-            string boundPrimary = !string.IsNullOrEmpty(chunk.BiomeId)
-                ? chunk.BiomeId
-                : chunk.StoredPrimaryBiomeId;
-            string boundMerge = !string.IsNullOrEmpty(chunk.MergeBiomeId)
-                ? chunk.MergeBiomeId
-                : chunk.StoredMergeBiomeId;
-            return string.Equals(boundPrimary, activePrimaryId ?? string.Empty, StringComparison.Ordinal) &&
-                   string.Equals(boundMerge, activeMergeId ?? string.Empty, StringComparison.Ordinal) &&
-                   chunk.UseSplatLayering == useSplatLayering &&
-                   (!useSplatLayering || chunk.LayerMode == layerMode);
-        }
+            HasPrimaryTexture = chunk.PrimaryTexture != null,
+            BiomeId = chunk.BiomeId,
+            MergeBiomeId = chunk.MergeBiomeId,
+            StoredPrimaryBiomeId = chunk.StoredPrimaryBiomeId,
+            StoredMergeBiomeId = chunk.StoredMergeBiomeId,
+            UseSplatLayering = chunk.UseSplatLayering,
+            LayerMode = (byte)chunk.LayerMode
+        };
 
         public void BuildChunks(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld) =>
             BuildChunkMesh(heights, tileSize, originWorld);
@@ -673,9 +675,11 @@ namespace Veilborne.MonoGameImpl
         }
 
         private static bool ChunkNeedsBiomeMergeDraw(ChunkData chunk) =>
-            chunk.MergeTexture != null &&
-            (!string.IsNullOrEmpty(chunk.StoredMergeBiomeId) ||
-             chunk.CachedMaxMerge > TerrainMeshCpuBuilder.BiomeMergeCornerThreshold);
+            TerrainChunkBiomeBlendPolicy.ChunkNeedsBiomeMergeDraw(
+                chunk.MergeTexture != null,
+                chunk.StoredMergeBiomeId,
+                chunk.CachedMaxMerge,
+                chunk.BiomeBlendCoverage);
 
         private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome, BiomeData? mergeBiome, float maxMerge)
         {
@@ -711,11 +715,12 @@ namespace Veilborne.MonoGameImpl
             chunk.SecondaryLightingModifier = 1f;
             chunk.Tint = ComputeStableTerrainTint(biome);
 
-            bool useBiomeMerge = _settings.Current.Graphics.BiomeTextureCrossfade &&
-                                 mergeBiome is not null &&
-                                 (!string.IsNullOrEmpty(chunk.StoredMergeBiomeId) ||
-                                  maxMerge > BiomeMergeCornerThreshold ||
-                                  chunk.CachedMaxMerge > BiomeMergeCornerThreshold);
+            bool useBiomeMerge = TerrainChunkBiomeBlendPolicy.ShouldBindMergeTexture(
+                _settings.Current.Graphics.BiomeTextureCrossfade,
+                mergeBiome is not null,
+                chunk.StoredMergeBiomeId,
+                maxMerge,
+                chunk.CachedMaxMerge);
 
             if (chunk.BaseHeights != null && chunk.LayerConfig != null)
             {

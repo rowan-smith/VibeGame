@@ -353,12 +353,13 @@ namespace Veilborne.Terrain
             BiomeData? effectiveMerge = secondaryBiome;
             float effectiveMaxMerge = blendFactor;
             float[,]? mergeMap = null;
-            string pairPrimaryId = biome.Id;
+            string generationBiomeId = biome.Id;
+            string pairPrimaryId = generationBiomeId;
             if (_biomeProvider is SimpleBiomeProvider simpleProvider)
             {
                 var (primaryId, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
                     simpleProvider, _terrainGen, origin, w, h, TileSize, 4f);
-                pairPrimaryId = primaryId;
+                pairPrimaryId = TerrainChunkBiomeBlendPolicy.ResolveSplatPrimaryBiomeId(primaryId, generationBiomeId);
                 if (!string.IsNullOrEmpty(mergeId) &&
                     simpleProvider.TryGetBiomeById(mergeId, out var mergeBiome) &&
                     mergeBiome is not null)

@@ -2,6 +2,7 @@ using System.Numerics;
 using Microsoft.Xna.Framework.Graphics;
 using Veilborne.Biomes;
 using Veilborne.Interfaces;
+using Veilborne.Terrain;
 
 namespace Veilborne.MonoGameImpl
 {
@@ -22,7 +23,6 @@ namespace Veilborne.MonoGameImpl
 
     internal static class TerrainMeshCpuBuilder
     {
-        internal const float BiomeMergeCornerThreshold = 0.015f;
         private const float TexWorldRepeat = 8f;
 
         internal readonly record struct LayerSnapshot(
@@ -73,7 +73,7 @@ namespace Veilborne.MonoGameImpl
             {
                 (primaryBiomeId, mergeBiomeId, maxBoundaryBlend) = BiomeSampling.ResolveChunkBiomePair(
                     simple, null, origin, width, depth, tileSize, 4f);
-                if (!string.IsNullOrEmpty(mergeBiomeId))
+                if (TerrainChunkBiomeBlendPolicy.ShouldBuildMergeBlendMap(mergeBiomeId))
                 {
                     int stride = fastMeshBuild ? 4 : 2;
                     (mergeMap, float mapMax) = BiomeSampling.BuildChunkPairBlendMap(
