@@ -73,6 +73,8 @@ namespace Veilborne.MonoGameImpl
             public bool UseSplatLayering;
             public LayerBlendMode LayerMode;
             public float LayerBlendCoverage;
+            public float TileSize;
+            public string PrimarySurfaceTextureId;
         }
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
@@ -222,14 +224,16 @@ namespace Veilborne.MonoGameImpl
                 var desiredLayerMode = desiredUseSplat
                     ? ChunkData.LayerBlendMode.SurfaceToSubsurface
                     : ChunkData.LayerBlendMode.None;
+                string desiredSurfaceId = _activeBiome != null ? GetBiomeSurfaceTextureId(_activeBiome) : string.Empty;
                 bool visualsMatch =
                     string.Equals(existing.BiomeId, primaryId, StringComparison.Ordinal) &&
                     string.Equals(existing.SecondaryBiomeId, secondaryId, StringComparison.Ordinal) &&
+                    string.Equals(existing.PrimarySurfaceTextureId, desiredSurfaceId, StringComparison.Ordinal) &&
                     MathF.Abs(existing.SecondaryBlend - blend) < 0.001f &&
                     existing.LayerMode == desiredLayerMode &&
                     existing.UseSplatLayering == desiredUseSplat;
                 if (!visualsMatch)
-                    ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, blend, allowBlendVisuals);
+                    ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, blend, allowBlendVisuals, tileSize);
                 _chunks[key] = existing;
             }
             _pendingCamera = camera;  // Accumulate — actual draw happens via Flush()
@@ -267,7 +271,7 @@ namespace Veilborne.MonoGameImpl
                 }
 
                 bool allowBlendVisuals = _settings.Current.Graphics.BiomeTextureCrossfade;
-                ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, allowBlendVisuals ? _activeSecondaryBlend : 0f, allowBlendVisuals);
+                ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, allowBlendVisuals ? _activeSecondaryBlend : 0f, allowBlendVisuals, tileSize);
                 _chunks[key] = existing;
             }
         }
@@ -421,9 +425,9 @@ namespace Veilborne.MonoGameImpl
 
             if (reuseBuffers)
             {
-                vb = old.Vb;
+                vb = old!.Vb!;
                 vb.SetData(vertices, 0, vertexCount);
-                ib = old.Ib;
+                ib = old.Ib!;
                 // Index topology is fixed for same-size chunks; no need to re-upload indices
             }
             else
@@ -475,7 +479,9 @@ namespace Veilborne.MonoGameImpl
                 Splatmap = splatmap,
                 UseSplatLayering = useSplatLayering,
                 LayerMode = layerMode,
-                LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f
+                LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f,
+                TileSize = tileSize,
+                PrimarySurfaceTextureId = string.Empty
             };
         }
 
@@ -527,8 +533,9 @@ namespace Veilborne.MonoGameImpl
             return indices;
         }
 
-        private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome, BiomeData? secondaryBiome, float secondaryBlend, bool allowBlendVisuals)
+        private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome, BiomeData? secondaryBiome, float secondaryBlend, bool allowBlendVisuals, float tileSize = 1f)
         {
+            chunk.TileSize = tileSize > 0f ? tileSize : chunk.TileSize;
             if (!allowBlendVisuals)
             {
                 secondaryBiome = null;
@@ -556,53 +563,41 @@ namespace Veilborne.MonoGameImpl
             chunk.SecondaryLightingModifier = 1f;
             chunk.Tint = ComputeStableTerrainTint(biome);
 
-            // Layered terrain mode: use per-vertex alpha as splat weight between material pairs.
+            string surfaceTextureId = GetBiomeSurfaceTextureId(biome);
+            chunk.PrimarySurfaceTextureId = surfaceTextureId ?? string.Empty;
+
+            // Layered terrain mode: primary pass always shows the biome surface color.
             if (chunk.BaseHeights != null && chunk.LayerConfig != null)
             {
-                var lc = chunk.LayerConfig;
                 chunk.LayerMode = ChunkData.LayerBlendMode.SurfaceToSubsurface;
-                // Prefer layered surface stack for editable chunks to prevent first-dig texture popping.
-                chunk.PrimaryTexture = LoadTexture(lc.SurfaceTextureId) ?? GetFallbackTexture();
-                chunk.SecondaryTexture = LoadTexture(lc.SubsurfaceTextureId);
-                // Keep lighting consistent across chunk state transitions.
-                chunk.PrimaryLightingModifier = 1f;
-                chunk.SecondaryLightingModifier = 1f;
+                chunk.PrimaryTexture = LoadTexture(surfaceTextureId) ?? GetFallbackTexture();
+                chunk.SecondaryTexture = LoadTexture(chunk.LayerConfig.SubsurfaceTextureId);
                 return;
             }
 
             Texture2D? primary = null;
-            var primaryTextureId = SelectTextureForChunk(biome, chunk);
-            if (!string.IsNullOrWhiteSpace(primaryTextureId))
-                primary = LoadTexture(primaryTextureId);
+            if (!string.IsNullOrWhiteSpace(surfaceTextureId))
+                primary = LoadTexture(surfaceTextureId);
             chunk.PrimaryTexture = primary ?? GetFallbackTexture();
 
             Texture2D? secondary = null;
             if (allowBlendVisuals && secondaryBiome is not null && secondaryBlend > 0.03f)
             {
-                var secondaryTextureId = SelectTextureForChunk(secondaryBiome, chunk);
+                var secondaryTextureId = GetBiomeSurfaceTextureId(secondaryBiome);
                 if (!string.IsNullOrWhiteSpace(secondaryTextureId))
                     secondary = LoadTexture(secondaryTextureId);
             }
             chunk.SecondaryTexture = secondary;
         }
 
-        private static string? SelectTextureForChunk(BiomeData biome, ChunkData chunk)
+        private static string? GetBiomeSurfaceTextureId(BiomeData biome)
         {
-            if (biome.TextureRules is { Count: > 0 })
-            {
-                float altitude = chunk.MaxY;
-                foreach (var kv in biome.TextureRules)
-                {
-                    var rule = kv.Value;
-                    if (rule == null) continue;
-                    if (rule.MinAltitude.HasValue && altitude < rule.MinAltitude.Value) continue;
-                    if (rule.MaxAltitude.HasValue && altitude > rule.MaxAltitude.Value) continue;
-                    return kv.Key;
-                }
-            }
+            if (!string.IsNullOrWhiteSpace(biome.TerrainLayers?.SurfaceTextureId))
+                return biome.TerrainLayers.SurfaceTextureId;
 
-            if (biome.SurfaceTextures?.Count > 0)
+            if (biome.SurfaceTextures is { Count: > 0 })
                 return biome.SurfaceTextures[0].TextureId;
+
             return null;
         }
 
@@ -739,10 +734,9 @@ namespace Veilborne.MonoGameImpl
                 return denom > 1e-5f ? Math.Clamp(deep / denom, 0f, 1f) : 0f;
             }
 
-            float surface = MathF.Max(0f, splat.X);
-            float exposed = MathF.Max(0f, splat.Y + splat.Z + splat.W);
-            float total = surface + exposed;
-            return total > 1e-5f ? Math.Clamp(exposed / total, 0f, 1f) : 0f;
+            // Surface-to-subsurface: only exposed dirt from digging (Y channel).
+            // Slope rock (Z) must not trigger the semi-transparent subsurface overlay pass.
+            return Math.Clamp(splat.Y, 0f, 1f);
         }
 
         private static XnaColor ComputeStableTerrainTint(BiomeData biome)
@@ -855,7 +849,8 @@ namespace Veilborne.MonoGameImpl
                 if (chunk.PrimaryTexture != null)
                 {
                     _basicEffect.TextureEnabled = true;
-                    _basicEffect.VertexColorEnabled = true;
+                    // Primary pass is always opaque — blend alpha is only for the secondary pass.
+                    _basicEffect.VertexColorEnabled = false;
                     _basicEffect.Texture = chunk.PrimaryTexture;
                     _basicEffect.Alpha = 1f;
                     var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.50f;
@@ -868,7 +863,7 @@ namespace Veilborne.MonoGameImpl
                 else
                 {
                     _basicEffect.TextureEnabled = false;
-                    _basicEffect.VertexColorEnabled = true;
+                    _basicEffect.VertexColorEnabled = false;
                     _basicEffect.Alpha = 1f;
                     _basicEffect.DiffuseColor = new XnaVector3(0.7f * brightness, 0.7f * brightness, 0.72f * brightness);
                 }
@@ -891,11 +886,16 @@ namespace Veilborne.MonoGameImpl
 
                 bool isLayeredChunk = chunk.UseSplatLayering &&
                                       chunk.LayerMode != ChunkData.LayerBlendMode.None;
-                bool hasVisibleLayerBlend = !isLayeredChunk || chunk.LayerBlendCoverage > 0.02f;
+                // Coarse rings are never dug — skip subsurface overlay to avoid splat artifacts.
+                bool isCoarseLod = chunk.TileSize > 1.5f;
+                // Layered secondary is for dig exposure / biome crossfade only — not slope rock.
+                bool hasVisibleLayerBlend = !isLayeredChunk || (!isCoarseLod && chunk.LayerBlendCoverage > 0.02f);
                 bool shouldDrawSecondary = hasVisibleLayerBlend &&
                                             chunk.SecondaryTexture != null &&
+                                            chunk.SecondaryTexture != chunk.PrimaryTexture &&
                                             ((isLayeredChunk && distanceSq <= layeredCutoffSq) ||
-                                             (crossfadeEnabled && !isLayeredChunk && distanceSq <= crossfadeCutoffSq));
+                                             (crossfadeEnabled && !isLayeredChunk && distanceSq <= crossfadeCutoffSq &&
+                                              chunk.SecondaryBlend > 0.03f));
                 if (!shouldDrawSecondary) continue;
 
                 _graphicsDevice.SetVertexBuffer(chunk.Vb);

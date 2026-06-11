@@ -163,5 +163,70 @@ namespace Veilborne.Biomes
 
             return (primary, secondary, blend);
         }
+
+        /// <summary>
+        /// Resolves the dominant biome (and optional secondary blend) for a terrain chunk
+        /// by sampling across its full area. Keeps biome assignment stable across LOD rings.
+        /// </summary>
+        public static (IBiome primary, IBiome? secondary, float secondaryBlend) ResolveChunkBiomeBlend(
+            IBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 chunkOriginWorld,
+            int chunkSize,
+            float tileSize,
+            int samplesPerAxis = 0,
+            float centerExtraWeight = 2f,
+            float expandWorldMargin = 0f)
+        {
+            if (samplesPerAxis <= 0)
+            {
+                float worldSize = chunkSize * tileSize;
+                samplesPerAxis = worldSize >= 384f ? 11 : worldSize >= 128f ? 9 : 7;
+            }
+
+            var (primary, secondary, primaryWeight, secondaryWeight) = GetDominantAndSecondaryBiomeForAreaWithWeights(
+                provider,
+                terrain,
+                chunkOriginWorld,
+                chunkSize,
+                tileSize,
+                samplesPerAxis,
+                centerExtraWeight,
+                expandWorldMargin);
+
+            if (secondary is null || string.Equals(secondary.Id, primary.Id, StringComparison.OrdinalIgnoreCase))
+                return (primary, null, 0f);
+
+            float denom = primaryWeight + secondaryWeight;
+            float blend = denom > 1e-5f ? Math.Clamp(secondaryWeight / denom, 0f, 0.49f) : 0f;
+            return blend > 0.001f ? (primary, secondary, blend) : (primary, null, 0f);
+        }
+
+        /// <summary>
+        /// Biome used for terrain surface color. Fine rings sample the full chunk area;
+        /// coarse LOD rings use the chunk center so a visible hillside isn't painted by
+        /// a different biome covering most of a 128–512 m tile.
+        /// </summary>
+        public static (IBiome primary, IBiome? secondary, float secondaryBlend) ResolveVisualBiomeForChunk(
+            IBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 chunkOriginWorld,
+            int chunkSize,
+            float tileSize)
+        {
+            float worldSize = chunkSize * tileSize;
+            if (tileSize <= 1.5f)
+                return ResolveChunkBiomeBlend(provider, terrain, chunkOriginWorld, chunkSize, tileSize);
+
+            Vector2 center = new Vector2(
+                chunkOriginWorld.X + worldSize * 0.5f,
+                chunkOriginWorld.Y + worldSize * 0.5f);
+
+            if (provider is SimpleBiomeProvider simple)
+                return simple.GetBiomeBlendAt(center, terrain!);
+
+            var primary = provider.GetBiomeAt(center, terrain!);
+            return (primary, null, 0f);
+        }
     }
 }

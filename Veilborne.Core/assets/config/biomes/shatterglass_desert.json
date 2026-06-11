@@ -1,119 +1,184 @@
 {
-    "Id":  "shatterglass_desert",
-    "DisplayName":  "Shatterglass Desert",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.95,
-                                        "Moisture":  0.05,
-                                        "Altitude":  0.1,
-                                        "Fertility":  0.05,
-                                        "Roughness":  0.2,
-                                        "VegetationDensity":  0.0
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.4,
-                                           "WtMoisture":  1.6,
-                                           "WtElevation":  0.8,
-                                           "WtFertility":  1.2
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.18,
-                                                  "Frequency":  0.7,
-                                                  "Persistence":  0.3,
-                                                  "Lacunarity":  1.8,
-                                                  "Detail":  0.35
-                                              }
-                       },
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  238,
-                                         "G":  232,
-                                         "B":  170,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  0,
-                                           "G":  188,
-                                           "B":  212,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  245,
-                                        "G":  245,
-                                        "B":  245,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "brown_mud_leaves",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.3,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMin":  20
-                                              }
-                     },
-    "AllowedObjects":  [
-                           "palm_trees"
-                       ],
-    "DominantFlora":  [
-
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Crystalline Sand",
-    "WeatherPatterns":  [
-                            "Heat shimmer",
-                            "mirages"
-                        ],
-    "AssetTags":  [
-                      "sand",
-                      "crystal",
-                      "dune"
-                  ],
-    "LightingModifier":  1.2,
-    "FeatureDescription":  "Sunlight fractures through dunes of shimmering glass, blinding those who wander too long.",
-    "SpecialFeatures":  [
-                            "Crystal monoliths",
-                            "reflective plains"
-                        ],
-    "MusicTag":  "desert",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "aerial_rocks",
-                          "SubsurfaceTextureId":  "brown_mud",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.3,
-                          "DeepDepth":  1.0,
-                          "DepthVariation":  0.3,
-                          "SlopeRockThreshold":  0.55,
-                          "SlopeBlendRange":  0.25
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "copper",
-                                    "OreNoiseFrequency":  7,
-                                    "OreThreshold":  0.74,
-                                    "OreMinDepth":  0.6,
-                                    "OreMaxDepth":  1.0,
-                                    "OreSpawnChance":  0.08
-                                },
-                                {
-                                    "OreType":  "gold",
-                                    "OreNoiseFrequency":  8,
-                                    "OreThreshold":  0.83,
-                                    "OreMinDepth":  0.7,
-                                    "OreMaxDepth":  1.0,
-                                    "OreSpawnChance":  0.03
-                                }
-                            ]
-               }
+    "Id": "shatterglass_desert",
+    "DisplayName": "Shatterglass Desert",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.95,
+            "Moisture": 0.05,
+            "Altitude": 0.1,
+            "Fertility": 0.05,
+            "Roughness": 0.2,
+            "VegetationDensity": 0.0
+        },
+        "Weights": {
+            "WtTemp": 1.4,
+            "WtMoisture": 1.6,
+            "WtElevation": 0.8,
+            "WtFertility": 1.2
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.16,
+            "Frequency": 0.62,
+            "Persistence": 0.28,
+            "Lacunarity": 1.75,
+            "Detail": 0.32,
+            "RidgeWeight": 0.52,
+            "BillowWeight": 0.28,
+            "RidgeSharpness": 2.2,
+            "WarpStrength": 0.38,
+            "WarpFrequency": 0.48,
+            "ErosionStrength": 0.35,
+            "ContinentalScale": 0.38,
+            "CliffStrength": 0.15,
+            "CliffFrequency": 0.35,
+            "CliffSharpness": 0.14,
+            "CliffTiers": 3,
+            "DuneFrequency": 2.2,
+            "DuneAmplitude": 1.35,
+            "DuneDirection": 115,
+            "WetlandFlatten": 0.18,
+            "MicroDetailFrequency": 5.2,
+            "MicroDetailAmplitude": 0.2
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Enabled": true,
+            "Type": "Ridge",
+            "Frequency": 1.85,
+            "Amplitude": 0.38,
+            "Octaves": 3,
+            "Persistence": 0.42,
+            "Lacunarity": 2.4,
+            "BlendMode": "Max",
+            "Seed": 16,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Billow",
+            "Frequency": 1.05,
+            "Amplitude": 0.38,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 32,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Worley",
+            "Frequency": 0.62,
+            "Amplitude": 0.55,
+            "Octaves": 1,
+            "BlendMode": "Max",
+            "Seed": 48,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Value",
+            "Frequency": 5.5,
+            "Amplitude": 0.14,
+            "Octaves": 2,
+            "BlendMode": "Screen",
+            "Seed": 64,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 238,
+            "G": 232,
+            "B": 170,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 0,
+            "G": 188,
+            "B": 212,
+            "A": 255
+        },
+        "Accent": {
+            "R": 245,
+            "G": 245,
+            "B": 245,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "brown_mud_leaves",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [
+        "palm_trees"
+    ],
+    "DominantFlora": [],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Crystalline Sand",
+    "WeatherPatterns": [
+        "Heat shimmer",
+        "mirages"
+    ],
+    "AssetTags": [
+        "sand",
+        "crystal",
+        "dune"
+    ],
+    "LightingModifier": 1.2,
+    "FeatureDescription": "Sunlight fractures through dunes of shimmering glass, blinding those who wander too long.",
+    "SpecialFeatures": [
+        "Crystal monoliths",
+        "reflective plains"
+    ],
+    "MusicTag": "desert",
+    "TerrainLayers": {
+        "SurfaceTextureId": "aerial_rocks",
+        "SubsurfaceTextureId": "brown_mud",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.3,
+        "DeepDepth": 1.0,
+        "DepthVariation": 0.3,
+        "SlopeRockThreshold": 0.55,
+        "SlopeBlendRange": 0.25
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "copper",
+                "OreNoiseFrequency": 7,
+                "OreThreshold": 0.74,
+                "OreMinDepth": 0.6,
+                "OreMaxDepth": 1.0,
+                "OreSpawnChance": 0.08
+            },
+            {
+                "OreType": "gold",
+                "OreNoiseFrequency": 8,
+                "OreThreshold": 0.83,
+                "OreMinDepth": 0.7,
+                "OreMaxDepth": 1.0,
+                "OreSpawnChance": 0.03
+            }
+        ]
+    },
+    "BaseHeight": -0.8,
+    "HeightMultiplier": 0.82
 }

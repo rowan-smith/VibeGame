@@ -1,130 +1,189 @@
 {
-    "Id":  "obsidian_expanse",
-    "DisplayName":  "Obsidian Expanse",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.65,
-                                        "Moisture":  0.1,
-                                        "Altitude":  0.5,
-                                        "Fertility":  0.1,
-                                        "Roughness":  0.7,
-                                        "VegetationDensity":  0.05
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.0,
-                                           "WtMoisture":  1.3,
-                                           "WtElevation":  1.2,
-                                           "WtFertility":  1.0
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.45,
-                                                  "Frequency":  1.4,
-                                                  "Persistence":  0.7,
-                                                  "Lacunarity":  2.8,
-                                                  "Detail":  0.9,
-                                                  "RidgeWeight":  0.7,
-                                                  "WarpStrength":  0.2,
-                                                  "WarpFrequency":  0.7,
-                                                  "TerracingStrength":  0.4,
-                                                  "TerracingSteps":  8,
-                                                  "PlateauLevel":  0.6,
-                                                  "CraterFrequency":  1.2,
-                                                  "CraterDepth":  2.5,
-                                                  "CraterRimHeight":  1.0,
-                                                  "OverhangStrength":  0.3,
-                                                  "OverhangFrequency":  1.5
-                                              }
-                       },
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  15,
-                                         "G":  15,
-                                         "B":  15,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  200,
-                                           "G":  50,
-                                           "B":  50,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  120,
-                                        "G":  120,
-                                        "B":  120,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "aerial_rocks",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.3,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMin":  20
-                                              }
-                     },
-    "AllowedObjects":  [
-
-                       ],
-    "DominantFlora":  [
-
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Volcanic Glass",
-    "WeatherPatterns":  [
-                            "Ember rain",
-                            "hot winds"
-                        ],
-    "AssetTags":  [
-                      "obsidian",
-                      "lava",
-                      "basalt"
-                  ],
-    "LightingModifier":  0.9,
-    "FeatureDescription":  "A vast sea of cooled glass, reflecting fire and stars alike.",
-    "SpecialFeatures":  [
-                            "Lava fractures",
-                            "glowing cracks"
-                        ],
-    "MusicTag":  "volcanic",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "aerial_rocks",
-                          "SubsurfaceTextureId":  "lichen_rock",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.1,
-                          "DeepDepth":  0.4,
-                          "DepthVariation":  0.25,
-                          "SlopeRockThreshold":  0.2,
-                          "SlopeBlendRange":  0.1
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "iron",
-                                    "OreNoiseFrequency":  5,
-                                    "OreThreshold":  0.66,
-                                    "OreMinDepth":  0.05,
-                                    "OreMaxDepth":  0.35,
-                                    "OreSpawnChance":  0.14
-                                },
-                                {
-                                    "OreType":  "copper",
-                                    "OreNoiseFrequency":  6,
-                                    "OreThreshold":  0.7,
-                                    "OreMinDepth":  0.1,
-                                    "OreMaxDepth":  0.4,
-                                    "OreSpawnChance":  0.1
-                                }
-                            ]
-               }
+    "Id": "obsidian_expanse",
+    "DisplayName": "Obsidian Expanse",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.65,
+            "Moisture": 0.1,
+            "Altitude": 0.5,
+            "Fertility": 0.1,
+            "Roughness": 0.7,
+            "VegetationDensity": 0.05
+        },
+        "Weights": {
+            "WtTemp": 1.0,
+            "WtMoisture": 1.3,
+            "WtElevation": 1.2,
+            "WtFertility": 1.0
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.48,
+            "Frequency": 1.25,
+            "Persistence": 0.68,
+            "Lacunarity": 2.65,
+            "Detail": 0.88,
+            "RidgeWeight": 0.72,
+            "BillowWeight": 0.22,
+            "RidgeSharpness": 2.0,
+            "WarpStrength": 0.18,
+            "WarpFrequency": 0.65,
+            "ContinentalScale": 1.25,
+            "CliffStrength": 0.68,
+            "CliffFrequency": 0.5,
+            "CliffSharpness": 0.05,
+            "CliffTiers": 9,
+            "CanyonDepth": 0.48,
+            "CanyonFrequency": 0.55,
+            "CanyonWidth": 0.32,
+            "CraterFrequency": 1.15,
+            "CraterDepth": 2.8,
+            "CraterRimHeight": 1.1,
+            "TerracingStrength": 0.58,
+            "TerracingSteps": 10,
+            "PlateauLevel": 0.68,
+            "WetlandFlatten": 0.25,
+            "OverhangStrength": 0.35,
+            "OverhangFrequency": 1.4,
+            "MicroDetailFrequency": 2.9,
+            "MicroDetailAmplitude": 0.11
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Enabled": true,
+            "Type": "Billow",
+            "Frequency": 0.35,
+            "Amplitude": 0.28,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 14,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Cliff",
+            "Frequency": 0.45,
+            "Amplitude": 0.9,
+            "Octaves": 5,
+            "BlendMode": "Max",
+            "Seed": 26,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Ridge",
+            "Frequency": 2.2,
+            "Amplitude": 0.42,
+            "Octaves": 3,
+            "BlendMode": "Max",
+            "Seed": 38,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Perlin",
+            "Frequency": 0.72,
+            "Amplitude": 0.18,
+            "Octaves": 2,
+            "BlendMode": "Add",
+            "Seed": 52,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 15,
+            "G": 15,
+            "B": 15,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 200,
+            "G": 50,
+            "B": 50,
+            "A": 255
+        },
+        "Accent": {
+            "R": 120,
+            "G": 120,
+            "B": 120,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "aerial_rocks",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [],
+    "DominantFlora": [],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Volcanic Glass",
+    "WeatherPatterns": [
+        "Ember rain",
+        "hot winds"
+    ],
+    "AssetTags": [
+        "obsidian",
+        "lava",
+        "basalt"
+    ],
+    "LightingModifier": 0.9,
+    "FeatureDescription": "A vast sea of cooled glass, reflecting fire and stars alike.",
+    "SpecialFeatures": [
+        "Lava fractures",
+        "glowing cracks"
+    ],
+    "MusicTag": "volcanic",
+    "TerrainLayers": {
+        "SurfaceTextureId": "aerial_rocks",
+        "SubsurfaceTextureId": "lichen_rock",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.1,
+        "DeepDepth": 0.4,
+        "DepthVariation": 0.25,
+        "SlopeRockThreshold": 0.2,
+        "SlopeBlendRange": 0.1
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "iron",
+                "OreNoiseFrequency": 5,
+                "OreThreshold": 0.66,
+                "OreMinDepth": 0.05,
+                "OreMaxDepth": 0.35,
+                "OreSpawnChance": 0.14
+            },
+            {
+                "OreType": "copper",
+                "OreNoiseFrequency": 6,
+                "OreThreshold": 0.7,
+                "OreMinDepth": 0.1,
+                "OreMaxDepth": 0.4,
+                "OreSpawnChance": 0.1
+            }
+        ]
+    },
+    "BaseHeight": 1.2,
+    "HeightMultiplier": 1.18
 }

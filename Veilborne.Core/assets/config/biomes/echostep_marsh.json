@@ -1,116 +1,179 @@
 {
-    "Id":  "echostep_marsh",
-    "DisplayName":  "Echostep Marsh",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.6,
-                                        "Moisture":  0.9,
-                                        "Altitude":  0.05,
-                                        "Fertility":  0.85,
-                                        "Roughness":  0.2,
-                                        "VegetationDensity":  0.8
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  0.8,
-                                           "WtMoisture":  1.5,
-                                           "WtElevation":  1.1,
-                                           "WtFertility":  1.2
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.12,
-                                                  "Frequency":  0.5,
-                                                  "Persistence":  0.3,
-                                                  "Lacunarity":  1.6,
-                                                  "Detail":  0.3,
-                                                  "RidgeWeight":  0.05,
-                                                  "WarpStrength":  0.4,
-                                                  "WarpFrequency":  0.3,
-                                                  "ErosionStrength":  0.8
-                                              }
-                       },
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  0,
-                                         "G":  128,
-                                         "B":  128,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  0,
-                                           "G":  100,
-                                           "B":  0,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  148,
-                                        "G":  0,
-                                        "B":  211,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "aerial_rocks",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.3,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMin":  20
-                                              }
-                     },
-    "AllowedObjects":  [
-
-                       ],
-    "DominantFlora":  [
-                          "Reeds",
-                          "Spirit Lilies"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Wet Mud",
-    "WeatherPatterns":  [
-                            "Thick fog",
-                            "faint whispers"
-                        ],
-    "AssetTags":  [
-                      "mud",
-                      "swamp",
-                      "mist"
-                  ],
-    "LightingModifier":  0.9,
-    "FeatureDescription":  "A foggy wetland where echoes never quite fade, and lights drift just out of reach.",
-    "SpecialFeatures":  [
-                            "Floating lights",
-                            "sinkholes"
-                        ],
-    "MusicTag":  "swamp",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "brown_mud",
-                          "SubsurfaceTextureId":  "brown_mud",
-                          "DeepTextureId":  "lichen_rock",
-                          "SlopeTextureId":  "lichen_rock",
-                          "SubsurfaceDepth":  0.2,
-                          "DeepDepth":  0.8,
-                          "DepthVariation":  0.6,
-                          "SlopeRockThreshold":  0.6,
-                          "SlopeBlendRange":  0.3
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "coal",
-                                    "OreNoiseFrequency":  7,
-                                    "OreThreshold":  0.78,
-                                    "OreMinDepth":  0.5,
-                                    "OreMaxDepth":  0.8,
-                                    "OreSpawnChance":  0.06
-                                }
-                            ]
-               }
+    "Id": "echostep_marsh",
+    "DisplayName": "Echostep Marsh",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.6,
+            "Moisture": 0.9,
+            "Altitude": 0.05,
+            "Fertility": 0.85,
+            "Roughness": 0.2,
+            "VegetationDensity": 0.8
+        },
+        "Weights": {
+            "WtTemp": 0.8,
+            "WtMoisture": 1.5,
+            "WtElevation": 1.1,
+            "WtFertility": 1.2
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.08,
+            "Frequency": 0.42,
+            "Persistence": 0.28,
+            "Lacunarity": 1.55,
+            "Detail": 0.25,
+            "RidgeWeight": 0.03,
+            "BillowWeight": 0.18,
+            "RidgeSharpness": 1.0,
+            "WarpStrength": 0.35,
+            "WarpFrequency": 0.28,
+            "ErosionStrength": 0.85,
+            "ValleyDepthBias": 0.7,
+            "ContinentalScale": 0.2,
+            "CliffStrength": 0.0,
+            "CanyonDepth": 0.28,
+            "CanyonFrequency": 0.38,
+            "CanyonWidth": 0.58,
+            "PondDepth": 0.85,
+            "PondFrequency": 2.5,
+            "BasinStrength": 0.72,
+            "WetlandFlatten": 0.82,
+            "PlateauLevel": 0.12,
+            "MicroDetailFrequency": 1.2,
+            "MicroDetailAmplitude": 0.06
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Enabled": true,
+            "Type": "Basin",
+            "Frequency": 0.25,
+            "Amplitude": 0.8,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 7,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Billow",
+            "Frequency": 0.28,
+            "Amplitude": 0.12,
+            "Octaves": 2,
+            "Persistence": 0.28,
+            "BlendMode": "Add",
+            "Seed": 19,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Pond",
+            "Frequency": 2.8,
+            "Amplitude": 0.9,
+            "Octaves": 1,
+            "BlendMode": "Add",
+            "Seed": 31,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Value",
+            "Frequency": 1.8,
+            "Amplitude": 0.08,
+            "Octaves": 2,
+            "BlendMode": "Screen",
+            "Seed": 47,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 0,
+            "G": 128,
+            "B": 128,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 0,
+            "G": 100,
+            "B": 0,
+            "A": 255
+        },
+        "Accent": {
+            "R": 148,
+            "G": 0,
+            "B": 211,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "aerial_rocks",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [],
+    "DominantFlora": [
+        "Reeds",
+        "Spirit Lilies"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Wet Mud",
+    "WeatherPatterns": [
+        "Thick fog",
+        "faint whispers"
+    ],
+    "AssetTags": [
+        "mud",
+        "swamp",
+        "mist"
+    ],
+    "LightingModifier": 0.9,
+    "FeatureDescription": "A foggy wetland where echoes never quite fade, and lights drift just out of reach.",
+    "SpecialFeatures": [
+        "Floating lights",
+        "sinkholes"
+    ],
+    "MusicTag": "swamp",
+    "TerrainLayers": {
+        "SurfaceTextureId": "brown_mud",
+        "SubsurfaceTextureId": "brown_mud",
+        "DeepTextureId": "lichen_rock",
+        "SlopeTextureId": "lichen_rock",
+        "SubsurfaceDepth": 0.2,
+        "DeepDepth": 0.8,
+        "DepthVariation": 0.6,
+        "SlopeRockThreshold": 0.6,
+        "SlopeBlendRange": 0.3
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "coal",
+                "OreNoiseFrequency": 7,
+                "OreThreshold": 0.78,
+                "OreMinDepth": 0.5,
+                "OreMaxDepth": 0.8,
+                "OreSpawnChance": 0.06
+            }
+        ]
+    },
+    "BaseHeight": -2.0,
+    "HeightMultiplier": 0.48
 }

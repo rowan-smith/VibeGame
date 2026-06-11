@@ -183,6 +183,56 @@ namespace Veilborne.Biomes
 
         /// <summary>Vertical frequency of overhang layering.</summary>
         public float OverhangFrequency { get; set; } = 1f;
+
+        /// <summary>Strata/mesa cliff strength — quantizes elevation into flat-topped tiers with steep faces.</summary>
+        public float CliffStrength { get; set; } = 0f;
+
+        /// <summary>Frequency multiplier for cliff strata placement.</summary>
+        public float CliffFrequency { get; set; } = 0.35f;
+
+        /// <summary>Width of the transition band at tier edges (lower = steeper cliff faces).</summary>
+        public float CliffSharpness { get; set; } = 0.1f;
+
+        /// <summary>Number of elevation tiers when CliffStrength > 0.</summary>
+        public int CliffTiers { get; set; } = 4;
+
+        /// <summary>Depth of ridge-carved canyons and river gullies.</summary>
+        public float CanyonDepth { get; set; } = 0f;
+
+        /// <summary>Frequency multiplier for canyon placement.</summary>
+        public float CanyonFrequency { get; set; } = 0.6f;
+
+        /// <summary>Narrowness of canyon cuts (lower = wider valleys, higher = tighter gorges).</summary>
+        public float CanyonWidth { get; set; } = 0.35f;
+
+        // ── Fantasy / gamelike landforms ─────────────────────────
+
+        /// <summary>Bowl-shaped depression strength for marshes, volcanic basins, and sink zones.</summary>
+        public float BasinStrength { get; set; } = 0f;
+
+        /// <summary>Depth of scattered pond/lake depressions (glowing pools, acid pools, sinkholes).</summary>
+        public float PondDepth { get; set; } = 0f;
+
+        /// <summary>Frequency multiplier for pond placement.</summary>
+        public float PondFrequency { get; set; } = 1.5f;
+
+        /// <summary>Amplitude of gentle rolling hill waves (steppes, savannas, golden plains).</summary>
+        public float RollingHillsAmplitude { get; set; } = 0f;
+
+        /// <summary>Frequency multiplier for rolling hill waves.</summary>
+        public float RollingHillsFrequency { get; set; } = 0.8f;
+
+        /// <summary>Floating island platform scale for void/surreal biomes (0 = disabled).</summary>
+        public float IslandScale { get; set; } = 0f;
+
+        /// <summary>Depth of void drop between floating islands.</summary>
+        public float IslandDrop { get; set; } = 3f;
+
+        /// <summary>Flattens terrain toward a readable game-like waterline (wetlands, glass seas).</summary>
+        public float WetlandFlatten { get; set; } = 0f;
+
+        /// <summary>Pulsing bulge strength for volcanic/magical underground pressure (Emberroot, etc.).</summary>
+        public float VolcanicPulse { get; set; } = 0f;
     }
 
     /// <summary>
@@ -191,7 +241,7 @@ namespace Veilborne.Biomes
     /// </summary>
     public class NoiseLayerConfig
     {
-        /// <summary>Noise algorithm: Perlin, Ridge, Billow, Value, Worley.</summary>
+        /// <summary>Noise algorithm: Perlin, Ridge, Billow, Value, Worley, Cliff, Canyon, Pond, Rolling, Basin, Island.</summary>
         public string Type { get; set; } = "Perlin";
 
         /// <summary>Spatial frequency of this noise layer.</summary>

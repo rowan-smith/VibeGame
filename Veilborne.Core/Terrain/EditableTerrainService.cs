@@ -230,11 +230,10 @@ namespace Veilborne.Terrain
                     heights[x, z] = BiomeTerrainHeightBlender.ComputeHeight(wx, wz, baseHeight, _biomeProvider, _terrainGen);
                 }
 
-                var center = new Vector2(
-                    originX + ChunkSize * TileSize * 0.5f,
-                    originZ + ChunkSize * TileSize * 0.5f);
-                var (primaryBiome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
-                var spawnBiome = _biomeProvider.GetBiomeAt(center, _terrainGen);
+                var (spawnBiome, secondaryIbiome, secondaryBlend) = BiomeSampling.ResolveVisualBiomeForChunk(
+                    _biomeProvider, _terrainGen, origin, ChunkSize, TileSize);
+                var primaryBiome = spawnBiome.Data;
+                var secondaryBiome = secondaryIbiome?.Data;
                 var objects = spawnBiome.ObjectSpawner.GenerateObjects(spawnBiome.Id, _terrainGen, heights, origin, 18);
                 _completed.Enqueue(new GeneratedEditableChunk(key, heights, origin, primaryBiome, secondaryBiome, secondaryBlend, objects));
             });
@@ -342,16 +341,11 @@ namespace Veilborne.Terrain
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
-        private (BiomeData primary, BiomeData? secondary, float blend) ResolveBiomeBlend(Vector2 centerWorld)
+        private (BiomeData primary, BiomeData? secondary, float blend) ResolveVisualBiome(Vector2 chunkOrigin)
         {
-            if (_biomeProvider is SimpleBiomeProvider simple)
-            {
-                var (primary, secondary, blend) = simple.GetBiomeBlendAt(centerWorld, _terrainGen);
-                return (primary.Data, secondary?.Data, blend);
-            }
-
-            var primaryBiome = _biomeProvider.GetBiomeAt(centerWorld, _terrainGen);
-            return (primaryBiome.Data, null, 0f);
+            var (primary, secondary, blend) = BiomeSampling.ResolveVisualBiomeForChunk(
+                _biomeProvider, _terrainGen, chunkOrigin, ChunkSize, TileSize);
+            return (primary.Data, secondary?.Data, blend);
         }
 
         private void RecomputeSplatmapForChunk((int cx, int cz) key, ref TerrainChunk chunk)
@@ -376,7 +370,7 @@ namespace Veilborne.Terrain
                 float depth = 0f;
                 if (chunk.BaseHeights != null)
                     depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
-                float slope = ComputeSlope(chunk.Heights, x, z, w, h);
+                float slope = ComputeSlope(chunk.Heights, x, z, w, h, TileSize);
 
                 Vector4 primary = ComputeSplatWeights(depth, key, x, z, primaryId, slope);
 
@@ -413,7 +407,7 @@ namespace Veilborne.Terrain
                 float depth = 0f;
                 if (chunk.BaseHeights != null)
                     depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
-                float slope = ComputeSlope(chunk.Heights, x, z, w, h);
+                float slope = ComputeSlope(chunk.Heights, x, z, w, h, TileSize);
 
                 Vector4 primary = ComputeSplatWeights(depth, key, x, z, primaryId, slope);
 
@@ -479,19 +473,10 @@ namespace Veilborne.Terrain
                 {
                     var key = kvp.Key;
                     var chunk = kvp.Value;
-                    if (!_primaryBiomeByChunk.TryGetValue(key, out var primaryBiome))
-                    {
-                        var center = new Vector2(
-                            chunk.Origin.X + ChunkSize * TileSize * 0.5f,
-                            chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
-                        var (primary, secondary, blend) = ResolveBiomeBlend(center);
-                        primaryBiome = primary;
-                        _primaryBiomeByChunk[key] = primaryBiome;
-                        _biomeBlendByChunk[key] = (secondary, blend);
-                    }
-                    if (!_biomeBlendByChunk.TryGetValue(key, out var blendInfo))
-                        blendInfo = (null, 0f);
-                _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
+                    var (primaryBiome, secondary, blend) = ResolveVisualBiome(chunk.Origin);
+                    _primaryBiomeByChunk[key] = primaryBiome;
+                    _biomeBlendByChunk[key] = (secondary, blend);
+                    _renderer.ApplyBiomeBlendTextures(primaryBiome, secondary, blend);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, GetTerrainLayersForBiomeId(primaryBiome.Id), chunk.Splatmap);
                 }
             }
@@ -612,20 +597,21 @@ namespace Veilborne.Terrain
                 float depth = 0f;
                 if (chunk.BaseHeights != null)
                     depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
-                float slope = ComputeSlope(chunk.Heights, x, z, w, h);
+                float slope = ComputeSlope(chunk.Heights, x, z, w, h, TileSize);
                 chunk.Splatmap[x, z] = ComputeSplatWeights(depth, key, x, z, biomeId, slope);
             }
         }
 
-        private static float ComputeSlope(float[,] heights, int x, int z, int w, int h)
+        private static float ComputeSlope(float[,] heights, int x, int z, int w, int h, float tileSize)
         {
             float center = heights[x, z];
             float left  = x > 0 ? heights[x - 1, z] : center;
             float right = x < w - 1 ? heights[x + 1, z] : center;
             float up    = z > 0 ? heights[x, z - 1] : center;
             float down  = z < h - 1 ? heights[x, z + 1] : center;
-            float dx = (right - left) * 0.5f;
-            float dz = (down - up) * 0.5f;
+            float spacing = MathF.Max(0.01f, tileSize);
+            float dx = (right - left) / (2f * spacing);
+            float dz = (down - up) / (2f * spacing);
             return MathF.Sqrt(dx * dx + dz * dz);
         }
 

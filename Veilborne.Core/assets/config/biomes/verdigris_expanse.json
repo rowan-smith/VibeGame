@@ -1,125 +1,207 @@
 {
-    "Id":  "verdigris_expanse",
-    "DisplayName":  "Verdigris Expanse",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.6,
-                                        "Moisture":  0.3,
-                                        "Altitude":  0.2,
-                                        "Fertility":  0.2,
-                                        "Roughness":  0.4,
-                                        "VegetationDensity":  0.2
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.0,
-                                           "WtMoisture":  1.3,
-                                           "WtElevation":  0.9,
-                                           "WtFertility":  0.9
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.35,
-                                                  "Frequency":  1.3,
-                                                  "Persistence":  0.55,
-                                                  "Lacunarity":  2.4,
-                                                  "Detail":  0.65
-                                              }
-                       },
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  107,
-                                         "G":  142,
-                                         "B":  35,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  184,
-                                           "G":  115,
-                                           "B":  51,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  139,
-                                        "G":  115,
-                                        "B":  85,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "brown_mud_leaves",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.3,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMin":  20
-                                              }
-                     },
-    "AllowedObjects":  [
-                           "maple_tree",
-                           "maple_trees",
-                           "birch_trees",
-                           "forest_trees",
-                           "dead_trees",
-                           "surface_grass"
-                       ],
-    "DominantFlora":  [
-                          "Thornbrush",
-                          "Oxide Ferns"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Corroded Soil",
-    "WeatherPatterns":  [
-                            "Acid Rain",
-                            "Wind Gusts"
-                        ],
-    "AssetTags":  [
-                      "rust",
-                      "metallic-rock",
-                      "dry-grass"
-                  ],
-    "LightingModifier":  0.95,
-    "FeatureDescription":  "A corroded wasteland where the soil glows faintly green from mineral decay.",
-    "SpecialFeatures":  [
-                            "Acid pools",
-                            "metallic ruins"
-                        ],
-    "MusicTag":  "industrial",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "lichen_rock",
-                          "SubsurfaceTextureId":  "brown_mud",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.3,
-                          "DeepDepth":  1.0,
-                          "DepthVariation":  0.45,
-                          "SlopeRockThreshold":  0.35,
-                          "SlopeBlendRange":  0.2
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "copper",
-                                    "OreNoiseFrequency":  6,
-                                    "OreThreshold":  0.7,
-                                    "OreMinDepth":  0.3,
-                                    "OreMaxDepth":  0.9,
-                                    "OreSpawnChance":  0.1
-                                },
-                                {
-                                    "OreType":  "iron",
-                                    "OreNoiseFrequency":  7,
-                                    "OreThreshold":  0.74,
-                                    "OreMinDepth":  0.5,
-                                    "OreMaxDepth":  1.0,
-                                    "OreSpawnChance":  0.08
-                                }
-                            ]
-               }
+    "Id": "verdigris_expanse",
+    "DisplayName": "Verdigris Expanse",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.6,
+            "Moisture": 0.3,
+            "Altitude": 0.2,
+            "Fertility": 0.2,
+            "Roughness": 0.4,
+            "VegetationDensity": 0.2
+        },
+        "Weights": {
+            "WtTemp": 1.0,
+            "WtMoisture": 1.3,
+            "WtElevation": 0.9,
+            "WtFertility": 0.9
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.38,
+            "Frequency": 1.22,
+            "Persistence": 0.52,
+            "Lacunarity": 2.35,
+            "Detail": 0.62,
+            "RidgeWeight": 0.42,
+            "BillowWeight": 0.32,
+            "RidgeSharpness": 1.8,
+            "WarpStrength": 0.28,
+            "WarpFrequency": 0.55,
+            "ErosionStrength": 0.68,
+            "ValleyDepthBias": 0.58,
+            "ContinentalScale": 0.88,
+            "CliffStrength": 0.48,
+            "CliffFrequency": 0.58,
+            "CliffSharpness": 0.09,
+            "CliffTiers": 5,
+            "CanyonDepth": 0.68,
+            "CanyonFrequency": 0.65,
+            "CanyonWidth": 0.3,
+            "PondDepth": 0.72,
+            "PondFrequency": 2.0,
+            "BasinStrength": 0.22,
+            "MicroDetailFrequency": 3.0,
+            "MicroDetailAmplitude": 0.15
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Enabled": true,
+            "Type": "Ridge",
+            "Frequency": 1.45,
+            "Amplitude": 0.38,
+            "Octaves": 4,
+            "Persistence": 0.48,
+            "Lacunarity": 2.3,
+            "BlendMode": "Add",
+            "Seed": 10,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Cliff",
+            "Frequency": 0.55,
+            "Amplitude": 0.48,
+            "Octaves": 4,
+            "BlendMode": "Add",
+            "Seed": 22,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Pond",
+            "Frequency": 1.85,
+            "Amplitude": 0.68,
+            "Octaves": 1,
+            "BlendMode": "Add",
+            "Seed": 34,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Canyon",
+            "Frequency": 0.88,
+            "Amplitude": -0.62,
+            "Octaves": 4,
+            "BlendMode": "Add",
+            "Seed": 46,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Billow",
+            "Frequency": 0.62,
+            "Amplitude": 0.25,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 58,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 107,
+            "G": 142,
+            "B": 35,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 184,
+            "G": 115,
+            "B": 51,
+            "A": 255
+        },
+        "Accent": {
+            "R": 139,
+            "G": 115,
+            "B": 85,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "brown_mud_leaves",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [
+        "maple_tree",
+        "maple_trees",
+        "birch_trees",
+        "forest_trees",
+        "dead_trees",
+        "surface_grass"
+    ],
+    "DominantFlora": [
+        "Thornbrush",
+        "Oxide Ferns"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Corroded Soil",
+    "WeatherPatterns": [
+        "Acid Rain",
+        "Wind Gusts"
+    ],
+    "AssetTags": [
+        "rust",
+        "metallic-rock",
+        "dry-grass"
+    ],
+    "LightingModifier": 0.95,
+    "FeatureDescription": "A corroded wasteland where the soil glows faintly green from mineral decay.",
+    "SpecialFeatures": [
+        "Acid pools",
+        "metallic ruins"
+    ],
+    "MusicTag": "industrial",
+    "TerrainLayers": {
+        "SurfaceTextureId": "lichen_rock",
+        "SubsurfaceTextureId": "brown_mud",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.3,
+        "DeepDepth": 1.0,
+        "DepthVariation": 0.45,
+        "SlopeRockThreshold": 0.35,
+        "SlopeBlendRange": 0.2
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "copper",
+                "OreNoiseFrequency": 6,
+                "OreThreshold": 0.7,
+                "OreMinDepth": 0.3,
+                "OreMaxDepth": 0.9,
+                "OreSpawnChance": 0.1
+            },
+            {
+                "OreType": "iron",
+                "OreNoiseFrequency": 7,
+                "OreThreshold": 0.74,
+                "OreMinDepth": 0.5,
+                "OreMaxDepth": 1.0,
+                "OreSpawnChance": 0.08
+            }
+        ]
+    },
+    "BaseHeight": -0.2,
+    "HeightMultiplier": 1.05
 }

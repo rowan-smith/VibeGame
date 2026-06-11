@@ -1,120 +1,183 @@
 {
-    "Id":  "frostveil_tundra",
-    "DisplayName":  "FrostveilTundra",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.1,
-                                        "Moisture":  0.4,
-                                        "Altitude":  0.3,
-                                        "Fertility":  0.1,
-                                        "Roughness":  0.3,
-                                        "VegetationDensity":  0.05
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.6,
-                                           "WtMoisture":  0.9,
-                                           "WtElevation":  1.0,
-                                           "WtFertility":  1.1
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.25,
-                                                  "Frequency":  0.7,
-                                                  "Persistence":  0.35,
-                                                  "Lacunarity":  1.8,
-                                                  "Detail":  0.4,
-                                                  "RidgeWeight":  0.15,
-                                                  "WarpStrength":  0.25,
-                                                  "WarpFrequency":  0.4,
-                                                  "ErosionStrength":  0.6,
-                                                  "ContinentalScale":  1.5,
-                                                  "ContinentalFrequency":  0.08,
-                                                  "MicroDetailFrequency":  2.0,
-                                                  "MicroDetailAmplitude":  0.1
-                                              }
-                       },
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  135,
-                                         "G":  206,
-                                         "B":  235,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  250,
-                                           "G":  250,
-                                           "B":  250,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  200,
-                                        "G":  200,
-                                        "B":  200,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "snow",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "snow":  {
-                                      "MinAltitude":  0.3,
-                                      "MaxAltitude":  1.0,
-                                      "SlopeMin":  20
-                                  }
-                     },
-    "AllowedObjects":  [
-                           "pine_trees"
-                       ],
-    "DominantFlora":  [
-                          "Frozen Shrubs",
-                          "Lichen"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Snow/Ice",
-    "WeatherPatterns":  [
-                            "Blizzards",
-                            "auroras"
-                        ],
-    "AssetTags":  [
-                      "ice",
-                      "snow",
-                      "rock"
-                  ],
-    "LightingModifier":  0.85,
-    "FeatureDescription":  "A frozen land of silence and pale light, where even sound freezes.",
-    "SpecialFeatures":  [
-                            "Ice caves",
-                            "glowing crystals"
-                        ],
-    "MusicTag":  "tundra",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "snow",
-                          "SubsurfaceTextureId":  "snow",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.6,
-                          "DeepDepth":  1.5,
-                          "DepthVariation":  0.2,
-                          "SlopeRockThreshold":  0.4,
-                          "SlopeBlendRange":  0.2
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "iron",
-                                    "OreNoiseFrequency":  6,
-                                    "OreThreshold":  0.72,
-                                    "OreMinDepth":  0.4,
-                                    "OreMaxDepth":  1.2,
-                                    "OreSpawnChance":  0.1
-                                }
-                            ]
-               }
+    "Id": "frostveil_tundra",
+    "DisplayName": "FrostveilTundra",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.1,
+            "Moisture": 0.4,
+            "Altitude": 0.3,
+            "Fertility": 0.1,
+            "Roughness": 0.3,
+            "VegetationDensity": 0.05
+        },
+        "Weights": {
+            "WtTemp": 1.6,
+            "WtMoisture": 0.9,
+            "WtElevation": 1.0,
+            "WtFertility": 1.1
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.22,
+            "Frequency": 0.62,
+            "Persistence": 0.32,
+            "Lacunarity": 1.75,
+            "Detail": 0.38,
+            "RidgeWeight": 0.12,
+            "BillowWeight": 0.48,
+            "RidgeSharpness": 1.2,
+            "WarpStrength": 0.22,
+            "WarpFrequency": 0.35,
+            "ErosionStrength": 0.55,
+            "ContinentalScale": 1.85,
+            "ContinentalFrequency": 0.07,
+            "CliffStrength": 0.22,
+            "CliffFrequency": 0.22,
+            "CliffSharpness": 0.18,
+            "CliffTiers": 3,
+            "CanyonDepth": 0.18,
+            "CanyonFrequency": 0.35,
+            "CanyonWidth": 0.52,
+            "PondDepth": 0.35,
+            "PondFrequency": 1.4,
+            "RollingHillsAmplitude": 0.22,
+            "RollingHillsFrequency": 0.45,
+            "MicroDetailFrequency": 2.2,
+            "MicroDetailAmplitude": 0.09
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Enabled": true,
+            "Type": "Perlin",
+            "Frequency": 0.22,
+            "Amplitude": 0.35,
+            "Octaves": 3,
+            "Persistence": 0.3,
+            "Lacunarity": 1.6,
+            "BlendMode": "Add",
+            "Seed": 9,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Billow",
+            "Frequency": 0.48,
+            "Amplitude": 0.38,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 21,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Pond",
+            "Frequency": 1.2,
+            "Amplitude": 0.3,
+            "Octaves": 1,
+            "BlendMode": "Add",
+            "Seed": 43,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Value",
+            "Frequency": 2.8,
+            "Amplitude": 0.07,
+            "Octaves": 2,
+            "BlendMode": "Screen",
+            "Seed": 61,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 135,
+            "G": 206,
+            "B": 235,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 250,
+            "G": 250,
+            "B": 250,
+            "A": 255
+        },
+        "Accent": {
+            "R": 200,
+            "G": 200,
+            "B": 200,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "snow",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "snow": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [
+        "pine_trees"
+    ],
+    "DominantFlora": [
+        "Frozen Shrubs",
+        "Lichen"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Snow/Ice",
+    "WeatherPatterns": [
+        "Blizzards",
+        "auroras"
+    ],
+    "AssetTags": [
+        "ice",
+        "snow",
+        "rock"
+    ],
+    "LightingModifier": 0.85,
+    "FeatureDescription": "A frozen land of silence and pale light, where even sound freezes.",
+    "SpecialFeatures": [
+        "Ice caves",
+        "glowing crystals"
+    ],
+    "MusicTag": "tundra",
+    "TerrainLayers": {
+        "SurfaceTextureId": "snow",
+        "SubsurfaceTextureId": "snow",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.6,
+        "DeepDepth": 1.5,
+        "DepthVariation": 0.2,
+        "SlopeRockThreshold": 0.4,
+        "SlopeBlendRange": 0.2
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "iron",
+                "OreNoiseFrequency": 6,
+                "OreThreshold": 0.72,
+                "OreMinDepth": 0.4,
+                "OreMaxDepth": 1.2,
+                "OreSpawnChance": 0.1
+            }
+        ]
+    },
+    "BaseHeight": 0.3,
+    "HeightMultiplier": 0.92
 }
