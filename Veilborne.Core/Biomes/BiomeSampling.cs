@@ -205,5 +205,43 @@ namespace Veilborne.Biomes
             var (_, _, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
             return blend;
         }
+
+        /// <summary>
+        /// Resolves biome crossfade from chunk corners. Chunks whose center sits deep inside
+        /// one biome can still have non-zero blend at edges that touch a neighbor biome.
+        /// </summary>
+        public static (float b00, float b10, float b01, float b11, float maxBlend, IBiome? secondaryBiome)
+            ResolveCornerCrossfade(
+                SimpleBiomeProvider provider,
+                ITerrainGenerator terrain,
+                Vector2 origin,
+                int width,
+                int height,
+                float tileSize)
+        {
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+
+            float maxBlend = 0f;
+            IBiome? bestSecondary = null;
+
+            float SampleCorner(float wx, float wz)
+            {
+                var (_, secondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+                if (blend > maxBlend && secondary is not null)
+                {
+                    maxBlend = blend;
+                    bestSecondary = secondary;
+                }
+                return blend;
+            }
+
+            float b00 = SampleCorner(origin.X, origin.Y);
+            float b10 = SampleCorner(origin.X + chunkW, origin.Y);
+            float b01 = SampleCorner(origin.X, origin.Y + chunkH);
+            float b11 = SampleCorner(origin.X + chunkW, origin.Y + chunkH);
+
+            return (b00, b10, b01, b11, maxBlend, bestSecondary);
+        }
     }
 }

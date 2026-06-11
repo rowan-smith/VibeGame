@@ -244,10 +244,10 @@ namespace Veilborne.Terrain
                         chunk.Origin.X + ChunkSize * TileSize * 0.5f,
                         chunk.Origin.Y + ChunkSize * TileSize * 0.5f)).primary.Data;
 
-                (BiomeData? secondary, float blend) blendInfo;
-                lock (_biomeBlendByChunk)
-                    blendInfo = _biomeBlendByChunk.TryGetValue(key, out var info) ? info : (null, 0f);
-                _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
+                int gridW = chunk.Heights.GetLength(0);
+                int gridH = chunk.Heights.GetLength(1);
+                var (renderSecondary, renderBlend) = ResolveChunkRenderBlend(chunk.Origin, gridW, gridH);
+                _renderer.ApplyBiomeBlendTextures(primaryBiome, renderSecondary, renderBlend);
                 _renderer.RenderAt(
                     chunk.Heights,
                     TileSize,
@@ -273,6 +273,23 @@ namespace Veilborne.Terrain
             return (primary, null, 0f);
         }
 
+        private (BiomeData? secondary, float blend) ResolveChunkRenderBlend(Vector2 origin, int gridWidth, int gridHeight)
+        {
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (_, _, _, _, maxBlend, cornerSecondary) = BiomeSampling.ResolveCornerCrossfade(
+                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize);
+                if (cornerSecondary is not null && maxBlend > 0.001f)
+                    return (cornerSecondary.Data, maxBlend);
+            }
+
+            var center = new Vector2(
+                origin.X + (gridWidth - 1) * TileSize * 0.5f,
+                origin.Y + (gridHeight - 1) * TileSize * 0.5f);
+            var (_, secondary, blend) = ResolveBiomeBlend(center);
+            return (secondary?.Data, blend);
+        }
+
         public IEnumerable<(Vector3 center, Vector3 size)> EnumerateChunkBounds()
         {
             var chunks = SnapshotChunksSafe(_loadedChunks);
@@ -292,8 +309,21 @@ namespace Veilborne.Terrain
             int h = heights.GetLength(1);
             var splat = new Vector4[w, h];
 
+            BiomeData? effectiveSecondary = secondaryBiome;
+            float effectiveBlend = blendFactor;
+            if (_biomeProvider is SimpleBiomeProvider simpleProvider)
+            {
+                var (_, _, _, _, maxBlend, cornerSecondary) = BiomeSampling.ResolveCornerCrossfade(
+                    simpleProvider, _terrainGen, origin, w, h, TileSize);
+                if (cornerSecondary is not null && maxBlend > 0.001f)
+                {
+                    effectiveSecondary = cornerSecondary.Data;
+                    effectiveBlend = maxBlend;
+                }
+            }
+
             float[,]? blendMap = null;
-            bool hasSecondary = secondaryBiome != null && blendFactor > 0.001f;
+            bool hasSecondary = effectiveSecondary != null && effectiveBlend > 0.001f;
             if (hasSecondary && _biomeProvider is SimpleBiomeProvider simple)
                 blendMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, origin, w, h, TileSize);
 
@@ -320,7 +350,7 @@ namespace Veilborne.Terrain
                     float vertexBlend = blendMap[x, z];
                     if (vertexBlend > 0.001f)
                     {
-                        Vector4 secondary = ComputeSplatForLayers(secondaryBiome!.TerrainLayers, depth, slope);
+                        Vector4 secondary = ComputeSplatForLayers(effectiveSecondary!.TerrainLayers, depth, slope);
                         splat[x, z] = Vector4.Lerp(primary, secondary, vertexBlend);
                         continue;
                     }

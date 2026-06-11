@@ -272,6 +272,7 @@ namespace Veilborne.Terrain
 
                 var newChunk = _loadedChunks[result.Key];
                 InitializeChunkLayersAndResources(result.Key, ref newChunk, result.PrimaryBiome.Id);
+                RecomputeSplatmapForChunk(result.Key, ref newChunk);
                 _loadedChunks[result.Key] = newChunk;
 
                 _entitiesByChunk[result.Key] = new List<Entity>(result.Objects.Count);
@@ -354,6 +355,23 @@ namespace Veilborne.Terrain
             return (primaryBiome.Data, null, 0f);
         }
 
+        private (BiomeData? secondary, float blend) ResolveChunkRenderBlend(Vector2 origin, int gridWidth, int gridHeight)
+        {
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (_, _, _, _, maxBlend, cornerSecondary) = BiomeSampling.ResolveCornerCrossfade(
+                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize);
+                if (cornerSecondary is not null && maxBlend > 0.001f)
+                    return (cornerSecondary.Data, maxBlend);
+            }
+
+            var center = new Vector2(
+                origin.X + (gridWidth - 1) * TileSize * 0.5f,
+                origin.Y + (gridHeight - 1) * TileSize * 0.5f);
+            var (_, secondary, blend) = ResolveBiomeBlend(center);
+            return (secondary, blend);
+        }
+
         private void RecomputeSplatmapForChunk((int cx, int cz) key, ref TerrainChunk chunk)
         {
             int w = chunk.Heights.GetLength(0);
@@ -361,11 +379,10 @@ namespace Veilborne.Terrain
             chunk.Splatmap ??= new Vector4[w, h];
 
             string primaryId = _primaryBiomeByChunk.TryGetValue(key, out var biome) ? biome.Id : string.Empty;
-            _biomeBlendByChunk.TryGetValue(key, out var blendInfo);
-            string secondaryId = blendInfo.secondary?.Id ?? string.Empty;
-            bool hasSecondary = !string.IsNullOrEmpty(secondaryId) && blendInfo.blend > 0.001f;
+            var (renderSecondary, renderBlend) = ResolveChunkRenderBlend(chunk.Origin, w, h);
+            string secondaryId = renderSecondary?.Id ?? string.Empty;
+            bool hasSecondary = !string.IsNullOrEmpty(secondaryId) && renderBlend > 0.001f;
 
-            // Compute per-vertex blend factor by sampling at chunk corners + center
             float[,]? blendMap = null;
             if (hasSecondary && _biomeProvider is SimpleBiomeProvider simple)
                 blendMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, chunk.Origin, w, h, TileSize);
@@ -452,9 +469,10 @@ namespace Veilborne.Terrain
                         _primaryBiomeByChunk[key] = primaryBiome;
                         _biomeBlendByChunk[key] = (secondary, blend);
                     }
-                    if (!_biomeBlendByChunk.TryGetValue(key, out var blendInfo))
-                        blendInfo = (null, 0f);
-                _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
+                    int gridW = chunk.Heights.GetLength(0);
+                    int gridH = chunk.Heights.GetLength(1);
+                    var (renderSecondary, renderBlend) = ResolveChunkRenderBlend(chunk.Origin, gridW, gridH);
+                    _renderer.ApplyBiomeBlendTextures(primaryBiome, renderSecondary, renderBlend);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, GetTerrainLayersForBiomeId(primaryBiome.Id), chunk.Splatmap);
                 }
             }

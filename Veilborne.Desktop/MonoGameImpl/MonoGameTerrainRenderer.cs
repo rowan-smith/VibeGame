@@ -74,6 +74,7 @@ namespace Veilborne.MonoGameImpl
             public LayerBlendMode LayerMode;
             public float LayerBlendCoverage;
             public float BiomeBlendCoverage;
+            public float TileSize;
         }
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
@@ -215,23 +216,32 @@ namespace Veilborne.MonoGameImpl
             if (_chunks.TryGetValue(key, out var existing))
             {
                 existing.CurrentHeights = heights;
-                bool allowBlendVisuals = _settings.Current.Graphics.BiomeTextureCrossfade;
-                string primaryId = _activeBiome?.Id ?? string.Empty;
-                string secondaryId = allowBlendVisuals ? (_activeSecondaryBiome?.Id ?? string.Empty) : string.Empty;
-                float blend = allowBlendVisuals ? _activeSecondaryBlend : 0f;
-                bool desiredUseSplat = existing.Splatmap != null && existing.LayerConfig != null && existing.BaseHeights != null;
-                var desiredLayerMode = desiredUseSplat
-                    ? ChunkData.LayerBlendMode.SurfaceToSubsurface
-                    : ChunkData.LayerBlendMode.None;
-                bool visualsMatch =
-                    string.Equals(existing.BiomeId, primaryId, StringComparison.Ordinal) &&
-                    string.Equals(existing.SecondaryBiomeId, secondaryId, StringComparison.Ordinal) &&
-                    MathF.Abs(existing.SecondaryBlend - blend) < 0.001f &&
-                    existing.LayerMode == desiredLayerMode &&
-                    existing.UseSplatLayering == desiredUseSplat;
-                if (!visualsMatch)
-                    ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, blend, allowBlendVisuals);
-                _chunks[key] = existing;
+                existing.TileSize = tileSize;
+                var (renderSecondary, renderBlend, needsBiomeMeshRebuild) =
+                    ResolveChunkRenderBlend(heights, tileSize, originWorld, existing.BiomeBlendCoverage);
+                if (needsBiomeMeshRebuild && existing.Vb != null)
+                    BuildChunkMesh(heights, tileSize, originWorld);
+
+                if (_chunks.TryGetValue(key, out existing))
+                {
+                    bool allowBlendVisuals = _settings.Current.Graphics.BiomeTextureCrossfade;
+                    string primaryId = _activeBiome?.Id ?? string.Empty;
+                    string secondaryId = allowBlendVisuals ? (renderSecondary?.Id ?? string.Empty) : string.Empty;
+                    float blend = allowBlendVisuals ? renderBlend : 0f;
+                    bool desiredUseSplat = existing.Splatmap != null && existing.LayerConfig != null && existing.BaseHeights != null;
+                    var desiredLayerMode = desiredUseSplat
+                        ? ChunkData.LayerBlendMode.SurfaceToSubsurface
+                        : ChunkData.LayerBlendMode.None;
+                    bool visualsMatch =
+                        string.Equals(existing.BiomeId, primaryId, StringComparison.Ordinal) &&
+                        string.Equals(existing.SecondaryBiomeId, secondaryId, StringComparison.Ordinal) &&
+                        MathF.Abs(existing.SecondaryBlend - blend) < 0.001f &&
+                        existing.LayerMode == desiredLayerMode &&
+                        existing.UseSplatLayering == desiredUseSplat;
+                    if (!visualsMatch)
+                        ApplyChunkVisual(ref existing, _activeBiome, renderSecondary, blend, allowBlendVisuals);
+                    _chunks[key] = existing;
+                }
             }
             _pendingCamera = camera;  // Accumulate — actual draw happens via Flush()
             _hasPendingCamera = true;
@@ -259,8 +269,14 @@ namespace Veilborne.MonoGameImpl
                     : ChunkData.LayerBlendMode.None;
                 _chunks[key] = existing;
 
-                // First time we receive layer data for a chunk, rebuild once so per-vertex layer blend is populated.
-                if ((!hadLayerData && baseHeights != null && layerConfig != null) || (!hadSplatmap && splatmap != null))
+                existing.TileSize = tileSize;
+                var (renderSecondary, renderBlend, needsBiomeMeshRebuild) =
+                    ResolveChunkRenderBlend(heights, tileSize, originWorld, existing.BiomeBlendCoverage);
+
+                // Rebuild when layer/splat data first arrives or when corner biome blend was missing from mesh.
+                if ((!hadLayerData && baseHeights != null && layerConfig != null) ||
+                    (!hadSplatmap && splatmap != null) ||
+                    (needsBiomeMeshRebuild && existing.Vb != null))
                 {
                     BuildChunkMesh(heights, tileSize, originWorld);
                     if (_chunks.TryGetValue(key, out var rebuilt))
@@ -268,7 +284,7 @@ namespace Veilborne.MonoGameImpl
                 }
 
                 bool allowBlendVisuals = _settings.Current.Graphics.BiomeTextureCrossfade;
-                ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, allowBlendVisuals ? _activeSecondaryBlend : 0f, allowBlendVisuals);
+                ApplyChunkVisual(ref existing, _activeBiome, renderSecondary, allowBlendVisuals ? renderBlend : 0f, allowBlendVisuals);
                 _chunks[key] = existing;
             }
         }
@@ -334,20 +350,15 @@ namespace Veilborne.MonoGameImpl
                 ? ChunkData.LayerBlendMode.SurfaceToSubsurface
                 : ChunkData.LayerBlendMode.None;
 
-            // Per-vertex biome crossfade: sample blend at chunk corners and bilinearly interpolate.
-            bool allowBiomeCrossfade = _settings.Current.Graphics.BiomeTextureCrossfade
-                && _activeSecondaryBiome is not null
-                && _activeSecondaryBlend > 0.03f
-                && _biomeProvider is SimpleBiomeProvider;
+            // Per-vertex biome crossfade from corner samples (works even when chunk center is deep inside one biome).
+            bool allowBiomeCrossfade = false;
             float cornerBiome00 = 0f, cornerBiome10 = 0f, cornerBiome01 = 0f, cornerBiome11 = 0f;
-            if (allowBiomeCrossfade)
+            if (_settings.Current.Graphics.BiomeTextureCrossfade && _biomeProvider is SimpleBiomeProvider simple)
             {
-                float chunkW = (width - 1) * tileSize;
-                float chunkD = (depth - 1) * tileSize;
-                cornerBiome00 = SampleBiomeCrossfadeAt(origin.X, origin.Y);
-                cornerBiome10 = SampleBiomeCrossfadeAt(origin.X + chunkW, origin.Y);
-                cornerBiome01 = SampleBiomeCrossfadeAt(origin.X, origin.Y + chunkD);
-                cornerBiome11 = SampleBiomeCrossfadeAt(origin.X + chunkW, origin.Y + chunkD);
+                (cornerBiome00, cornerBiome10, cornerBiome01, cornerBiome11, _, _) =
+                    BiomeSampling.ResolveCornerCrossfade(simple, null!, origin, width, depth, tileSize);
+                allowBiomeCrossfade = cornerBiome00 > 0.001f || cornerBiome10 > 0.001f ||
+                                      cornerBiome01 > 0.001f || cornerBiome11 > 0.001f;
             }
 
             // UV: repeat texture every 8 world-units so it tiles naturally
@@ -472,18 +483,33 @@ namespace Veilborne.MonoGameImpl
                 UseSplatLayering = useSplatLayering,
                 LayerMode = layerMode,
                 LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f,
-                BiomeBlendCoverage = biomeBlendSamples > 0 ? biomeBlendNonZero / (float)biomeBlendSamples : 0f
+                BiomeBlendCoverage = biomeBlendSamples > 0 ? biomeBlendNonZero / (float)biomeBlendSamples : 0f,
+                TileSize = tileSize
             };
         }
 
-        private float SampleBiomeCrossfadeAt(float worldX, float worldZ)
+        private (BiomeData? secondary, float blend, bool needsBiomeMeshRebuild) ResolveChunkRenderBlend(
+            float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, float currentBiomeBlendCoverage)
         {
-            if (_biomeProvider is SimpleBiomeProvider simple)
+            BiomeData? secondary = _activeSecondaryBiome;
+            float blend = _activeSecondaryBlend;
+            bool needsRebuild = false;
+
+            if (_settings.Current.Graphics.BiomeTextureCrossfade && _biomeProvider is SimpleBiomeProvider simple)
             {
-                var (_, _, blend) = simple.GetBiomeBlendAt(new System.Numerics.Vector2(worldX, worldZ), null!);
-                return blend;
+                int width = heights.GetLength(0);
+                int depth = heights.GetLength(1);
+                var (_, _, _, _, maxBlend, cornerSecondary) =
+                    BiomeSampling.ResolveCornerCrossfade(simple, null!, originWorld, width, depth, tileSize);
+                if (cornerSecondary is not null && maxBlend > 0.001f)
+                {
+                    secondary = cornerSecondary.Data;
+                    blend = MathF.Max(blend, maxBlend);
+                    needsRebuild = currentBiomeBlendCoverage < 0.001f;
+                }
             }
-            return 0f;
+
+            return (secondary, blend, needsRebuild);
         }
 
         private short[] GetOrCreateIndices16(int width, int depth)
@@ -570,7 +596,8 @@ namespace Veilborne.MonoGameImpl
                 chunk.LayerMode = ChunkData.LayerBlendMode.SurfaceToSubsurface;
                 chunk.PrimaryTexture = LoadTexture(lc.SurfaceTextureId) ?? GetFallbackTexture();
 
-                bool useNeighborCrossfade = allowBlendVisuals && secondaryBiome is not null && secondaryBlend > 0.03f;
+                bool useNeighborCrossfade = allowBlendVisuals && secondaryBiome is not null &&
+                                            (secondaryBlend > 0.001f || chunk.BiomeBlendCoverage > 0.02f);
                 if (useNeighborCrossfade)
                 {
                     var neighborTextureId = GetBiomeSurfaceTextureId(secondaryBiome);
@@ -595,7 +622,7 @@ namespace Veilborne.MonoGameImpl
             chunk.PrimaryTexture = primary ?? GetFallbackTexture();
 
             Texture2D? secondary = null;
-            if (allowBlendVisuals && secondaryBiome is not null && secondaryBlend > 0.03f)
+            if (allowBlendVisuals && secondaryBiome is not null && secondaryBlend > 0.001f)
             {
                 var secondaryTextureId = SelectTextureForChunk(secondaryBiome, chunk);
                 if (!string.IsNullOrWhiteSpace(secondaryTextureId))
@@ -918,13 +945,15 @@ namespace Veilborne.MonoGameImpl
 
                 bool isLayeredChunk = chunk.UseSplatLayering &&
                                       chunk.LayerMode != ChunkData.LayerBlendMode.None;
-                bool hasBiomeBlend = crossfadeEnabled && chunk.BiomeBlendCoverage > 0.02f;
+                bool hasBiomeBlend = crossfadeEnabled &&
+                    (chunk.BiomeBlendCoverage > 0.02f ||
+                     (!string.IsNullOrEmpty(chunk.SecondaryBiomeId) && chunk.SecondaryBlend > 0.001f));
                 bool hasLayerBlend = isLayeredChunk && chunk.LayerBlendCoverage > 0.02f;
                 bool shouldDrawSecondary = chunk.SecondaryTexture != null &&
                     ((hasBiomeBlend && distanceSq <= crossfadeCutoffSq) ||
                      (hasLayerBlend && distanceSq <= layeredCutoffSq) ||
                      (!isLayeredChunk && crossfadeEnabled && distanceSq <= crossfadeCutoffSq &&
-                      chunk.SecondaryBlend > 0.03f));
+                      chunk.SecondaryBlend > 0.001f));
                 if (!shouldDrawSecondary) continue;
 
                 _graphicsDevice.SetVertexBuffer(chunk.Vb);
