@@ -645,13 +645,16 @@ namespace Veilborne.Terrain
         {
             var lc = GetTerrainLayersForBiomeId(biomeId);
 
-            // Per-cell depth variation via cheap hash noise
+            // World-space smooth noise avoids blocky per-vertex grass/mud seams.
             float depthVar = lc.DepthVariation;
-            float cellNoise = DepthNoise(key.cx, key.cz, ix, iz) * depthVar;
+            float worldX = (key.cx * ChunkSize + ix) * TileSize;
+            float worldZ = (key.cz * ChunkSize + iz) * TileSize;
+            float cellNoise = SampleSmoothDepthNoise(worldX, worldZ) * depthVar;
             float effSubDepth = MathF.Max(0.05f, lc.SubsurfaceDepth + cellNoise);
             float effDeepDepth = MathF.Max(effSubDepth + 0.1f, lc.DeepDepth + cellNoise * 1.5f);
 
             float grass = Math.Clamp(1f - depth / effSubDepth, 0f, 1f);
+            grass = grass * grass * (3f - 2f * grass);
             float mud = 0f;
             float rock = 0f;
             float mineral = 0f;
@@ -684,14 +687,34 @@ namespace Veilborne.Terrain
             return new Vector4(grass / sum, mud / sum, rock / sum, mineral / sum);
         }
 
-        private static float DepthNoise(int cx, int cz, int ix, int iz)
+        private static float SampleSmoothDepthNoise(float worldX, float worldZ)
+        {
+            const float frequency = 0.14f;
+            float x = worldX * frequency;
+            float z = worldZ * frequency;
+            int ix = (int)MathF.Floor(x);
+            int iz = (int)MathF.Floor(z);
+            float fx = x - ix;
+            float fz = z - iz;
+            float sx = fx * fx * (3f - 2f * fx);
+            float sz = fz * fz * (3f - 2f * fz);
+            float n00 = DepthNoiseUnit(ix, iz);
+            float n10 = DepthNoiseUnit(ix + 1, iz);
+            float n01 = DepthNoiseUnit(ix, iz + 1);
+            float n11 = DepthNoiseUnit(ix + 1, iz + 1);
+            float nx0 = n00 + (n10 - n00) * sx;
+            float nx1 = n01 + (n11 - n01) * sx;
+            return (nx0 + (nx1 - nx0) * sz) * 2f - 1f;
+        }
+
+        private static float DepthNoiseUnit(int ix, int iz)
         {
             unchecked
             {
-                int h = cx * 374761393 ^ cz * 668265263 ^ ix * 1274126177 ^ iz * (int)2654435769;
+                int h = ix * 374761393 ^ iz * 668265263;
                 h ^= h >> 13;
                 h *= 1274126177;
-                return ((h & 0x7FFFFFFF) / (float)int.MaxValue) * 2f - 1f;
+                return (h & 0x7FFFFFFF) / (float)int.MaxValue;
             }
         }
 

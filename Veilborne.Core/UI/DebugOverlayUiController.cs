@@ -76,15 +76,18 @@ namespace Veilborne.UI
 
             y += 22;
             ui.DrawText("── System Hotspots ──", x, y, 18, new Vector4(0.8f, 0.8f, 0.8f, 1f));
+            double frameBudgetMs = PerformanceHotspotColor.ResolveFrameBudgetMs(_time.Fps);
             var hotspots = _perf.GetTopHotspots(10);
             for (int i = 0; i < hotspots.Count; i++)
             {
                 var h = hotspots[i];
                 double total = h.AvgUpdateMs + h.AvgRenderMs;
-                var color = total > 3.0 ? new Vector4(1, 0.4f, 0.4f, 1f)
-                          : total > 1.0 ? new Vector4(0.92f, 0.82f, 0.45f, 1f)
-                          : new Vector4(0.6f, 0.8f, 0.6f, 1f);
-                string line = $"{h.Name}: U {h.AvgUpdateMs:0.00}ms R {h.AvgRenderMs:0.00}ms (pk {Math.Max(h.PeakUpdateMs, h.PeakRenderMs):0.00})";
+                var color = PerformanceHotspotColor.ForSystemTotalMs(total, frameBudgetMs);
+                double peak = Math.Max(h.PeakUpdateMs, h.PeakRenderMs);
+                string peakSuffix = PerformanceHotspotColor.IsStalePeak(peak, total)
+                    ? $" (pk~ {peak:0.0})"
+                    : $" (pk {peak:0.00})";
+                string line = $"{h.Name}: U {h.AvgUpdateMs:0.00}ms R {h.AvgRenderMs:0.00}ms{peakSuffix}";
                 ui.DrawText(line, x, y + 20 + i * 18, 16, color);
             }
         }
