@@ -68,4 +68,34 @@ public class TerrainRenderCullTests
 
         Assert.False(far);
     }
+
+    [Fact]
+    public void IsChunkRoughlyVisible_culls_far_lod_chunks_when_looking_at_horizon()
+    {
+        var camera = new CameraComponent
+        {
+            Position = new Vector3(0f, 14f, -10f),
+            Target = new Vector3(0f, 30f, 400f),
+            Up = Vector3.UnitY
+        };
+
+        bool nearLod = TerrainRenderCull.IsChunkRoughlyVisible(
+            camera,
+            chunkOrigin: new Vector2(0f, 80f),
+            tileSize: 4f,
+            gridWidth: 129,
+            gridHeight: 129,
+            maxDrawDistance: 900f);
+
+        bool farLod = TerrainRenderCull.IsChunkRoughlyVisible(
+            camera,
+            chunkOrigin: new Vector2(0f, 1200f),
+            tileSize: 4f,
+            gridWidth: 129,
+            gridHeight: 129,
+            maxDrawDistance: 900f);
+
+        Assert.True(nearLod);
+        Assert.False(farLod);
+    }
 }

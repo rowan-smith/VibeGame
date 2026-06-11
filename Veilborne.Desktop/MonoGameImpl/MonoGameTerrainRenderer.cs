@@ -102,6 +102,7 @@ namespace Veilborne.MonoGameImpl
         private int _visibilitySerialUsed = -1;
         private XnaBoundingFrustum _visibilityFrustum;
         private XnaVector3 _visibilityCamPos;
+        private XnaVector3 _visibilityCamTarget;
         private float _visibilityDrawDistance;
 
         // Per-frame rendering metrics (reset each Flush)
@@ -309,7 +310,8 @@ namespace Veilborne.MonoGameImpl
             EnsureVisibilityCache(camera);
             var key = (chunkOrigin.X, chunkOrigin.Y, tileSize);
             if (_chunks.TryGetValue(key, out var chunk))
-                return TryGetVisibleChunkState(chunk, _visibilityCamPos, _visibilityFrustum, _visibilityDrawDistance, out _);
+                return TryGetVisibleChunkState(
+                    chunk, _visibilityCamPos, _visibilityCamTarget, _visibilityFrustum, _visibilityDrawDistance, out _);
 
             return TerrainRenderCull.IsChunkRoughlyVisible(
                 camera, chunkOrigin, tileSize, gridWidth, gridHeight, _visibilityDrawDistance);
@@ -331,6 +333,7 @@ namespace Veilborne.MonoGameImpl
                 XnaMathHelper.ToRadians(camera.FovY), aspect, 0.1f, 5000f);
             _visibilityFrustum = new XnaBoundingFrustum(view * proj);
             _visibilityCamPos = pos;
+            _visibilityCamTarget = target;
             float renderDistanceScale = _settings.Current.Graphics.TerrainViewDistance / 100f;
             _visibilityDrawDistance = _maxTerrainDrawDistance * renderDistanceScale;
         }
@@ -339,11 +342,8 @@ namespace Veilborne.MonoGameImpl
         {
             var key = (originWorld.X, originWorld.Y, tileSize);
             _activeChunkKeys.Add(key);
-            if (!_chunks.TryGetValue(key, out _) && _syncBuildBudget < MaxSyncBuildsPerFrame)
-            {
-                BuildChunkMesh(heights, tileSize, originWorld);
-                _syncBuildBudget++;
-            }
+            if (!_chunks.TryGetValue(key, out _))
+                EnqueueBuild(heights, tileSize, originWorld);
             if (_chunks.TryGetValue(key, out var existing))
             {
                 existing.CurrentHeights = heights;
@@ -479,6 +479,7 @@ namespace Veilborne.MonoGameImpl
                     continue;
                 }
 
+                bool completed = false;
                 if (_cpuBuildTasks.TryGetValue(key, out var task))
                 {
                     if (!task.IsCompleted)
@@ -491,13 +492,22 @@ namespace Veilborne.MonoGameImpl
                     if (task.IsFaulted)
                     {
                         _log.Warning(task.Exception, "Async terrain mesh build failed for {Key}", key);
-                        BuildChunkMesh(pending.heights, pending.tileSize, pending.origin);
+                        completed = TryBuildMeshSyncOrSchedule(key, pending.heights, pending.tileSize, pending.origin);
                     }
                     else
+                    {
                         UploadMeshFromCpuResult(task.Result);
+                        completed = true;
+                    }
                 }
                 else
-                    BuildChunkMesh(pending.heights, pending.tileSize, pending.origin);
+                    completed = TryBuildMeshSyncOrSchedule(key, pending.heights, pending.tileSize, pending.origin);
+
+                if (!completed)
+                {
+                    _buildQueue.Enqueue(key);
+                    continue;
+                }
 
                 _pendingBuildData.Remove(key);
                 _queuedBuildKeys.Remove(key);
@@ -528,6 +538,26 @@ namespace Veilborne.MonoGameImpl
         }
 
         // ── Mesh building ────────────────────────────────────────────────────────
+
+        private bool TryBuildMeshSyncOrSchedule(
+            (float x, float z, float tile) key,
+            float[,] heights,
+            float tileSize,
+            System.Numerics.Vector2 origin)
+        {
+            int vertexCount = heights.GetLength(0) * heights.GetLength(1);
+            if (TerrainChunkBiomeBlendPolicy.AllowSyncMeshBuild(vertexCount) &&
+                _syncBuildBudget < MaxSyncBuildsPerFrame)
+            {
+                BuildChunkMesh(heights, tileSize, origin);
+                _syncBuildBudget++;
+                return true;
+            }
+
+            if (!_cpuBuildTasks.ContainsKey(key))
+                ScheduleCpuMeshBuild(key, heights, tileSize, origin);
+            return false;
+        }
 
         private void BuildChunkMesh(float[,] heights, float tileSize, System.Numerics.Vector2 origin)
         {
@@ -778,6 +808,7 @@ namespace Veilborne.MonoGameImpl
         private static bool TryGetVisibleChunkState(
             ChunkData chunk,
             XnaVector3 cameraPos,
+            XnaVector3 cameraTarget,
             XnaBoundingFrustum frustum,
             float drawDistance,
             out float distanceSq)
@@ -789,10 +820,14 @@ namespace Veilborne.MonoGameImpl
             var bounds = new XnaBoundingBox(min, max);
             var center = new XnaVector3(chunk.OriginX + half, (chunk.MinY + chunk.MaxY) * 0.5f, chunk.OriginZ + half);
 
-            var camDelta = center - cameraPos;
-            distanceSq = camDelta.LengthSquared();
-            float chunkDistanceLimit = drawDistance + chunk.WorldSize * 0.75f;
-            if (distanceSq > chunkDistanceLimit * chunkDistanceLimit)
+            float effectiveDraw = TerrainRenderCull.ResolveEffectiveDrawDistance(
+                cameraPos, cameraTarget, chunk.TileSize, drawDistance);
+            float dx = center.X - cameraPos.X;
+            float dz = center.Z - cameraPos.Z;
+            float nearestDx = MathF.Max(0f, MathF.Abs(dx) - half);
+            float nearestDz = MathF.Max(0f, MathF.Abs(dz) - half);
+            distanceSq = nearestDx * nearestDx + nearestDz * nearestDz;
+            if (distanceSq > effectiveDraw * effectiveDraw)
                 return false;
             return frustum.Contains(bounds) != Microsoft.Xna.Framework.ContainmentType.Disjoint;
         }
@@ -867,7 +902,7 @@ namespace Veilborne.MonoGameImpl
             _graphicsDevice.SamplerStates[0] = SamplerState.LinearWrap;
             bool wireframe = RuntimeEnvironment.IsDevelopmentEnvironment && _settings.Current.Debug.Wireframe;
 
-            CollectVisibleChunks(pos, frustum, drawDistance);
+            CollectVisibleChunks(pos, target, frustum, drawDistance);
 
             var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.50f;
             var litDiffuse = new XnaVector3(
@@ -959,13 +994,17 @@ namespace Veilborne.MonoGameImpl
             _graphicsDevice.BlendState = prevBlend;
         }
 
-        private void CollectVisibleChunks(XnaVector3 cameraPos, XnaBoundingFrustum frustum, float drawDistance)
+        private void CollectVisibleChunks(
+            XnaVector3 cameraPos,
+            XnaVector3 cameraTarget,
+            XnaBoundingFrustum frustum,
+            float drawDistance)
         {
             _visibleChunksScratch.Clear();
             foreach (var key in _activeChunkKeys)
             {
                 if (!_chunks.TryGetValue(key, out var chunk)) continue;
-                if (!TryGetVisibleChunkState(chunk, cameraPos, frustum, drawDistance, out float distanceSq))
+                if (!TryGetVisibleChunkState(chunk, cameraPos, cameraTarget, frustum, drawDistance, out float distanceSq))
                     continue;
                 int rasterTier = GetRasterTier(key.Item3);
                 _visibleChunksScratch.Add(new VisibleTerrainChunk(key, distanceSq, rasterTier));

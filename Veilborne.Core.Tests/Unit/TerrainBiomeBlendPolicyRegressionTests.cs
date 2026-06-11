@@ -120,4 +120,20 @@ public class TerrainBiomeBlendPolicyRegressionTests
         Assert.Equal("pair_primary", TerrainChunkBiomeBlendPolicy.ResolveSplatPrimaryBiomeId("pair_primary", "center_biome"));
         Assert.Equal("center_biome", TerrainChunkBiomeBlendPolicy.ResolveSplatPrimaryBiomeId("", "center_biome"));
     }
+
+    [Fact]
+    public void ResolveBiomeBlendSampleStride_uses_coarse_stride_on_lod_grids()
+    {
+        Assert.Equal(4, TerrainChunkBiomeBlendPolicy.ResolveBiomeBlendSampleStride(
+            129, 129, fastMeshBuild: false, maxBoundaryBlend: 0.5f));
+        Assert.Equal(1, TerrainChunkBiomeBlendPolicy.ResolveBiomeBlendSampleStride(
+            33, 33, fastMeshBuild: false, maxBoundaryBlend: 0.5f));
+    }
+
+    [Fact]
+    public void AllowSyncMeshBuild_rejects_lod_vertex_counts()
+    {
+        Assert.True(TerrainChunkBiomeBlendPolicy.AllowSyncMeshBuild(65 * 65));
+        Assert.False(TerrainChunkBiomeBlendPolicy.AllowSyncMeshBuild(129 * 129));
+    }
 }

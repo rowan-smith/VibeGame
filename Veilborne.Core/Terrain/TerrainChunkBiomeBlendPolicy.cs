@@ -8,6 +8,32 @@ namespace Veilborne.Terrain
     {
         public const float BiomeMergeCornerThreshold = 0.015f;
 
+        /// <summary>65×65 vertices — larger LOD meshes must build off the render thread.</summary>
+        public const int MaxSyncMeshVertices = 65 * 65;
+
+        public static bool AllowSyncMeshBuild(int vertexCount) =>
+            vertexCount > 0 && vertexCount <= MaxSyncMeshVertices;
+
+        /// <summary>
+        /// Coarser stride on large grids keeps horizon LOD builds from stalling the frame.
+        /// </summary>
+        public static int ResolveBiomeBlendSampleStride(
+            int gridWidth,
+            int gridHeight,
+            bool fastMeshBuild,
+            float maxBoundaryBlend)
+        {
+            int grid = Math.Max(gridWidth, gridHeight);
+            if (fastMeshBuild)
+                return grid >= 97 ? 8 : grid >= 49 ? 4 : 4;
+
+            if (grid >= 97)
+                return maxBoundaryBlend > BiomeMergeCornerThreshold ? 4 : 8;
+            if (grid >= 49)
+                return maxBoundaryBlend > BiomeMergeCornerThreshold ? 2 : 4;
+            return maxBoundaryBlend > BiomeMergeCornerThreshold ? 1 : 2;
+        }
+
         /// <summary>
         /// Only the initial async mesh build for biome vertex weights should be queued.
         /// Do not add follow-up enqueue rules based on low coverage — that caused per-frame

@@ -75,11 +75,8 @@ namespace Veilborne.MonoGameImpl
                     simple, null, origin, width, depth, tileSize, 4f);
                 if (TerrainChunkBiomeBlendPolicy.ShouldBuildMergeBlendMap(mergeBiomeId))
                 {
-                    int stride = fastMeshBuild
-                        ? 4
-                        : maxBoundaryBlend > TerrainChunkBiomeBlendPolicy.BiomeMergeCornerThreshold
-                            ? 1
-                            : 2;
+                    int stride = TerrainChunkBiomeBlendPolicy.ResolveBiomeBlendSampleStride(
+                        width, depth, fastMeshBuild, maxBoundaryBlend);
                     (mergeMap, float mapMax) = BiomeSampling.BuildChunkPairBlendMap(
                         simple, null, origin, width, depth, tileSize, primaryBiomeId, mergeBiomeId, stride);
                     if (mapMax > maxBoundaryBlend)
