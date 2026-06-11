@@ -302,7 +302,7 @@ namespace Veilborne.Terrain
                 {
                     Heights = item.heights,
                     BaseHeights = (float[,])item.heights.Clone(),
-                    Splatmap = BuildSplatmap(item.heights, item.heights, item.biome, secBiome, secBlend),
+                    Splatmap = BuildSplatmap(item.heights, item.heights, item.biome, secBiome, secBlend, TileSize),
                     Origin = item.origin,
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
@@ -498,11 +498,12 @@ namespace Veilborne.Terrain
         }
 
         private Vector4[,] BuildSplatmap(float[,] heights, float[,]? baseHeights, BiomeData biome,
-            BiomeData? secondaryBiome = null, float blendFactor = 0f)
+            BiomeData? secondaryBiome = null, float blendFactor = 0f, float tileSize = 1f)
         {
             int w = heights.GetLength(0);
             int h = heights.GetLength(1);
             var splat = new Vector4[w, h];
+            float spacing = MathF.Max(0.01f, tileSize);
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -511,42 +512,29 @@ namespace Veilborne.Terrain
                 if (baseHeights != null)
                     depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
 
-                float hL = x > 0 ? heights[x - 1, z] : heights[x, z];
-                float hR = x < w - 1 ? heights[x + 1, z] : heights[x, z];
-                float hU = z > 0 ? heights[x, z - 1] : heights[x, z];
-                float hD = z < h - 1 ? heights[x, z + 1] : heights[x, z];
-                float dx = (hR - hL) * 0.5f;
-                float dz = (hD - hU) * 0.5f;
-                float slope = MathF.Sqrt(dx * dx + dz * dz);
+                float slope = ComputeSlopeAt(heights, x, z, w, h, spacing);
 
                 splat[x, z] = ComputeSplatForLayers(biome.TerrainLayers, depth, slope);
             }
 
             // Multi-biome per-vertex blend overlay: sample biome blend weights at a grid
             // and interpolate splatmap where secondary biomes have influence.
-            if (_biomeProvider is SimpleBiomeProvider simple && w > 1 && h > 1)
+            if (_biomeProvider is SimpleBiomeProvider && w > 1 && h > 1)
             {
                 for (int z = 0; z < h; z++)
                 for (int x = 0; x < w; x++)
                 {
-                    // Skip interior vertices on even grid for LowLod perf — only every 4th
-                    // vertex gets a full biome lookup, rest are interpolated implicitly by GPU.
-                    // For RO ring we do every vertex since quality matters.
                     float depth = 0f;
                     if (baseHeights != null)
                         depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
-                    float slopeVal = ComputeSlopeAt(heights, x, z, w, h);
+                    float slopeVal = ComputeSlopeAt(heights, x, z, w, h, spacing);
 
-                    // World position of this vertex
-                    // (origin is set externally; we use biome to get nearest chunk origin)
-                    // We don't have origin here; use relative blend from primary
                     if (secondaryBiome == null || blendFactor <= 0.001f)
                         continue;
 
                     // Spatially-varying blend using smooth gradient across chunk
                     float tx = x / (float)(w - 1);
                     float tz = z / (float)(h - 1);
-                    // Hermite-style blend that peaks at edges and fades to center
                     float edgeFade = MathF.Max(
                         MathF.Abs(tx - 0.5f) * 2f,
                         MathF.Abs(tz - 0.5f) * 2f);
@@ -564,15 +552,15 @@ namespace Veilborne.Terrain
             return splat;
         }
 
-        private static float ComputeSlopeAt(float[,] heights, int x, int z, int w, int h)
+        private static float ComputeSlopeAt(float[,] heights, int x, int z, int w, int h, float spacing)
         {
             float center = heights[x, z];
             float left  = x > 0 ? heights[x - 1, z] : center;
             float right = x < w - 1 ? heights[x + 1, z] : center;
             float up    = z > 0 ? heights[x, z - 1] : center;
             float down  = z < h - 1 ? heights[x, z + 1] : center;
-            float dx = (right - left) * 0.5f;
-            float dz = (down - up) * 0.5f;
+            float dx = (right - left) / (2f * spacing);
+            float dz = (down - up) / (2f * spacing);
             return MathF.Sqrt(dx * dx + dz * dz);
         }
 

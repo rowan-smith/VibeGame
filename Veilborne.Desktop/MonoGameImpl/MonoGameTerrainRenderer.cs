@@ -73,6 +73,7 @@ namespace Veilborne.MonoGameImpl
             public bool UseSplatLayering;
             public LayerBlendMode LayerMode;
             public float LayerBlendCoverage;
+            public float TileSize;
         }
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
@@ -229,7 +230,7 @@ namespace Veilborne.MonoGameImpl
                     existing.LayerMode == desiredLayerMode &&
                     existing.UseSplatLayering == desiredUseSplat;
                 if (!visualsMatch)
-                    ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, blend, allowBlendVisuals);
+                    ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, blend, allowBlendVisuals, tileSize);
                 _chunks[key] = existing;
             }
             _pendingCamera = camera;  // Accumulate — actual draw happens via Flush()
@@ -267,7 +268,7 @@ namespace Veilborne.MonoGameImpl
                 }
 
                 bool allowBlendVisuals = _settings.Current.Graphics.BiomeTextureCrossfade;
-                ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, allowBlendVisuals ? _activeSecondaryBlend : 0f, allowBlendVisuals);
+                ApplyChunkVisual(ref existing, _activeBiome, _activeSecondaryBiome, allowBlendVisuals ? _activeSecondaryBlend : 0f, allowBlendVisuals, tileSize);
                 _chunks[key] = existing;
             }
         }
@@ -475,7 +476,8 @@ namespace Veilborne.MonoGameImpl
                 Splatmap = splatmap,
                 UseSplatLayering = useSplatLayering,
                 LayerMode = layerMode,
-                LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f
+                LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f,
+                TileSize = tileSize
             };
         }
 
@@ -527,8 +529,9 @@ namespace Veilborne.MonoGameImpl
             return indices;
         }
 
-        private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome, BiomeData? secondaryBiome, float secondaryBlend, bool allowBlendVisuals)
+        private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome, BiomeData? secondaryBiome, float secondaryBlend, bool allowBlendVisuals, float tileSize = 1f)
         {
+            chunk.TileSize = tileSize > 0f ? tileSize : chunk.TileSize;
             if (!allowBlendVisuals)
             {
                 secondaryBiome = null;
@@ -561,8 +564,14 @@ namespace Veilborne.MonoGameImpl
             {
                 var lc = chunk.LayerConfig;
                 chunk.LayerMode = ChunkData.LayerBlendMode.SurfaceToSubsurface;
-                float rockCoverage = EstimateRockCoverage(chunk);
-                string? layeredPrimaryId = rockCoverage > 0.28f && !string.IsNullOrWhiteSpace(lc.SlopeTextureId)
+                // Coarse LOD chunks inflate splat rock weights — keep biome surface color on primary.
+                bool useSlopePrimary = chunk.TileSize <= 1.5f;
+                if (useSlopePrimary)
+                {
+                    float rockCoverage = EstimateRockCoverage(chunk);
+                    useSlopePrimary = rockCoverage > 0.28f && !string.IsNullOrWhiteSpace(lc.SlopeTextureId);
+                }
+                string? layeredPrimaryId = useSlopePrimary
                     ? lc.SlopeTextureId
                     : lc.SurfaceTextureId;
                 chunk.PrimaryTexture = LoadTexture(layeredPrimaryId) ?? GetFallbackTexture();

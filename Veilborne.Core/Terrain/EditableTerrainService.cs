@@ -376,7 +376,7 @@ namespace Veilborne.Terrain
                 float depth = 0f;
                 if (chunk.BaseHeights != null)
                     depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
-                float slope = ComputeSlope(chunk.Heights, x, z, w, h);
+                float slope = ComputeSlope(chunk.Heights, x, z, w, h, TileSize);
 
                 Vector4 primary = ComputeSplatWeights(depth, key, x, z, primaryId, slope);
 
@@ -413,7 +413,7 @@ namespace Veilborne.Terrain
                 float depth = 0f;
                 if (chunk.BaseHeights != null)
                     depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
-                float slope = ComputeSlope(chunk.Heights, x, z, w, h);
+                float slope = ComputeSlope(chunk.Heights, x, z, w, h, TileSize);
 
                 Vector4 primary = ComputeSplatWeights(depth, key, x, z, primaryId, slope);
 
@@ -612,20 +612,21 @@ namespace Veilborne.Terrain
                 float depth = 0f;
                 if (chunk.BaseHeights != null)
                     depth = MathF.Max(0f, chunk.BaseHeights[x, z] - chunk.Heights[x, z]);
-                float slope = ComputeSlope(chunk.Heights, x, z, w, h);
+                float slope = ComputeSlope(chunk.Heights, x, z, w, h, TileSize);
                 chunk.Splatmap[x, z] = ComputeSplatWeights(depth, key, x, z, biomeId, slope);
             }
         }
 
-        private static float ComputeSlope(float[,] heights, int x, int z, int w, int h)
+        private static float ComputeSlope(float[,] heights, int x, int z, int w, int h, float tileSize)
         {
             float center = heights[x, z];
             float left  = x > 0 ? heights[x - 1, z] : center;
             float right = x < w - 1 ? heights[x + 1, z] : center;
             float up    = z > 0 ? heights[x, z - 1] : center;
             float down  = z < h - 1 ? heights[x, z + 1] : center;
-            float dx = (right - left) * 0.5f;
-            float dz = (down - up) * 0.5f;
+            float spacing = MathF.Max(0.01f, tileSize);
+            float dx = (right - left) / (2f * spacing);
+            float dz = (down - up) / (2f * spacing);
             return MathF.Sqrt(dx * dx + dz * dz);
         }
 
