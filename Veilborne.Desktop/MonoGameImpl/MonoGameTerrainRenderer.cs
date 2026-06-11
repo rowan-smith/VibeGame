@@ -81,7 +81,6 @@ namespace Veilborne.MonoGameImpl
         private readonly List<VisibleTerrainChunk> _visibleChunksScratch = new(128);
         private readonly List<TerrainDrawItem> _drawItemsScratch = new(192);
         private readonly Dictionary<(float x, float z, float tile), Task<TerrainMeshCpuBuilder.CpuBuildResult>> _cpuBuildTasks = new();
-        private readonly EffectPass _terrainEffectPass;
         private readonly Queue<(float x, float z, float tile)> _buildQueue = new();
         private readonly Dictionary<(float x, float z, float tile), (float[,] heights, float tileSize, System.Numerics.Vector2 origin)> _pendingBuildData = new();
         private readonly HashSet<(float x, float z, float tile)> _queuedBuildKeys = new();
@@ -146,7 +145,6 @@ namespace Veilborne.MonoGameImpl
                 SlopeScaleDepthBias = 2f
             };
             _biomeBlendShaderAvailable = DetectBiomeBlendShaderAssets();
-            _terrainEffectPass = _basicEffect.CurrentTechnique.Passes[0];
         }
 
         private readonly struct VisibleTerrainChunk
@@ -305,6 +303,7 @@ namespace Veilborne.MonoGameImpl
                     ? TerrainChunkLayerBlendMode.SurfaceToSubsurface
                     : TerrainChunkLayerBlendMode.None;
                 bool visualsMatch =
+                    existing.PrimaryTexture != null &&
                     string.Equals(existing.BiomeId, primaryId, StringComparison.Ordinal) &&
                     string.Equals(existing.MergeBiomeId, mergeId, StringComparison.Ordinal) &&
                     existing.LayerMode == desiredLayerMode &&
@@ -348,6 +347,7 @@ namespace Veilborne.MonoGameImpl
                 string primaryId = _activeBiome?.Id ?? string.Empty;
                 string mergeId = _activeSecondaryBiome?.Id ?? string.Empty;
                 bool visualsMatch =
+                    existing.PrimaryTexture != null &&
                     string.Equals(existing.BiomeId, primaryId, StringComparison.Ordinal) &&
                     string.Equals(existing.MergeBiomeId, mergeId, StringComparison.Ordinal) &&
                     existing.UseSplatLayering == (splatmap != null && baseHeights != null && layerConfig != null);
@@ -525,20 +525,21 @@ namespace Veilborne.MonoGameImpl
             }
 
             var layer = cpu.Layer;
+            // Clear visual bindings on mesh upload so the next RenderAt re-binds textures.
+            // Preserving BiomeId alone caused visualsMatch to skip ApplyChunkVisual while
+            // PrimaryTexture was still null.
             _chunks[key] = new ChunkData
             {
                 Vb = vb,
                 Ib = ib,
                 IndexCount = indexCount,
-                PrimaryTexture = hasOld ? old.PrimaryTexture : null,
-                SecondaryTexture = hasOld ? old.SecondaryTexture : null,
-                MergeTexture = hasOld ? old.MergeTexture : null,
+                PrimaryTexture = null,
+                SecondaryTexture = null,
+                MergeTexture = null,
                 Tint = hasOld ? old.Tint : XnaColor.White,
-                BiomeId = hasOld ? old.BiomeId : string.Empty,
-                MergeBiomeId = string.IsNullOrEmpty(cpu.MergeBiomeId)
-                    ? (hasOld ? old.MergeBiomeId : string.Empty)
-                    : cpu.MergeBiomeId,
-                SecondaryBiomeId = hasOld ? old.SecondaryBiomeId : string.Empty,
+                BiomeId = string.Empty,
+                MergeBiomeId = string.Empty,
+                SecondaryBiomeId = string.Empty,
                 SecondaryBlend = hasOld ? old.SecondaryBlend : 0f,
                 PrimaryLightingModifier = hasOld ? old.PrimaryLightingModifier : 1f,
                 SecondaryLightingModifier = hasOld ? old.SecondaryLightingModifier : 1f,
@@ -867,11 +868,13 @@ namespace Veilborne.MonoGameImpl
         private void BuildPrimaryDrawItems(XnaVector3 litDiffuse, XnaVector3 fallbackDiffuse)
         {
             _drawItemsScratch.Clear();
+            var fallbackTexture = GetFallbackTexture();
             foreach (var visible in _visibleChunksScratch)
             {
                 if (!_chunks.TryGetValue(visible.Key, out var chunk)) continue;
                 bool isLayered = chunk.UseSplatLayering && chunk.LayerMode != TerrainChunkLayerBlendMode.None;
-                if (chunk.PrimaryTexture != null)
+                var texture = chunk.PrimaryTexture ?? fallbackTexture;
+                if (texture != null)
                 {
                     float mod = isLayered ? 1f : chunk.PrimaryLightingModifier;
                     var diffuse = new XnaVector3(
@@ -879,7 +882,7 @@ namespace Veilborne.MonoGameImpl
                         Math.Clamp(litDiffuse.Y * mod, 0.20f, 1f),
                         Math.Clamp(litDiffuse.Z * mod, 0.20f, 1f));
                     _drawItemsScratch.Add(new TerrainDrawItem(
-                        visible, chunk.PrimaryTexture, true, diffuse, TerrainPassKind.Primary));
+                        visible, texture, true, diffuse, TerrainPassKind.Primary));
                 }
                 else
                 {
@@ -976,15 +979,18 @@ namespace Veilborne.MonoGameImpl
                     _basicEffect.Texture = boundTexture;
                     _basicEffect.Alpha = 1f;
                     _basicEffect.DiffuseColor = item.DiffuseColor;
-                    _terrainEffectPass.Apply();
-                    effectApplies++;
                     effectDirty = false;
                 }
 
                 _graphicsDevice.SetVertexBuffer(chunk.Vb);
                 _graphicsDevice.Indices = chunk.Ib;
-                _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
-                drawCalls++;
+                foreach (var effectPass in _basicEffect.CurrentTechnique.Passes)
+                {
+                    effectPass.Apply();
+                    effectApplies++;
+                    _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
+                    drawCalls++;
+                }
                 passDraws++;
                 chunksDrawn++;
             }
