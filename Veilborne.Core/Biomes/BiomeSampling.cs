@@ -423,21 +423,8 @@ namespace Veilborne.Biomes
                     int x = Math.Min(gx * sampleStride, width - 1);
                     float wx = origin.X + x * tileSize;
                     float wz = origin.Y + z * tileSize;
-                    provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
-
-                    float primaryW = 0f;
-                    float mergeW = 0f;
-                    for (int i = 0; i < count; i++)
-                    {
-                        string id = weights[i].Biome.Id;
-                        if (string.Equals(id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
-                            primaryW = weights[i].Weight;
-                        else if (string.Equals(id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
-                            mergeW = weights[i].Weight;
-                    }
-
-                    float pairSum = primaryW + mergeW;
-                    float alpha = pairSum > 1e-5f ? mergeW / pairSum : mergeW;
+                    float alpha = SamplePairBlendAlpha(
+                        provider, terrain, wx, wz, primaryBiomeId, mergeBiomeId, weights);
                     alpha = PerturbMergeWeight(wx, wz, alpha);
                     coarse[gx, gz] = alpha;
                     if (alpha > maxMerge) maxMerge = alpha;
@@ -473,6 +460,46 @@ namespace Veilborne.Biomes
             }
 
             return (map, maxMerge);
+        }
+
+        /// <summary>
+        /// World-consistent blend toward mergeBiomeId. Uses GetBiomeBlendAt when the local
+        /// primary/secondary pair matches the chunk pair (including swapped orientation).
+        /// </summary>
+        private static float SamplePairBlendAlpha(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            float wx,
+            float wz,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            Span<BiomeWeight> weights)
+        {
+            var (localPrimary, localSecondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+            if (localSecondary is not null)
+            {
+                if (string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(localSecondary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                    return blend;
+                if (string.Equals(localPrimary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    return 1f - blend;
+            }
+
+            provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
+            float primaryW = 0f;
+            float mergeW = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                string id = weights[i].Biome.Id;
+                if (string.Equals(id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    primaryW = weights[i].Weight;
+                else if (string.Equals(id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                    mergeW = weights[i].Weight;
+            }
+
+            float pairSum = primaryW + mergeW;
+            return pairSum > 1e-5f ? mergeW / pairSum : mergeW;
         }
 
         private static float PerturbMergeWeight(float worldX, float worldZ, float merge)

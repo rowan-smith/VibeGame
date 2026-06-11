@@ -434,19 +434,14 @@ namespace Veilborne.Terrain
                 if (!_renderer.IsChunkVisibleForRender(chunk.Origin, TileSize, gridW, gridH, camera))
                     continue;
 
-                BiomeData primaryBiome;
-                if (biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary))
-                    primaryBiome = cachedPrimary;
-                else
-                    primaryBiome = GetDominantBiomeForChunk(chunk).Data;
+                var (primaryBiome, mergeBiome, maxMerge) = ResolveChunkRenderBiomes(chunk, key, biomeByChunkSnapshot);
 
                 if (!_renderMergeByChunk.TryGetValue(key, out var mergeInfo))
                 {
-                    mergeInfo = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                    mergeInfo = (mergeBiome, maxMerge);
                     _renderMergeByChunk[key] = mergeInfo;
                 }
 
-                var (mergeBiome, maxMerge) = mergeInfo;
                 _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
 
                 _renderer.RenderAt(
@@ -483,16 +478,47 @@ namespace Veilborne.Terrain
             return (primary, null, 0f);
         }
 
+        private (BiomeData primaryBiome, BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderBiomes(
+            TerrainChunk chunk,
+            (int cx, int cz) key,
+            Dictionary<(int cx, int cz), BiomeData> biomeByChunkSnapshot)
+        {
+            int gridW = chunk.Heights.GetLength(0);
+            int gridH = chunk.Heights.GetLength(1);
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (primaryId, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, _terrainGen, chunk.Origin, gridW, gridH, TileSize, 4f);
+                if (simple.TryGetBiomeById(primaryId, out var primaryBiome) && primaryBiome is not null)
+                {
+                    BiomeData? merge = null;
+                    if (!string.IsNullOrEmpty(mergeId) &&
+                        simple.TryGetBiomeById(mergeId, out var mergeBiome) &&
+                        mergeBiome is not null)
+                        merge = mergeBiome.Data;
+                    return (primaryBiome.Data, merge, maxMerge);
+                }
+            }
+
+            BiomeData fallbackPrimary = biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary)
+                ? cachedPrimary
+                : GetDominantBiomeForChunk(chunk).Data;
+            var center = new Vector2(
+                chunk.Origin.X + (gridW - 1) * TileSize * 0.5f,
+                chunk.Origin.Y + (gridH - 1) * TileSize * 0.5f);
+            var (_, secondary, blend) = ResolveBiomeBlend(center);
+            return (fallbackPrimary, secondary?.Data, blend);
+        }
+
         private (BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderMerge(Vector2 origin, int gridWidth, int gridHeight)
         {
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
                 var (_, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
-                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize, 2f);
+                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize, 4f);
                 if (!string.IsNullOrEmpty(mergeId) &&
                     simple.TryGetBiomeById(mergeId, out var mergeBiome) &&
-                    mergeBiome is not null &&
-                    maxMerge > 0.015f)
+                    mergeBiome is not null)
                     return (mergeBiome.Data, maxMerge);
             }
 
@@ -547,23 +573,24 @@ namespace Veilborne.Terrain
             BiomeData? effectiveMerge = secondaryBiome;
             float effectiveMaxMerge = blendFactor;
             float[,]? mergeMap = null;
+            string pairPrimaryId = biome.Id;
             if (_biomeProvider is SimpleBiomeProvider simpleProvider)
             {
-                var (_, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
-                    simpleProvider, _terrainGen, origin, w, h, TileSize, 2f);
+                var (primaryId, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
+                    simpleProvider, _terrainGen, origin, w, h, TileSize, 4f);
+                pairPrimaryId = primaryId;
                 if (!string.IsNullOrEmpty(mergeId) &&
                     simpleProvider.TryGetBiomeById(mergeId, out var mergeBiome) &&
-                    mergeBiome is not null &&
-                    maxMerge > 0.015f)
+                    mergeBiome is not null)
                 {
                     effectiveMerge = mergeBiome.Data;
                     effectiveMaxMerge = maxMerge;
                     (mergeMap, _) = BiomeSampling.BuildChunkPairBlendMap(
-                        simpleProvider, _terrainGen, origin, w, h, TileSize, biome.Id, mergeId, 2);
+                        simpleProvider, _terrainGen, origin, w, h, TileSize, primaryId, mergeId, 2);
                 }
             }
 
-            bool hasMerge = effectiveMerge != null && effectiveMaxMerge > 0.015f && mergeMap != null;
+            bool hasMerge = effectiveMerge != null && mergeMap != null;
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -573,7 +600,14 @@ namespace Veilborne.Terrain
                     depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
 
                 float slope = ComputeSlopeAt(heights, x, z, w, h);
-                Vector4 primary = ComputeSplatForLayers(biome.TerrainLayers, depth, slope);
+                var primaryLayers = string.Equals(biome.Id, pairPrimaryId, StringComparison.OrdinalIgnoreCase)
+                    ? biome.TerrainLayers
+                    : (_biomeProvider is SimpleBiomeProvider sp &&
+                       sp.TryGetBiomeById(pairPrimaryId, out var pairPrimary) &&
+                       pairPrimary is not null
+                        ? pairPrimary.Data.TerrainLayers
+                        : biome.TerrainLayers);
+                Vector4 primary = ComputeSplatForLayers(primaryLayers, depth, slope);
 
                 if (hasMerge)
                 {

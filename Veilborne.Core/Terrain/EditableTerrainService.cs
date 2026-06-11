@@ -348,16 +348,38 @@ namespace Veilborne.Terrain
             return (primaryBiome.Data, null, 0f);
         }
 
+        private BiomeData ResolveChunkPrimaryBiome(TerrainChunk chunk)
+        {
+            int gridW = chunk.Heights.GetLength(0);
+            int gridH = chunk.Heights.GetLength(1);
+            if (_biomeProvider is SimpleBiomeProvider simple)
+            {
+                var (primaryId, _, _) = BiomeSampling.ResolveChunkBiomePair(
+                    simple, _terrainGen, chunk.Origin, gridW, gridH, TileSize, 4f);
+                if (simple.TryGetBiomeById(primaryId, out var primary) && primary is not null)
+                    return primary.Data;
+            }
+
+            var center = new Vector2(
+                chunk.Origin.X + ChunkSize * TileSize * 0.5f,
+                chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
+            var (fallback, secondary, blend) = ResolveBiomeBlend(center);
+            var key = (
+                (int)MathF.Floor(chunk.Origin.X / (ChunkSize * TileSize)),
+                (int)MathF.Floor(chunk.Origin.Y / (ChunkSize * TileSize)));
+            _biomeBlendByChunk[key] = (secondary, blend);
+            return fallback;
+        }
+
         private (BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderMerge(Vector2 origin, int gridWidth, int gridHeight)
         {
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
                 var (_, mergeId, maxMerge) = BiomeSampling.ResolveChunkBiomePair(
-                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize, 2f);
+                    simple, _terrainGen, origin, gridWidth, gridHeight, TileSize, 4f);
                 if (!string.IsNullOrEmpty(mergeId) &&
                     simple.TryGetBiomeById(mergeId, out var mergeBiome) &&
-                    mergeBiome is not null &&
-                    maxMerge > 0.015f)
+                    mergeBiome is not null)
                     return (mergeBiome.Data, maxMerge);
             }
 
@@ -375,9 +397,17 @@ namespace Veilborne.Terrain
             chunk.Splatmap ??= new Vector4[w, h];
 
             string primaryId = _primaryBiomeByChunk.TryGetValue(key, out var biome) ? biome.Id : string.Empty;
+            if (_biomeProvider is SimpleBiomeProvider simplePair)
+            {
+                var (pairPrimaryId, pairMergeId, _) = BiomeSampling.ResolveChunkBiomePair(
+                    simplePair, _terrainGen, chunk.Origin, w, h, TileSize, 4f);
+                if (!string.IsNullOrEmpty(pairPrimaryId))
+                    primaryId = pairPrimaryId;
+            }
+
             var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, w, h);
             string mergeId = mergeBiome?.Id ?? string.Empty;
-            bool hasMerge = !string.IsNullOrEmpty(mergeId) && maxMerge > 0.015f;
+            bool hasMerge = !string.IsNullOrEmpty(mergeId);
 
             float[,]? mergeMap = null;
             if (hasMerge && _biomeProvider is SimpleBiomeProvider simple && !string.IsNullOrEmpty(primaryId))
@@ -458,27 +488,17 @@ namespace Veilborne.Terrain
                     var chunk = kvp.Value;
                     if (!_primaryBiomeByChunk.TryGetValue(key, out var primaryBiome))
                     {
-                        if (_biomeProvider is SimpleBiomeProvider simple)
-                        {
-                            var dominant = BiomeSampling.GetDominantBiomeForArea(
-                                simple, _terrainGen, chunk.Origin, ChunkSize, TileSize, 7, 2f, TileSize * 2f);
-                            primaryBiome = dominant.Data;
-                            var (_, secondary, blend) = simple.GetBiomeBlendAt(
-                                new Vector2(chunk.Origin.X + ChunkSize * TileSize * 0.5f,
-                                    chunk.Origin.Y + ChunkSize * TileSize * 0.5f),
-                                _terrainGen);
-                            _biomeBlendByChunk[key] = (secondary?.Data, blend);
-                        }
-                        else
-                        {
-                            var center = new Vector2(
-                                chunk.Origin.X + ChunkSize * TileSize * 0.5f,
-                                chunk.Origin.Y + ChunkSize * TileSize * 0.5f);
-                            var (primary, secondary, blend) = ResolveBiomeBlend(center);
-                            primaryBiome = primary;
-                            _biomeBlendByChunk[key] = (secondary, blend);
-                        }
+                        primaryBiome = ResolveChunkPrimaryBiome(chunk);
                         _primaryBiomeByChunk[key] = primaryBiome;
+                    }
+                    else if (_biomeProvider is SimpleBiomeProvider simpleRefresh)
+                    {
+                        int gw = chunk.Heights.GetLength(0);
+                        int gh = chunk.Heights.GetLength(1);
+                        var (pairPrimaryId, _, _) = BiomeSampling.ResolveChunkBiomePair(
+                            simpleRefresh, _terrainGen, chunk.Origin, gw, gh, TileSize, 4f);
+                        if (simpleRefresh.TryGetBiomeById(pairPrimaryId, out var pairPrimary) && pairPrimary is not null)
+                            primaryBiome = pairPrimary.Data;
                     }
                     int gridW = chunk.Heights.GetLength(0);
                     int gridH = chunk.Heights.GetLength(1);

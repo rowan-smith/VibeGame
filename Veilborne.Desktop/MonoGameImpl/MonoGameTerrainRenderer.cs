@@ -351,6 +351,14 @@ namespace Veilborne.MonoGameImpl
                 existing.TileSize = tileSize;
                 if (!existing.BiomeMergeEvaluated && _settings.Current.Graphics.BiomeTextureCrossfade)
                     EnqueueBuild(heights, tileSize, originWorld);
+                else if (_settings.Current.Graphics.BiomeTextureCrossfade &&
+                         !string.IsNullOrEmpty(existing.StoredMergeBiomeId) &&
+                         existing.BiomeBlendCoverage < 0.005f &&
+                         existing.CachedMaxMerge > TerrainMeshCpuBuilder.BiomeMergeCornerThreshold)
+                {
+                    existing.BiomeMergeEvaluated = false;
+                    EnqueueBuild(heights, tileSize, originWorld);
+                }
 
                 string primaryId = _activeBiome?.Id ?? string.Empty;
                 string mergeId = _activeSecondaryBiome?.Id ?? string.Empty;
@@ -668,6 +676,11 @@ namespace Veilborne.MonoGameImpl
             return indices;
         }
 
+        private static bool ChunkNeedsBiomeMergeDraw(ChunkData chunk) =>
+            chunk.MergeTexture != null &&
+            (!string.IsNullOrEmpty(chunk.StoredMergeBiomeId) ||
+             chunk.CachedMaxMerge > TerrainMeshCpuBuilder.BiomeMergeCornerThreshold);
+
         private void ApplyChunkVisual(ref ChunkData chunk, BiomeData? biome, BiomeData? mergeBiome, float maxMerge)
         {
             if (!string.IsNullOrEmpty(chunk.StoredPrimaryBiomeId) && _biomeProvider is SimpleBiomeProvider simpleStored)
@@ -704,13 +717,14 @@ namespace Veilborne.MonoGameImpl
 
             bool useBiomeMerge = _settings.Current.Graphics.BiomeTextureCrossfade &&
                                  mergeBiome is not null &&
-                                 (maxMerge > BiomeMergeCornerThreshold ||
-                                  chunk.BiomeBlendCoverage > 0.02f ||
+                                 (!string.IsNullOrEmpty(chunk.StoredMergeBiomeId) ||
+                                  maxMerge > BiomeMergeCornerThreshold ||
                                   chunk.CachedMaxMerge > BiomeMergeCornerThreshold);
 
             if (chunk.BaseHeights != null && chunk.LayerConfig != null)
             {
-                var lc = chunk.LayerConfig;
+                var lc = biome.TerrainLayers ?? chunk.LayerConfig;
+                chunk.LayerConfig = lc;
                 chunk.LayerMode = TerrainChunkLayerBlendMode.SurfaceToSubsurface;
                 chunk.PrimaryTexture = LoadTexture(lc.SurfaceTextureId) ?? GetFallbackTexture();
                 chunk.SecondaryTexture = LoadTexture(lc.SubsurfaceTextureId);
@@ -863,7 +877,7 @@ namespace Veilborne.MonoGameImpl
 
             float secondaryPassDistance = drawDistance * _secondaryPassDistanceScale;
             float layeredCutoffSq = secondaryPassDistance * secondaryPassDistance * 0.25f;
-            float crossfadeCutoffSq = secondaryPassDistance * secondaryPassDistance;
+            float crossfadeCutoffSq = drawDistance * drawDistance;
             bool crossfadeEnabled = graphics.BiomeTextureCrossfade;
 
             BuildPrimaryDrawItems(litDiffuse, fallbackDiffuse, crossfadeEnabled);
@@ -971,7 +985,7 @@ namespace Veilborne.MonoGameImpl
                 bool hasBiomeMerge = crossfadeEnabled &&
                                      _useBiomeMergeShader &&
                                      chunk.MergeTexture != null &&
-                                     chunk.BiomeBlendCoverage > 0.02f;
+                                     ChunkNeedsBiomeMergeDraw(chunk);
                 if (texture != null)
                 {
                     float mod = isLayered ? 1f : chunk.PrimaryLightingModifier;
@@ -1006,7 +1020,7 @@ namespace Veilborne.MonoGameImpl
             {
                 if (visible.DistanceSq > crossfadeCutoffSq) continue;
                 if (!_chunks.TryGetValue(visible.Key, out var chunk)) continue;
-                if (chunk.MergeTexture == null || chunk.BiomeBlendCoverage <= 0.02f) continue;
+                if (!ChunkNeedsBiomeMergeDraw(chunk)) continue;
                 _drawItemsScratch.Add(new TerrainDrawItem(
                     visible, chunk.MergeTexture, null, true, litDiffuse, TerrainPassKind.Merge));
             }

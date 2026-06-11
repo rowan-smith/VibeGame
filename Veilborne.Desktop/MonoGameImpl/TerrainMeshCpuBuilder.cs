@@ -72,10 +72,10 @@ namespace Veilborne.MonoGameImpl
             if (biomeCrossfadeEnabled && biomeProvider is SimpleBiomeProvider simple)
             {
                 (primaryBiomeId, mergeBiomeId, maxBoundaryBlend) = BiomeSampling.ResolveChunkBiomePair(
-                    simple, null, origin, width, depth, tileSize, 2f);
-                if (!string.IsNullOrEmpty(mergeBiomeId) && maxBoundaryBlend > BiomeMergeCornerThreshold)
+                    simple, null, origin, width, depth, tileSize, 4f);
+                if (!string.IsNullOrEmpty(mergeBiomeId))
                 {
-                    int stride = fastMeshBuild ? 4 : 2;
+                    int stride = fastMeshBuild ? 2 : 1;
                     (mergeMap, float mapMax) = BiomeSampling.BuildChunkPairBlendMap(
                         simple, null, origin, width, depth, tileSize, primaryBiomeId, mergeBiomeId, stride);
                     if (mapMax > maxBoundaryBlend)
