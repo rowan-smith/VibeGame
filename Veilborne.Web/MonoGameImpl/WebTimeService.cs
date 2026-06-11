@@ -26,6 +26,16 @@ public class WebTimeService : ITimeService
         _deltaTime = dt;
         _totalTime += dt;
         _updatesSinceSample++;
+
+        if (dt > 1e-5f)
+        {
+            float instant = 1f / dt;
+            _displayFps = _displayFps <= 0f ? instant : Lerp(_displayFps, instant, 0.2f);
+            _fps = Math.Max(1, (int)MathF.Round(_displayFps));
+
+            _displayUps = _displayUps <= 0f ? instant : Lerp(_displayUps, instant, 0.2f);
+            _ups = Math.Max(1, (int)MathF.Round(_displayUps));
+        }
     }
 
     public void NotifyFrameRendered()
@@ -34,27 +44,27 @@ public class WebTimeService : ITimeService
         if (_lastFrameTimestamp == 0)
         {
             _lastFrameTimestamp = now;
+            _framesSinceSample = 1;
             return;
         }
 
         float frameSeconds = (float)((now - _lastFrameTimestamp) / (double)Stopwatch.Frequency);
         _lastFrameTimestamp = now;
-        if (frameSeconds <= 0f)
-            return;
-
         _framesSinceSample++;
-        _sampleAccumSeconds += frameSeconds;
 
-        if (_sampleAccumSeconds < 0.25f)
+        if (frameSeconds > 1e-5f)
+            _sampleAccumSeconds += frameSeconds;
+
+        if (_sampleAccumSeconds < 0.5f)
             return;
 
         float sampledFps = _framesSinceSample / Math.Max(_sampleAccumSeconds, 1e-5f);
         _displayFps = _displayFps <= 0f ? sampledFps : Lerp(_displayFps, sampledFps, 0.35f);
-        _fps = Math.Max(0, (int)MathF.Round(_displayFps));
+        _fps = Math.Max(1, (int)MathF.Round(_displayFps));
 
         float sampledUps = _updatesSinceSample / Math.Max(_sampleAccumSeconds, 1e-5f);
         _displayUps = _displayUps <= 0f ? sampledUps : Lerp(_displayUps, sampledUps, 0.35f);
-        _ups = Math.Max(0, (int)MathF.Round(_displayUps));
+        _ups = Math.Max(1, (int)MathF.Round(_displayUps));
 
         _framesSinceSample = 0;
         _updatesSinceSample = 0;

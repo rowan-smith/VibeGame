@@ -1,7 +1,48 @@
 // JS interop for Veilborne.Web: canvas rendering and input
 window.veilborne = {
+    LOGICAL_WIDTH: 1280,
+    LOGICAL_HEIGHT: 720,
     getCanvas: function() {
         return document.getElementById('veilborne-game-canvas');
+    },
+    getViewport: function() {
+        return document.querySelector('.game-viewport');
+    },
+    syncViewportLayout: function() {
+        const viewport = this.getViewport();
+        const gameCanvas = this.getCanvas();
+        const textCanvas = document.getElementById('veilborne-text-canvas');
+        if (!viewport || !gameCanvas || !textCanvas) return;
+
+        for (const canvas of [gameCanvas, textCanvas]) {
+            canvas.style.position = 'absolute';
+            canvas.style.left = '0';
+            canvas.style.top = '0';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+        }
+
+        if (this.pixi.app && this.pixi.app.renderer) {
+            this.pixi.app.renderer.resize(this.LOGICAL_WIDTH, this.LOGICAL_HEIGHT);
+        }
+    },
+    getLogicalCoordsFromClient: function(clientX, clientY) {
+        const viewport = this.getViewport();
+        const canvas = this.getCanvas();
+        const target = viewport || canvas;
+        if (!target) return { x: 0, y: 0 };
+
+        const rect = target.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+
+        const logicalW = this.LOGICAL_WIDTH;
+        const logicalH = this.LOGICAL_HEIGHT;
+        const x = Math.round(((clientX - rect.left) / rect.width) * logicalW);
+        const y = Math.round(((clientY - rect.top) / rect.height) * logicalH);
+        return {
+            x: Math.max(0, Math.min(logicalW, x)),
+            y: Math.max(0, Math.min(logicalH, y))
+        };
     },
     requestAnimationFrame: function(dotNetRef) {
         function frame(ts) {
@@ -31,17 +72,7 @@ window.veilborne = {
         let mouseRafPending = false;
 
         function getLogicalCoords(e) {
-            const canvas = document.getElementById('veilborne-game-canvas');
-            if (!canvas) return { x: e.clientX, y: e.clientY };
-            const rect = canvas.getBoundingClientRect();
-            const logicalW = parseInt(canvas.getAttribute('width') || '1280', 10);
-            const logicalH = parseInt(canvas.getAttribute('height') || '720', 10);
-            const x = Math.round(((e.clientX - rect.left) / rect.width) * logicalW);
-            const y = Math.round(((e.clientY - rect.top) / rect.height) * logicalH);
-            return {
-                x: Math.max(0, Math.min(logicalW, x)),
-                y: Math.max(0, Math.min(logicalH, y))
-            };
+            return window.veilborne.getLogicalCoordsFromClient(e.clientX, e.clientY);
         }
 
         function sendMouseMove(x, y) {
@@ -79,6 +110,12 @@ window.veilborne = {
         window.addEventListener('wheel', e => {
             dotNetRef.invokeMethodAsync('OnMouseWheel', -e.deltaY);
         }, { passive: true });
+
+        window.addEventListener('resize', () => {
+            window.veilborne.syncViewportLayout();
+        }, { passive: true });
+
+        window.veilborne.syncViewportLayout();
     },
     _measureCanvas: null,
     _measureCtx: null,
@@ -143,12 +180,12 @@ window.veilborne = {
             const opts = {
                 view: canvas,
                 canvas: canvas,
-                width: canvas.width || 1280,
-                height: canvas.height || 720,
+                width: window.veilborne.LOGICAL_WIDTH,
+                height: window.veilborne.LOGICAL_HEIGHT,
                 backgroundColor: 0x0F1216,
                 antialias: false,
                 resolution: this._cappedDpr(),
-                autoDensity: true,
+                autoDensity: false,
                 autoStart: false
             };
 
@@ -166,6 +203,7 @@ window.veilborne = {
                     return null;
                 }
             }
+            window.veilborne.syncViewportLayout();
             return this.app;
         },
         parseColor: function(color) {
@@ -390,6 +428,7 @@ window.veilborne = {
             }
         },
         present: function() {
+            window.veilborne.syncViewportLayout();
             const app = this.ensureApp();
             if (app && !this.failed) {
                 try {
