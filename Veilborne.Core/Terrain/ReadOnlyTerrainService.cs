@@ -432,8 +432,8 @@ namespace Veilborne.Terrain
 
                 int gridW = chunk.Heights.GetLength(0);
                 int gridH = chunk.Heights.GetLength(1);
-                var (renderSecondary, renderBlend) = ResolveChunkRenderBlend(chunk.Origin, gridW, gridH);
-                _renderer.ApplyBiomeBlendTextures(primaryBiome, renderSecondary, renderBlend);
+                var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
 
                 _renderer.RenderAt(
                     chunk.Heights,
@@ -463,14 +463,14 @@ namespace Veilborne.Terrain
             return (primary, null, 0f);
         }
 
-        private (BiomeData? secondary, float blend) ResolveChunkRenderBlend(Vector2 origin, int gridWidth, int gridHeight)
+        private (BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderMerge(Vector2 origin, int gridWidth, int gridHeight)
         {
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
-                var (_, _, _, _, maxBlend, cornerSecondary) = BiomeSampling.ResolveCornerCrossfade(
+                var (_, _, _, _, maxMerge, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
                     simple, _terrainGen, origin, gridWidth, gridHeight, TileSize);
-                if (cornerSecondary is not null && maxBlend > 0.001f)
-                    return (cornerSecondary.Data, maxBlend);
+                if (mergeBiome is not null && maxMerge > 0.001f)
+                    return (mergeBiome.Data, maxMerge);
             }
 
             var center = new Vector2(
@@ -521,23 +521,18 @@ namespace Veilborne.Terrain
             int h = heights.GetLength(1);
             var splat = new Vector4[w, h];
 
-            BiomeData? effectiveSecondary = secondaryBiome;
-            float effectiveBlend = blendFactor;
+            BiomeData? effectiveMerge = secondaryBiome;
+            float effectiveMaxMerge = blendFactor;
+            float[,]? mergeMap = null;
             if (_biomeProvider is SimpleBiomeProvider simpleProvider)
             {
-                var (_, _, _, _, maxBlend, cornerSecondary) = BiomeSampling.ResolveCornerCrossfade(
+                (mergeMap, var mergeBiome, effectiveMaxMerge) = BiomeSampling.BuildVertexMergeMap(
                     simpleProvider, _terrainGen, origin, w, h, TileSize);
-                if (cornerSecondary is not null && maxBlend > 0.001f)
-                {
-                    effectiveSecondary = cornerSecondary.Data;
-                    effectiveBlend = maxBlend;
-                }
+                if (mergeBiome is not null && effectiveMaxMerge > 0.001f)
+                    effectiveMerge = mergeBiome.Data;
             }
 
-            float[,]? blendMap = null;
-            bool hasSecondary = effectiveSecondary != null && effectiveBlend > 0.001f;
-            if (hasSecondary && _biomeProvider is SimpleBiomeProvider simple)
-                blendMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, origin, w, h, TileSize);
+            bool hasMerge = effectiveMerge != null && effectiveMaxMerge > 0.001f && mergeMap != null;
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -549,13 +544,13 @@ namespace Veilborne.Terrain
                 float slope = ComputeSlopeAt(heights, x, z, w, h);
                 Vector4 primary = ComputeSplatForLayers(biome.TerrainLayers, depth, slope);
 
-                if (hasSecondary && blendMap != null)
+                if (hasMerge)
                 {
-                    float vertexBlend = blendMap[x, z];
+                    float vertexBlend = mergeMap![x, z];
                     if (vertexBlend > 0.001f)
                     {
-                        Vector4 secondary = ComputeSplatForLayers(effectiveSecondary!.TerrainLayers, depth, slope);
-                        splat[x, z] = Vector4.Lerp(primary, secondary, vertexBlend);
+                        Vector4 merged = ComputeSplatForLayers(effectiveMerge!.TerrainLayers, depth, slope);
+                        splat[x, z] = Vector4.Lerp(primary, merged, vertexBlend);
                         continue;
                     }
                 }

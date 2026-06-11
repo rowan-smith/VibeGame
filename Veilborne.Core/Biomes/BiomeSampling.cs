@@ -207,6 +207,72 @@ namespace Veilborne.Biomes
         }
 
         /// <summary>
+        /// Builds a per-vertex biome merge map using world-position blend weights.
+        /// Adds noise near transitions so boundaries look organic instead of straight lines.
+        /// </summary>
+        public static (float[,] mergeMap, IBiome? mergeBiome, float maxMerge) BuildVertexMergeMap(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize)
+        {
+            var map = new float[width, height];
+            float maxMerge = 0f;
+            IBiome? mergeBiome = null;
+            var weights = new BiomeWeight[4];
+
+            for (int z = 0; z < height; z++)
+            for (int x = 0; x < width; x++)
+            {
+                float wx = origin.X + x * tileSize;
+                float wz = origin.Y + z * tileSize;
+                provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain, weights, out int count, 4);
+
+                float merge = 0f;
+                if (count > 1)
+                {
+                    merge = 1f - weights[0].Weight;
+                    if (weights[1].Weight > 0.001f)
+                    {
+                        float candidate = weights[1].Weight;
+                        if (candidate > maxMerge)
+                        {
+                            maxMerge = candidate;
+                            mergeBiome = weights[1].Biome;
+                        }
+                    }
+                    merge = PerturbMergeWeight(wx, wz, merge);
+                }
+
+                map[x, z] = merge;
+                if (merge > maxMerge)
+                    maxMerge = merge;
+            }
+
+            return (map, mergeBiome, maxMerge);
+        }
+
+        private static float PerturbMergeWeight(float worldX, float worldZ, float merge)
+        {
+            if (merge <= 0.001f || merge >= 0.999f)
+                return merge;
+
+            float noise = HashNoise(worldX * 0.08f + 41.2f, worldZ * 0.08f - 17.8f);
+            float edge = MathF.Min(merge, 1f - merge) * 4f;
+            float amplitude = 0.22f * MathF.Min(1f, edge);
+            return Math.Clamp(merge + (noise - 0.5f) * 2f * amplitude, 0f, 1f);
+        }
+
+        private static float HashNoise(float x, float y)
+        {
+            uint n = (uint)(x * 127.1f + y * 311.7f);
+            n = (n << 13) ^ n;
+            return ((n * (n * n * 15731u + 789221u) + 1376312589u) & 0x7FFFFFFF) / (float)0x7FFFFFFF;
+        }
+
+        /// <summary>
         /// Resolves biome crossfade from chunk corners. Chunks whose center sits deep inside
         /// one biome can still have non-zero blend at edges that touch a neighbor biome.
         /// </summary>

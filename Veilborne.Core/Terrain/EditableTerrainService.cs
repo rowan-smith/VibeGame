@@ -355,14 +355,14 @@ namespace Veilborne.Terrain
             return (primaryBiome.Data, null, 0f);
         }
 
-        private (BiomeData? secondary, float blend) ResolveChunkRenderBlend(Vector2 origin, int gridWidth, int gridHeight)
+        private (BiomeData? mergeBiome, float maxMerge) ResolveChunkRenderMerge(Vector2 origin, int gridWidth, int gridHeight)
         {
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
-                var (_, _, _, _, maxBlend, cornerSecondary) = BiomeSampling.ResolveCornerCrossfade(
+                var (_, _, _, _, maxMerge, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
                     simple, _terrainGen, origin, gridWidth, gridHeight, TileSize);
-                if (cornerSecondary is not null && maxBlend > 0.001f)
-                    return (cornerSecondary.Data, maxBlend);
+                if (mergeBiome is not null && maxMerge > 0.001f)
+                    return (mergeBiome.Data, maxMerge);
             }
 
             var center = new Vector2(
@@ -379,13 +379,15 @@ namespace Veilborne.Terrain
             chunk.Splatmap ??= new Vector4[w, h];
 
             string primaryId = _primaryBiomeByChunk.TryGetValue(key, out var biome) ? biome.Id : string.Empty;
-            var (renderSecondary, renderBlend) = ResolveChunkRenderBlend(chunk.Origin, w, h);
-            string secondaryId = renderSecondary?.Id ?? string.Empty;
-            bool hasSecondary = !string.IsNullOrEmpty(secondaryId) && renderBlend > 0.001f;
+            var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, w, h);
+            string mergeId = mergeBiome?.Id ?? string.Empty;
+            bool hasMerge = !string.IsNullOrEmpty(mergeId) && maxMerge > 0.001f;
 
-            float[,]? blendMap = null;
-            if (hasSecondary && _biomeProvider is SimpleBiomeProvider simple)
-                blendMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, chunk.Origin, w, h, TileSize);
+            float[,]? mergeMap = null;
+            if (hasMerge && _biomeProvider is SimpleBiomeProvider simple)
+            {
+                (mergeMap, _, _) = BiomeSampling.BuildVertexMergeMap(simple, _terrainGen, chunk.Origin, w, h, TileSize);
+            }
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -397,13 +399,13 @@ namespace Veilborne.Terrain
 
                 Vector4 primary = ComputeSplatWeights(depth, key, x, z, primaryId, slope);
 
-                if (hasSecondary && blendMap != null)
+                if (hasMerge && mergeMap != null)
                 {
-                    float t = blendMap[x, z];
+                    float t = mergeMap[x, z];
                     if (t > 0.001f)
                     {
-                        Vector4 secondary = ComputeSplatWeights(depth, key, x, z, secondaryId, slope);
-                        chunk.Splatmap[x, z] = Vector4.Lerp(primary, secondary, t);
+                        Vector4 merged = ComputeSplatWeights(depth, key, x, z, mergeId, slope);
+                        chunk.Splatmap[x, z] = Vector4.Lerp(primary, merged, t);
                         continue;
                     }
                 }
@@ -471,8 +473,8 @@ namespace Veilborne.Terrain
                     }
                     int gridW = chunk.Heights.GetLength(0);
                     int gridH = chunk.Heights.GetLength(1);
-                    var (renderSecondary, renderBlend) = ResolveChunkRenderBlend(chunk.Origin, gridW, gridH);
-                    _renderer.ApplyBiomeBlendTextures(primaryBiome, renderSecondary, renderBlend);
+                    var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                    _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, GetTerrainLayersForBiomeId(primaryBiome.Id), chunk.Splatmap);
                 }
             }

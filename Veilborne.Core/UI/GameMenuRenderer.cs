@@ -395,7 +395,7 @@ namespace Veilborne.UI
                 ("Brightness", $"{settings.Graphics.Brightness}%", null,
                     () => { _settings.Update(s => s.Graphics.Brightness = Math.Max(50, s.Graphics.Brightness - 5)); applySettings(); },
                     () => { _settings.Update(s => s.Graphics.Brightness = Math.Min(150, s.Graphics.Brightness + 5)); applySettings(); }),
-                ("Biome Crossfade", settings.Graphics.BiomeTextureCrossfade ? "On" : "Off",
+                ("Biome Merge (legacy)", settings.Graphics.BiomeTextureCrossfade ? "On" : "Off",
                     () => { _settings.Update(s => s.Graphics.BiomeTextureCrossfade = !s.Graphics.BiomeTextureCrossfade); applySettings(); }, null, null),
             };
 
