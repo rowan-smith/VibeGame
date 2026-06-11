@@ -1,179 +1,217 @@
 {
-    "Id":  "glimmerfall_ridge",
-    "DisplayName":  "Glimmerfall Ridge",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.5,
-                                        "Moisture":  0.4,
-                                        "Altitude":  0.9,
-                                        "Fertility":  0.35,
-                                        "Roughness":  0.8,
-                                        "VegetationDensity":  0.3
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  0.9,
-                                           "WtMoisture":  0.9,
-                                           "WtElevation":  1.6,
-                                           "WtFertility":  0.8
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.7,
-                                                  "Frequency":  1.6,
-                                                  "Persistence":  0.75,
-                                                  "Lacunarity":  2.9,
-                                                  "Detail":  0.95,
-                                                  "RidgeWeight":  0.85,
-                                                  "WarpStrength":  0.3,
-                                                  "WarpFrequency":  0.5,
-                                                  "ErosionStrength":  0.15,
-                                                  "OverhangStrength":  0.55,
-                                                  "OverhangFrequency":  1.8,
-                                                  "TerracingStrength":  0.25,
-                                                  "TerracingSteps":  5,
-                                                  "ValleyDepthBias":  -0.3,
-                                                  "MicroDetailFrequency":  2.5,
-                                                  "MicroDetailAmplitude":  0.15
-                                              }
-                       },
-    "NoiseLayers":  [
-                        {
-                            "Type":  "Ridge",
-                            "Frequency":  1.8,
-                            "Amplitude":  0.85,
-                            "Octaves":  5,
-                            "Persistence":  0.65,
-                            "Lacunarity":  2.8,
-                            "BlendMode":  "Max",
-                            "Seed":  15,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Value",
-                            "Frequency":  1.0,
-                            "Amplitude":  -0.25,
-                            "Octaves":  3,
-                            "Persistence":  0.45,
-                            "Lacunarity":  2.0,
-                            "BlendMode":  "Min",
-                            "Offset":  0.1,
-                            "Seed":  27,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Perlin",
-                            "Frequency":  0.6,
-                            "Amplitude":  0.35,
-                            "Octaves":  3,
-                            "Persistence":  0.5,
-                            "Lacunarity":  2.2,
-                            "BlendMode":  "Add",
-                            "Seed":  39,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Ridge",
-                            "Frequency":  3.0,
-                            "Amplitude":  0.2,
-                            "Octaves":  2,
-                            "Persistence":  0.4,
-                            "BlendMode":  "Screen",
-                            "Seed":  55,
-                            "Enabled":  true
-                        }
-                    ],
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  192,
-                                         "G":  192,
-                                         "B":  192,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  0,
-                                           "G":  127,
-                                           "B":  255,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  112,
-                                        "G":  128,
-                                        "B":  144,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "brown_mud_leaves",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.3,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMin":  20
-                                              }
-                     },
-    "AllowedObjects":  [
-                           "pine_trees",
-                           "forest_trees",
-                           "surface_grass"
-                       ],
-    "DominantFlora":  [
-                          "Cliff Moss",
-                          "Frost Fern"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Shale/Stone",
-    "WeatherPatterns":  [
-                            "Snow flurries",
-                            "cold mist"
-                        ],
-    "AssetTags":  [
-                      "rock",
-                      "cliff",
-                      "waterfall"
-                  ],
-    "LightingModifier":  0.95,
-    "FeatureDescription":  "Sheer cliffs where waterfalls glow faintly under moonlight.",
-    "SpecialFeatures":  [
-                            "Waterfall networks",
-                            "frozen ledges"
-                        ],
-    "MusicTag":  "mountain",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "lichen_rock",
-                          "SubsurfaceTextureId":  "rock_3",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.1,
-                          "DeepDepth":  0.5,
-                          "DepthVariation":  0.15,
-                          "SlopeRockThreshold":  0.15,
-                          "SlopeBlendRange":  0.1
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "iron",
-                                    "OreNoiseFrequency":  5,
-                                    "OreThreshold":  0.62,
-                                    "OreMinDepth":  0.05,
-                                    "OreMaxDepth":  0.4,
-                                    "OreSpawnChance":  0.18
-                                },
-                                {
-                                    "OreType":  "copper",
-                                    "OreNoiseFrequency":  6,
-                                    "OreThreshold":  0.68,
-                                    "OreMinDepth":  0.1,
-                                    "OreMaxDepth":  0.5,
-                                    "OreSpawnChance":  0.14
-                                }
-                            ]
-               }
+    "Id": "glimmerfall_ridge",
+    "DisplayName": "Glimmerfall Ridge",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.5,
+            "Moisture": 0.4,
+            "Altitude": 0.9,
+            "Fertility": 0.35,
+            "Roughness": 0.8,
+            "VegetationDensity": 0.3
+        },
+        "Weights": {
+            "WtTemp": 0.9,
+            "WtMoisture": 0.9,
+            "WtElevation": 1.6,
+            "WtFertility": 0.8
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.7,
+            "Frequency": 1.6,
+            "Persistence": 0.75,
+            "Lacunarity": 2.9,
+            "Detail": 0.95,
+            "RidgeWeight": 0.92,
+            "WarpStrength": 0.3,
+            "WarpFrequency": 0.5,
+            "ErosionStrength": 0.15,
+            "OverhangStrength": 0.75,
+            "OverhangFrequency": 2.0,
+            "TerracingStrength": 0.4,
+            "TerracingSteps": 6,
+            "ValleyDepthBias": -0.3,
+            "MicroDetailFrequency": 2.5,
+            "MicroDetailAmplitude": 0.15,
+            "ContinentalScale": 2.2,
+            "CliffStrength": 0.92,
+            "CliffFrequency": 0.45,
+            "CliffSharpness": 0.05,
+            "CliffTiers": 7,
+            "CanyonDepth": 1.5,
+            "CanyonFrequency": 0.75,
+            "CanyonWidth": 0.22,
+            "RidgeSharpness": 2.2
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Type": "Ridge",
+            "Frequency": 1.8,
+            "Amplitude": 0.85,
+            "Octaves": 5,
+            "Persistence": 0.65,
+            "Lacunarity": 2.8,
+            "BlendMode": "Max",
+            "Seed": 15,
+            "Enabled": true
+        },
+        {
+            "Type": "Value",
+            "Frequency": 1.0,
+            "Amplitude": -0.25,
+            "Octaves": 3,
+            "Persistence": 0.45,
+            "Lacunarity": 2.0,
+            "BlendMode": "Min",
+            "Offset": 0.1,
+            "Seed": 27,
+            "Enabled": true
+        },
+        {
+            "Type": "Perlin",
+            "Frequency": 0.6,
+            "Amplitude": 0.35,
+            "Octaves": 3,
+            "Persistence": 0.5,
+            "Lacunarity": 2.2,
+            "BlendMode": "Add",
+            "Seed": 39,
+            "Enabled": true
+        },
+        {
+            "Type": "Ridge",
+            "Frequency": 3.0,
+            "Amplitude": 0.2,
+            "Octaves": 2,
+            "Persistence": 0.4,
+            "BlendMode": "Screen",
+            "Seed": 55,
+            "Enabled": true
+        },
+        {
+            "Type": "Cliff",
+            "Frequency": 0.5,
+            "Amplitude": 1.1,
+            "Octaves": 5,
+            "BlendMode": "Max",
+            "Seed": 103,
+            "Enabled": true
+        },
+        {
+            "Type": "Canyon",
+            "Frequency": 0.85,
+            "Amplitude": -1.0,
+            "Octaves": 4,
+            "BlendMode": "Add",
+            "Seed": 105,
+            "Enabled": true
+        },
+        {
+            "Type": "Ridge",
+            "Frequency": 1.2,
+            "Amplitude": 0.5,
+            "Octaves": 4,
+            "Persistence": 0.6,
+            "Lacunarity": 2.8,
+            "BlendMode": "Max",
+            "Seed": 107,
+            "Enabled": true
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 192,
+            "G": 192,
+            "B": 192,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 0,
+            "G": 127,
+            "B": 255,
+            "A": 255
+        },
+        "Accent": {
+            "R": 112,
+            "G": 128,
+            "B": 144,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "brown_mud_leaves",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [
+        "pine_trees",
+        "forest_trees",
+        "surface_grass"
+    ],
+    "DominantFlora": [
+        "Cliff Moss",
+        "Frost Fern"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Shale/Stone",
+    "WeatherPatterns": [
+        "Snow flurries",
+        "cold mist"
+    ],
+    "AssetTags": [
+        "rock",
+        "cliff",
+        "waterfall"
+    ],
+    "LightingModifier": 0.95,
+    "FeatureDescription": "Sheer cliffs where waterfalls glow faintly under moonlight.",
+    "SpecialFeatures": [
+        "Waterfall networks",
+        "frozen ledges"
+    ],
+    "MusicTag": "mountain",
+    "TerrainLayers": {
+        "SurfaceTextureId": "lichen_rock",
+        "SubsurfaceTextureId": "rock_3",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.1,
+        "DeepDepth": 0.5,
+        "DepthVariation": 0.15,
+        "SlopeRockThreshold": 0.15,
+        "SlopeBlendRange": 0.1
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "iron",
+                "OreNoiseFrequency": 5,
+                "OreThreshold": 0.62,
+                "OreMinDepth": 0.05,
+                "OreMaxDepth": 0.4,
+                "OreSpawnChance": 0.18
+            },
+            {
+                "OreType": "copper",
+                "OreNoiseFrequency": 6,
+                "OreThreshold": 0.68,
+                "OreMinDepth": 0.1,
+                "OreMaxDepth": 0.5,
+                "OreSpawnChance": 0.14
+            }
+        ]
+    },
+    "BaseHeight": 3.0,
+    "HeightMultiplier": 1.6
 }

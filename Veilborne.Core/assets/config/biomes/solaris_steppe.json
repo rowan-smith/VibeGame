@@ -1,178 +1,195 @@
 {
-    "Id":  "solaris_steppe",
-    "DisplayName":  "Solaris Steppe",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.85,
-                                        "Moisture":  0.3,
-                                        "Altitude":  0.25,
-                                        "Fertility":  0.45,
-                                        "Roughness":  0.5,
-                                        "VegetationDensity":  0.4
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.3,
-                                           "WtMoisture":  1.0,
-                                           "WtElevation":  0.9,
-                                           "WtFertility":  0.9
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.25,
-                                                  "Frequency":  1.0,
-                                                  "Persistence":  0.4,
-                                                  "Lacunarity":  2.0,
-                                                  "Detail":  0.5,
-                                                  "RidgeWeight":  0.2,
-                                                  "WarpStrength":  0.15,
-                                                  "WarpFrequency":  0.5,
-                                                  "ErosionStrength":  0.5,
-                                                  "MicroDetailFrequency":  2.5,
-                                                  "MicroDetailAmplitude":  0.2,
-                                                  "SlopeErosionScale":  0.3
-                                              }
-                       },
-    "NoiseLayers":  [
-                        {
-                            "Type":  "Billow",
-                            "Frequency":  0.8,
-                            "Amplitude":  0.4,
-                            "Octaves":  3,
-                            "Persistence":  0.4,
-                            "Lacunarity":  2.2,
-                            "BlendMode":  "Add",
-                            "Offset":  0.0,
-                            "Seed":  42,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Perlin",
-                            "Frequency":  0.6,
-                            "Amplitude":  0.3,
-                            "Octaves":  3,
-                            "Persistence":  0.4,
-                            "Lacunarity":  2.0,
-                            "BlendMode":  "Add",
-                            "Seed":  18,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Value",
-                            "Frequency":  4.0,
-                            "Amplitude":  0.1,
-                            "Octaves":  2,
-                            "Persistence":  0.35,
-                            "BlendMode":  "Screen",
-                            "Seed":  36,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Ridge",
-                            "Frequency":  1.2,
-                            "Amplitude":  0.15,
-                            "Octaves":  2,
-                            "Persistence":  0.4,
-                            "Lacunarity":  2.1,
-                            "BlendMode":  "Add",
-                            "Seed":  54,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Worley",
-                            "Frequency":  0.5,
-                            "Amplitude":  0.25,
-                            "Octaves":  1,
-                            "BlendMode":  "Max",
-                            "Seed":  72,
-                            "Enabled":  true
-                        }
-                    ],
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  212,
-                                         "G":  175,
-                                         "B":  55,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  255,
-                                           "G":  191,
-                                           "B":  0,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  139,
-                                        "G":  69,
-                                        "B":  19,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "aerial_rocks",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.3,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMin":  20
-                                              }
-                     },
-    "AllowedObjects":  [
-                           "maple_tree",
-                           "maple_trees",
-                           "birch_trees",
-                           "forest_trees",
-                           "surface_grass"
-                       ],
-    "DominantFlora":  [
-                          "Goldengrass",
-                          "Shrubs"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Dry Grass",
-    "WeatherPatterns":  [
-                            "Clear skies",
-                            "strong winds"
-                        ],
-    "AssetTags":  [
-                      "grass",
-                      "rock",
-                      "savanna"
-                  ],
-    "LightingModifier":  1.1,
-    "FeatureDescription":  "A sun-drenched plain where heat shimmers on golden waves.",
-    "SpecialFeatures":  [
-                            "Windmills",
-                            "scattered ruins"
-                        ],
-    "MusicTag":  "steppe",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "brown_mud_leaves",
-                          "SubsurfaceTextureId":  "brown_mud",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "aerial_rocks",
-                          "SubsurfaceDepth":  0.45,
-                          "DeepDepth":  1.5,
-                          "DepthVariation":  0.35,
-                          "SlopeRockThreshold":  0.45,
-                          "SlopeBlendRange":  0.3
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "coal",
-                                    "OreNoiseFrequency":  5,
-                                    "OreThreshold":  0.7,
-                                    "OreMinDepth":  0.4,
-                                    "OreMaxDepth":  1.2,
-                                    "OreSpawnChance":  0.11
-                                }
-                            ]
-               }
+    "Id": "solaris_steppe",
+    "DisplayName": "Solaris Steppe",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.85,
+            "Moisture": 0.3,
+            "Altitude": 0.25,
+            "Fertility": 0.45,
+            "Roughness": 0.5,
+            "VegetationDensity": 0.4
+        },
+        "Weights": {
+            "WtTemp": 1.3,
+            "WtMoisture": 1.0,
+            "WtElevation": 0.9,
+            "WtFertility": 0.9
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.25,
+            "Frequency": 1.0,
+            "Persistence": 0.4,
+            "Lacunarity": 2.0,
+            "Detail": 0.5,
+            "RidgeWeight": 0.2,
+            "WarpStrength": 0.15,
+            "WarpFrequency": 0.5,
+            "ErosionStrength": 0.5,
+            "MicroDetailFrequency": 2.5,
+            "MicroDetailAmplitude": 0.2,
+            "SlopeErosionScale": 0.3,
+            "ContinentalScale": 1.1,
+            "CliffStrength": 0.18,
+            "CliffFrequency": 0.32,
+            "CliffSharpness": 0.17,
+            "CliffTiers": 4,
+            "CanyonDepth": 0.3,
+            "CanyonFrequency": 0.48,
+            "CanyonWidth": 0.42
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Type": "Billow",
+            "Frequency": 0.8,
+            "Amplitude": 0.4,
+            "Octaves": 3,
+            "Persistence": 0.4,
+            "Lacunarity": 2.2,
+            "BlendMode": "Add",
+            "Offset": 0.0,
+            "Seed": 42,
+            "Enabled": true
+        },
+        {
+            "Type": "Perlin",
+            "Frequency": 0.6,
+            "Amplitude": 0.3,
+            "Octaves": 3,
+            "Persistence": 0.4,
+            "Lacunarity": 2.0,
+            "BlendMode": "Add",
+            "Seed": 18,
+            "Enabled": true
+        },
+        {
+            "Type": "Value",
+            "Frequency": 4.0,
+            "Amplitude": 0.1,
+            "Octaves": 2,
+            "Persistence": 0.35,
+            "BlendMode": "Screen",
+            "Seed": 36,
+            "Enabled": true
+        },
+        {
+            "Type": "Ridge",
+            "Frequency": 1.2,
+            "Amplitude": 0.15,
+            "Octaves": 2,
+            "Persistence": 0.4,
+            "Lacunarity": 2.1,
+            "BlendMode": "Add",
+            "Seed": 54,
+            "Enabled": true
+        },
+        {
+            "Type": "Worley",
+            "Frequency": 0.5,
+            "Amplitude": 0.25,
+            "Octaves": 1,
+            "BlendMode": "Max",
+            "Seed": 72,
+            "Enabled": true
+        },
+        {
+            "Type": "Canyon",
+            "Frequency": 0.55,
+            "Amplitude": -0.3,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 113,
+            "Enabled": true
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 212,
+            "G": 175,
+            "B": 55,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 255,
+            "G": 191,
+            "B": 0,
+            "A": 255
+        },
+        "Accent": {
+            "R": 139,
+            "G": 69,
+            "B": 19,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "aerial_rocks",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [
+        "maple_tree",
+        "maple_trees",
+        "birch_trees",
+        "forest_trees",
+        "surface_grass"
+    ],
+    "DominantFlora": [
+        "Goldengrass",
+        "Shrubs"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Dry Grass",
+    "WeatherPatterns": [
+        "Clear skies",
+        "strong winds"
+    ],
+    "AssetTags": [
+        "grass",
+        "rock",
+        "savanna"
+    ],
+    "LightingModifier": 1.1,
+    "FeatureDescription": "A sun-drenched plain where heat shimmers on golden waves.",
+    "SpecialFeatures": [
+        "Windmills",
+        "scattered ruins"
+    ],
+    "MusicTag": "steppe",
+    "TerrainLayers": {
+        "SurfaceTextureId": "brown_mud_leaves",
+        "SubsurfaceTextureId": "brown_mud",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "aerial_rocks",
+        "SubsurfaceDepth": 0.45,
+        "DeepDepth": 1.5,
+        "DepthVariation": 0.35,
+        "SlopeRockThreshold": 0.45,
+        "SlopeBlendRange": 0.3
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "coal",
+                "OreNoiseFrequency": 5,
+                "OreThreshold": 0.7,
+                "OreMinDepth": 0.4,
+                "OreMaxDepth": 1.2,
+                "OreSpawnChance": 0.11
+            }
+        ]
+    },
+    "BaseHeight": 0.0,
+    "HeightMultiplier": 0.98
 }

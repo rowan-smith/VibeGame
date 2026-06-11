@@ -61,10 +61,10 @@ namespace Veilborne.Terrain
 
             // Keep a stable baseline while layering medium/high-frequency variation.
             float h = 2.2f;
-            h += (macro * 0.5f + 0.5f) * 8.5f; // large forms
-            h += ridge * 8.0f;                 // mountain ridges
-            h += detail * 2.8f;                // medium breakup
-            h += micro * 1.1f;                 // fine noise
+            h += (macro * 0.5f + 0.5f) * 10.5f; // large continental forms
+            h += ridge * 10.5f;                 // mountain ridges and cliff spines
+            h += detail * 3.4f;                 // medium breakup
+            h += micro * 1.4f;                  // fine surface detail
 
             return h;
         }

@@ -183,6 +183,27 @@ namespace Veilborne.Biomes
 
         /// <summary>Vertical frequency of overhang layering.</summary>
         public float OverhangFrequency { get; set; } = 1f;
+
+        /// <summary>Strata/mesa cliff strength — quantizes elevation into flat-topped tiers with steep faces.</summary>
+        public float CliffStrength { get; set; } = 0f;
+
+        /// <summary>Frequency multiplier for cliff strata placement.</summary>
+        public float CliffFrequency { get; set; } = 0.35f;
+
+        /// <summary>Width of the transition band at tier edges (lower = steeper cliff faces).</summary>
+        public float CliffSharpness { get; set; } = 0.1f;
+
+        /// <summary>Number of elevation tiers when CliffStrength > 0.</summary>
+        public int CliffTiers { get; set; } = 4;
+
+        /// <summary>Depth of ridge-carved canyons and river gullies.</summary>
+        public float CanyonDepth { get; set; } = 0f;
+
+        /// <summary>Frequency multiplier for canyon placement.</summary>
+        public float CanyonFrequency { get; set; } = 0.6f;
+
+        /// <summary>Narrowness of canyon cuts (lower = wider valleys, higher = tighter gorges).</summary>
+        public float CanyonWidth { get; set; } = 0.35f;
     }
 
     /// <summary>
@@ -191,7 +212,7 @@ namespace Veilborne.Biomes
     /// </summary>
     public class NoiseLayerConfig
     {
-        /// <summary>Noise algorithm: Perlin, Ridge, Billow, Value, Worley.</summary>
+        /// <summary>Noise algorithm: Perlin, Ridge, Billow, Value, Worley, Cliff, Canyon.</summary>
         public string Type { get; set; } = "Perlin";
 
         /// <summary>Spatial frequency of this noise layer.</summary>

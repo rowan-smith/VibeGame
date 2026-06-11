@@ -1,157 +1,169 @@
 {
-    "Id":  "nullscape",
-    "DisplayName":  "Nullscape",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.0,
-                                        "Moisture":  0.0,
-                                        "Altitude":  0.5,
-                                        "Fertility":  0.0,
-                                        "Roughness":  0.0,
-                                        "VegetationDensity":  0.0
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.2,
-                                           "WtMoisture":  1.2,
-                                           "WtElevation":  0.6,
-                                           "WtFertility":  1.0
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.08,
-                                                  "Frequency":  0.3,
-                                                  "Persistence":  0.2,
-                                                  "Lacunarity":  1.5,
-                                                  "Detail":  0.15,
-                                                  "RidgeWeight":  0.7,
-                                                  "WarpStrength":  0.8,
-                                                  "WarpFrequency":  1.2,
-                                                  "TerracingStrength":  0.6,
-                                                  "TerracingSteps":  4
-                                              }
-                       },
-    "NoiseLayers":  [
-                        {
-                            "Type":  "Worley",
-                            "Frequency":  0.6,
-                            "Amplitude":  1.2,
-                            "Octaves":  1,
-                            "BlendMode":  "Max",
-                            "Seed":  0,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Value",
-                            "Frequency":  5.0,
-                            "Amplitude":  0.35,
-                            "Octaves":  3,
-                            "Persistence":  0.5,
-                            "Lacunarity":  2.5,
-                            "BlendMode":  "Add",
-                            "Seed":  99,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Ridge",
-                            "Frequency":  2.5,
-                            "Amplitude":  0.4,
-                            "Octaves":  2,
-                            "Persistence":  0.4,
-                            "BlendMode":  "Screen",
-                            "Seed":  77,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Perlin",
-                            "Frequency":  1.5,
-                            "Amplitude":  -0.5,
-                            "Octaves":  2,
-                            "Persistence":  0.3,
-                            "BlendMode":  "Min",
-                            "Seed":  88,
-                            "Enabled":  true
-                        }
-                    ],
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  0,
-                                         "G":  0,
-                                         "B":  0,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  128,
-                                           "G":  128,
-                                           "B":  128,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  255,
-                                        "G":  255,
-                                        "B":  255,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "lichen_rock",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "lichen_rock":  {
-                                             "MinAltitude":  0.3,
-                                             "MaxAltitude":  1.0,
-                                             "SlopeMin":  20
-                                         }
-                     },
-    "AllowedObjects":  [
-                           "dead_trees"
-                       ],
-    "DominantFlora":  [
-
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "None",
-    "WeatherPatterns":  [
-
-                        ],
-    "AssetTags":  [
-                      "void",
-                      "abstract",
-                      "glitch"
-                  ],
-    "LightingModifier":  0.8,
-    "FeatureDescription":  "The void between worlds — static hums, and reality unravels.",
-    "SpecialFeatures":  [
-                            "Floating terrain",
-                            "distortion"
-                        ],
-    "MusicTag":  "void",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "lichen_rock",
-                          "SubsurfaceTextureId":  "rock_3",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.25,
-                          "DeepDepth":  0.9,
-                          "DepthVariation":  0.1,
-                          "SlopeRockThreshold":  0.5,
-                          "SlopeBlendRange":  0.15
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "gold",
-                                    "OreNoiseFrequency":  9,
-                                    "OreThreshold":  0.85,
-                                    "OreMinDepth":  0.3,
-                                    "OreMaxDepth":  0.9,
-                                    "OreSpawnChance":  0.03
-                                }
-                            ]
-               }
+    "Id": "nullscape",
+    "DisplayName": "Nullscape",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.0,
+            "Moisture": 0.0,
+            "Altitude": 0.5,
+            "Fertility": 0.0,
+            "Roughness": 0.0,
+            "VegetationDensity": 0.0
+        },
+        "Weights": {
+            "WtTemp": 1.2,
+            "WtMoisture": 1.2,
+            "WtElevation": 0.6,
+            "WtFertility": 1.0
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.08,
+            "Frequency": 0.3,
+            "Persistence": 0.2,
+            "Lacunarity": 1.5,
+            "Detail": 0.15,
+            "RidgeWeight": 0.7,
+            "WarpStrength": 0.8,
+            "WarpFrequency": 1.2,
+            "TerracingStrength": 0.7,
+            "TerracingSteps": 4,
+            "CliffStrength": 0.78,
+            "CliffFrequency": 0.5,
+            "CliffSharpness": 0.04,
+            "CliffTiers": 5,
+            "CanyonDepth": 0.85,
+            "CanyonFrequency": 0.9,
+            "CanyonWidth": 0.25
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Type": "Worley",
+            "Frequency": 0.6,
+            "Amplitude": 1.2,
+            "Octaves": 1,
+            "BlendMode": "Max",
+            "Seed": 0,
+            "Enabled": true
+        },
+        {
+            "Type": "Value",
+            "Frequency": 5.0,
+            "Amplitude": 0.35,
+            "Octaves": 3,
+            "Persistence": 0.5,
+            "Lacunarity": 2.5,
+            "BlendMode": "Add",
+            "Seed": 99,
+            "Enabled": true
+        },
+        {
+            "Type": "Ridge",
+            "Frequency": 2.5,
+            "Amplitude": 0.4,
+            "Octaves": 2,
+            "Persistence": 0.4,
+            "BlendMode": "Screen",
+            "Seed": 77,
+            "Enabled": true
+        },
+        {
+            "Type": "Perlin",
+            "Frequency": 1.5,
+            "Amplitude": -0.5,
+            "Octaves": 2,
+            "Persistence": 0.3,
+            "BlendMode": "Min",
+            "Seed": 88,
+            "Enabled": true
+        },
+        {
+            "Type": "Cliff",
+            "Frequency": 0.45,
+            "Amplitude": 0.9,
+            "Octaves": 4,
+            "BlendMode": "Max",
+            "Seed": 109,
+            "Enabled": true
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 0,
+            "G": 0,
+            "B": 0,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 128,
+            "G": 128,
+            "B": 128,
+            "A": 255
+        },
+        "Accent": {
+            "R": 255,
+            "G": 255,
+            "B": 255,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "lichen_rock",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "lichen_rock": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [
+        "dead_trees"
+    ],
+    "DominantFlora": [],
+    "DominantFauna": [],
+    "SurfaceMaterial": "None",
+    "WeatherPatterns": [],
+    "AssetTags": [
+        "void",
+        "abstract",
+        "glitch"
+    ],
+    "LightingModifier": 0.8,
+    "FeatureDescription": "The void between worlds \u2014 static hums, and reality unravels.",
+    "SpecialFeatures": [
+        "Floating terrain",
+        "distortion"
+    ],
+    "MusicTag": "void",
+    "TerrainLayers": {
+        "SurfaceTextureId": "lichen_rock",
+        "SubsurfaceTextureId": "rock_3",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.25,
+        "DeepDepth": 0.9,
+        "DepthVariation": 0.1,
+        "SlopeRockThreshold": 0.5,
+        "SlopeBlendRange": 0.15
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "gold",
+                "OreNoiseFrequency": 9,
+                "OreThreshold": 0.85,
+                "OreMinDepth": 0.3,
+                "OreMaxDepth": 0.9,
+                "OreSpawnChance": 0.03
+            }
+        ]
+    },
+    "BaseHeight": 0.0,
+    "HeightMultiplier": 1.1
 }

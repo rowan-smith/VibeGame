@@ -1,169 +1,186 @@
 {
-    "Id":  "aetherwild_grove",
-    "DisplayName":  "Aetherwild Grove",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.7,
-                                        "Moisture":  0.8,
-                                        "Altitude":  0.3,
-                                        "Fertility":  0.9,
-                                        "Roughness":  0.5,
-                                        "VegetationDensity":  0.9
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  0.9,
-                                           "WtMoisture":  1.2,
-                                           "WtElevation":  0.9,
-                                           "WtFertility":  1.2
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.35,
-                                                  "Frequency":  0.8,
-                                                  "Persistence":  0.45,
-                                                  "Lacunarity":  1.8,
-                                                  "Detail":  0.55,
-                                                  "RidgeWeight":  0.25,
-                                                  "BillowWeight":  0.45,
-                                                  "WarpStrength":  0.35,
-                                                  "WarpFrequency":  0.5,
-                                                  "ErosionStrength":  0.35,
-                                                  "ValleyDepthBias":  0.3,
-                                                  "MicroDetailFrequency":  2.2,
-                                                  "MicroDetailAmplitude":  0.18
-                                              }
-                       },
-    "NoiseLayers":  [
-                        {
-                            "Type":  "Billow",
-                            "Frequency":  0.6,
-                            "Amplitude":  0.55,
-                            "Octaves":  4,
-                            "Persistence":  0.45,
-                            "Lacunarity":  1.9,
-                            "BlendMode":  "Add",
-                            "Seed":  11,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Perlin",
-                            "Frequency":  1.1,
-                            "Amplitude":  0.35,
-                            "Octaves":  3,
-                            "Persistence":  0.4,
-                            "Lacunarity":  2.0,
-                            "BlendMode":  "Add",
-                            "Seed":  23,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Worley",
-                            "Frequency":  1.8,
-                            "Amplitude":  -0.45,
-                            "Octaves":  1,
-                            "BlendMode":  "Min",
-                            "Offset":  0.0,
-                            "Seed":  37,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Value",
-                            "Frequency":  3.5,
-                            "Amplitude":  0.12,
-                            "Octaves":  2,
-                            "Persistence":  0.35,
-                            "BlendMode":  "Screen",
-                            "Seed":  59,
-                            "Enabled":  true
-                        }
-                    ],
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  0,
-                                         "G":  174,
-                                         "B":  239,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  80,
-                                           "G":  200,
-                                           "B":  120,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  181,
-                                        "G":  126,
-                                        "B":  220,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "aerial_rocks",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "aerial_rocks":  {
-                                              "MinAltitude":  0.3,
-                                              "MaxAltitude":  1.0,
-                                              "SlopeMin":  20
-                                          }
-                     },
-    "AllowedObjects":  [
-                           "maple_tree",
-                           "maple_trees",
-                           "birch_trees",
-                           "forest_trees",
-                           "surface_grass"
-                       ],
-    "DominantFlora":  [
-                          "Glowcap Trees",
-                          "Luminous Vines"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Bioluminescent moss",
-    "WeatherPatterns":  [
-                            "Light mist",
-                            "Sparkling pollen drift"
-                        ],
-    "AssetTags":  [
-                      "bioluminescent",
-                      "tree",
-                      "moss",
-                      "vines"
-                  ],
-    "LightingModifier":  1.15,
-    "FeatureDescription":  "A magical jungle pulsing with radiant life, light drifting through the canopy.",
-    "SpecialFeatures":  [
-                            "Floating spores",
-                            "glowing ponds"
-                        ],
-    "MusicTag":  "mystic",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "brown_mud_leaves",
-                          "SubsurfaceTextureId":  "brown_mud",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "lichen_rock",
-                          "SubsurfaceDepth":  0.5,
-                          "DeepDepth":  1.8,
-                          "DepthVariation":  0.4,
-                          "SlopeRockThreshold":  0.3,
-                          "SlopeBlendRange":  0.25
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "coal",
-                                    "OreNoiseFrequency":  5,
-                                    "OreThreshold":  0.7,
-                                    "OreMinDepth":  0.5,
-                                    "OreMaxDepth":  1.4,
-                                    "OreSpawnChance":  0.12
-                                }
-                            ]
-               }
+    "Id": "aetherwild_grove",
+    "DisplayName": "Aetherwild Grove",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.7,
+            "Moisture": 0.8,
+            "Altitude": 0.3,
+            "Fertility": 0.9,
+            "Roughness": 0.5,
+            "VegetationDensity": 0.9
+        },
+        "Weights": {
+            "WtTemp": 0.9,
+            "WtMoisture": 1.2,
+            "WtElevation": 0.9,
+            "WtFertility": 1.2
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.35,
+            "Frequency": 0.8,
+            "Persistence": 0.45,
+            "Lacunarity": 1.8,
+            "Detail": 0.55,
+            "RidgeWeight": 0.3,
+            "BillowWeight": 0.5,
+            "WarpStrength": 0.4,
+            "WarpFrequency": 0.55,
+            "ErosionStrength": 0.35,
+            "ValleyDepthBias": 0.3,
+            "MicroDetailFrequency": 2.2,
+            "MicroDetailAmplitude": 0.18,
+            "ContinentalScale": 0.9,
+            "CliffStrength": 0.22,
+            "CliffFrequency": 0.4,
+            "CliffSharpness": 0.14,
+            "CliffTiers": 4,
+            "CanyonDepth": 0.45,
+            "CanyonFrequency": 0.5,
+            "CanyonWidth": 0.4
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Type": "Billow",
+            "Frequency": 0.6,
+            "Amplitude": 0.55,
+            "Octaves": 4,
+            "Persistence": 0.45,
+            "Lacunarity": 1.9,
+            "BlendMode": "Add",
+            "Seed": 11,
+            "Enabled": true
+        },
+        {
+            "Type": "Perlin",
+            "Frequency": 1.1,
+            "Amplitude": 0.35,
+            "Octaves": 3,
+            "Persistence": 0.4,
+            "Lacunarity": 2.0,
+            "BlendMode": "Add",
+            "Seed": 23,
+            "Enabled": true
+        },
+        {
+            "Type": "Worley",
+            "Frequency": 1.8,
+            "Amplitude": -0.45,
+            "Octaves": 1,
+            "BlendMode": "Min",
+            "Offset": 0.0,
+            "Seed": 37,
+            "Enabled": true
+        },
+        {
+            "Type": "Value",
+            "Frequency": 3.5,
+            "Amplitude": 0.12,
+            "Octaves": 2,
+            "Persistence": 0.35,
+            "BlendMode": "Screen",
+            "Seed": 59,
+            "Enabled": true
+        },
+        {
+            "Type": "Cliff",
+            "Frequency": 0.35,
+            "Amplitude": 0.35,
+            "Octaves": 4,
+            "BlendMode": "Add",
+            "Seed": 91,
+            "Enabled": true
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 0,
+            "G": 174,
+            "B": 239,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 80,
+            "G": 200,
+            "B": 120,
+            "A": 255
+        },
+        "Accent": {
+            "R": 181,
+            "G": 126,
+            "B": 220,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "aerial_rocks",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "aerial_rocks": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [
+        "maple_tree",
+        "maple_trees",
+        "birch_trees",
+        "forest_trees",
+        "surface_grass"
+    ],
+    "DominantFlora": [
+        "Glowcap Trees",
+        "Luminous Vines"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Bioluminescent moss",
+    "WeatherPatterns": [
+        "Light mist",
+        "Sparkling pollen drift"
+    ],
+    "AssetTags": [
+        "bioluminescent",
+        "tree",
+        "moss",
+        "vines"
+    ],
+    "LightingModifier": 1.15,
+    "FeatureDescription": "A magical jungle pulsing with radiant life, light drifting through the canopy.",
+    "SpecialFeatures": [
+        "Floating spores",
+        "glowing ponds"
+    ],
+    "MusicTag": "mystic",
+    "TerrainLayers": {
+        "SurfaceTextureId": "brown_mud_leaves",
+        "SubsurfaceTextureId": "brown_mud",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "lichen_rock",
+        "SubsurfaceDepth": 0.5,
+        "DeepDepth": 1.8,
+        "DepthVariation": 0.4,
+        "SlopeRockThreshold": 0.3,
+        "SlopeBlendRange": 0.25
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "coal",
+                "OreNoiseFrequency": 5,
+                "OreThreshold": 0.7,
+                "OreMinDepth": 0.5,
+                "OreMaxDepth": 1.4,
+                "OreSpawnChance": 0.12
+            }
+        ]
+    },
+    "BaseHeight": 0.0,
+    "HeightMultiplier": 1.0
 }

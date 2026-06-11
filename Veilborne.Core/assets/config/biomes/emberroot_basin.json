@@ -1,179 +1,205 @@
 {
-    "Id":  "emberroot_basin",
-    "DisplayName":  "Emberroot Basin",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.85,
-                                        "Moisture":  0.2,
-                                        "Altitude":  0.4,
-                                        "Fertility":  0.35,
-                                        "Roughness":  0.6,
-                                        "VegetationDensity":  0.3
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.3,
-                                           "WtMoisture":  1.1,
-                                           "WtElevation":  1.0,
-                                           "WtFertility":  0.9
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.5,
-                                                  "Frequency":  1.6,
-                                                  "Persistence":  0.65,
-                                                  "Lacunarity":  2.8,
-                                                  "Detail":  0.85,
-                                                  "RidgeWeight":  0.6,
-                                                  "BillowWeight":  0.3,
-                                                  "WarpStrength":  0.25,
-                                                  "CraterFrequency":  1.0,
-                                                  "CraterDepth":  1.8,
-                                                  "CraterRimHeight":  0.8,
-                                                  "MicroDetailFrequency":  3.5,
-                                                  "MicroDetailAmplitude":  0.25
-                                              }
-                       },
-    "NoiseLayers":  [
-                        {
-                            "Type":  "Ridge",
-                            "Frequency":  2.0,
-                            "Amplitude":  0.5,
-                            "Octaves":  4,
-                            "Persistence":  0.55,
-                            "Lacunarity":  2.6,
-                            "BlendMode":  "Max",
-                            "Seed":  17,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Billow",
-                            "Frequency":  1.2,
-                            "Amplitude":  0.4,
-                            "Octaves":  3,
-                            "Persistence":  0.5,
-                            "Lacunarity":  2.4,
-                            "BlendMode":  "Add",
-                            "Seed":  33,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Worley",
-                            "Frequency":  1.6,
-                            "Amplitude":  -0.9,
-                            "Octaves":  1,
-                            "BlendMode":  "Min",
-                            "Seed":  51,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Value",
-                            "Frequency":  4.0,
-                            "Amplitude":  0.15,
-                            "Octaves":  2,
-                            "Persistence":  0.4,
-                            "BlendMode":  "Screen",
-                            "Seed":  73,
-                            "Enabled":  true
-                        }
-                    ],
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  220,
-                                         "G":  20,
-                                         "B":  60,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  10,
-                                           "G":  10,
-                                           "B":  10,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  255,
-                                        "G":  191,
-                                        "B":  0,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "brown_mud_leaves",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            },
-                            {
-                                "TextureId":  "aerial_rocks",
-                                "BlendMin":  0.0,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.0,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMax":  35
-                                              },
-                         "aerial_rocks":  {
-                                              "SlopeMin":  25
-                                          }
-                     },
-    "AllowedObjects":  [
-
-                       ],
-    "DominantFlora":  [
-                          "Firebloom Shrubs",
-                          "Ember Trees"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Charred Earth",
-    "WeatherPatterns":  [
-                            "Ashfall",
-                            "heat haze"
-                        ],
-    "AssetTags":  [
-                      "lava",
-                      "ash",
-                      "charred-rock"
-                  ],
-    "LightingModifier":  0.9,
-    "FeatureDescription":  "Fire cracks the surface as molten roots pulse beneath scorched ground.",
-    "SpecialFeatures":  [
-                            "Lava vents",
-                            "cracked terrain"
-                        ],
-    "MusicTag":  "volcanic",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "aerial_rocks",
-                          "SubsurfaceTextureId":  "rock_3",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.15,
-                          "DeepDepth":  0.6,
-                          "DepthVariation":  0.3,
-                          "SlopeRockThreshold":  0.2,
-                          "SlopeBlendRange":  0.15
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "iron",
-                                    "OreNoiseFrequency":  5,
-                                    "OreThreshold":  0.65,
-                                    "OreMinDepth":  0.1,
-                                    "OreMaxDepth":  0.5,
-                                    "OreSpawnChance":  0.15
-                                },
-                                {
-                                    "OreType":  "copper",
-                                    "OreNoiseFrequency":  6,
-                                    "OreThreshold":  0.7,
-                                    "OreMinDepth":  0.15,
-                                    "OreMaxDepth":  0.6,
-                                    "OreSpawnChance":  0.12
-                                }
-                            ]
-               }
+    "Id": "emberroot_basin",
+    "DisplayName": "Emberroot Basin",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.85,
+            "Moisture": 0.2,
+            "Altitude": 0.4,
+            "Fertility": 0.35,
+            "Roughness": 0.6,
+            "VegetationDensity": 0.3
+        },
+        "Weights": {
+            "WtTemp": 1.3,
+            "WtMoisture": 1.1,
+            "WtElevation": 1.0,
+            "WtFertility": 0.9
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.5,
+            "Frequency": 1.6,
+            "Persistence": 0.65,
+            "Lacunarity": 2.8,
+            "Detail": 0.85,
+            "RidgeWeight": 0.6,
+            "BillowWeight": 0.3,
+            "WarpStrength": 0.25,
+            "CraterFrequency": 1.0,
+            "CraterDepth": 1.8,
+            "CraterRimHeight": 0.8,
+            "MicroDetailFrequency": 3.5,
+            "MicroDetailAmplitude": 0.25,
+            "ContinentalScale": 1.1,
+            "CliffStrength": 0.58,
+            "CliffFrequency": 0.7,
+            "CliffSharpness": 0.07,
+            "CliffTiers": 4,
+            "CanyonDepth": 1.0,
+            "CanyonFrequency": 0.85,
+            "CanyonWidth": 0.28,
+            "TerracingStrength": 0.35,
+            "TerracingSteps": 5
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Type": "Ridge",
+            "Frequency": 2.0,
+            "Amplitude": 0.5,
+            "Octaves": 4,
+            "Persistence": 0.55,
+            "Lacunarity": 2.6,
+            "BlendMode": "Max",
+            "Seed": 17,
+            "Enabled": true
+        },
+        {
+            "Type": "Billow",
+            "Frequency": 1.2,
+            "Amplitude": 0.4,
+            "Octaves": 3,
+            "Persistence": 0.5,
+            "Lacunarity": 2.4,
+            "BlendMode": "Add",
+            "Seed": 33,
+            "Enabled": true
+        },
+        {
+            "Type": "Worley",
+            "Frequency": 1.6,
+            "Amplitude": -0.9,
+            "Octaves": 1,
+            "BlendMode": "Min",
+            "Seed": 51,
+            "Enabled": true
+        },
+        {
+            "Type": "Value",
+            "Frequency": 4.0,
+            "Amplitude": 0.15,
+            "Octaves": 2,
+            "Persistence": 0.4,
+            "BlendMode": "Screen",
+            "Seed": 73,
+            "Enabled": true
+        },
+        {
+            "Type": "Cliff",
+            "Frequency": 0.55,
+            "Amplitude": 0.6,
+            "Octaves": 4,
+            "BlendMode": "Max",
+            "Seed": 95,
+            "Enabled": true
+        },
+        {
+            "Type": "Canyon",
+            "Frequency": 1.1,
+            "Amplitude": -0.75,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 97,
+            "Enabled": true
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 220,
+            "G": 20,
+            "B": 60,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 10,
+            "G": 10,
+            "B": 10,
+            "A": 255
+        },
+        "Accent": {
+            "R": 255,
+            "G": 191,
+            "B": 0,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "brown_mud_leaves",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        },
+        {
+            "TextureId": "aerial_rocks",
+            "BlendMin": 0.0,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.0,
+            "MaxAltitude": 1.0,
+            "SlopeMax": 35
+        },
+        "aerial_rocks": {
+            "SlopeMin": 25
+        }
+    },
+    "AllowedObjects": [],
+    "DominantFlora": [
+        "Firebloom Shrubs",
+        "Ember Trees"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Charred Earth",
+    "WeatherPatterns": [
+        "Ashfall",
+        "heat haze"
+    ],
+    "AssetTags": [
+        "lava",
+        "ash",
+        "charred-rock"
+    ],
+    "LightingModifier": 0.9,
+    "FeatureDescription": "Fire cracks the surface as molten roots pulse beneath scorched ground.",
+    "SpecialFeatures": [
+        "Lava vents",
+        "cracked terrain"
+    ],
+    "MusicTag": "volcanic",
+    "TerrainLayers": {
+        "SurfaceTextureId": "aerial_rocks",
+        "SubsurfaceTextureId": "rock_3",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.15,
+        "DeepDepth": 0.6,
+        "DepthVariation": 0.3,
+        "SlopeRockThreshold": 0.2,
+        "SlopeBlendRange": 0.15
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "iron",
+                "OreNoiseFrequency": 5,
+                "OreThreshold": 0.65,
+                "OreMinDepth": 0.1,
+                "OreMaxDepth": 0.5,
+                "OreSpawnChance": 0.15
+            },
+            {
+                "OreType": "copper",
+                "OreNoiseFrequency": 6,
+                "OreThreshold": 0.7,
+                "OreMinDepth": 0.15,
+                "OreMaxDepth": 0.6,
+                "OreSpawnChance": 0.12
+            }
+        ]
+    },
+    "BaseHeight": 1.0,
+    "HeightMultiplier": 1.25
 }

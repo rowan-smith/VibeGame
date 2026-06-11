@@ -1,162 +1,177 @@
 {
-    "Id":  "bloodpetal_wilds",
-    "DisplayName":  "Bloodpetal Wilds",
-    "Enabled":  true,
-    "ProceduralData":  {
-                           "Base":  {
-                                        "Temperature":  0.75,
-                                        "Moisture":  0.7,
-                                        "Altitude":  0.2,
-                                        "Fertility":  0.95,
-                                        "Roughness":  0.6,
-                                        "VegetationDensity":  1.0
-                                    },
-                           "Weights":  {
-                                           "WtTemp":  1.0,
-                                           "WtMoisture":  1.2,
-                                           "WtElevation":  0.8,
-                                           "WtFertility":  1.4
-                                       },
-                           "NoiseModifiers":  {
-                                                  "HeightScale":  0.3,
-                                                  "Frequency":  1.2,
-                                                  "Persistence":  0.6,
-                                                  "Lacunarity":  2.2,
-                                                  "Detail":  0.85,
-                                                  "RidgeWeight":  0.35,
-                                                  "BillowWeight":  0.55,
-                                                  "WarpStrength":  0.5,
-                                                  "WarpFrequency":  0.65,
-                                                  "ErosionStrength":  0.25,
-                                                  "ValleyDepthBias":  0.45,
-                                                  "MicroDetailFrequency":  3.0,
-                                                  "MicroDetailAmplitude":  0.22
-                                              }
-                       },
-    "NoiseLayers":  [
-                        {
-                            "Type":  "Billow",
-                            "Frequency":  0.9,
-                            "Amplitude":  0.65,
-                            "Octaves":  5,
-                            "Persistence":  0.55,
-                            "Lacunarity":  2.3,
-                            "BlendMode":  "Add",
-                            "Seed":  13,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Ridge",
-                            "Frequency":  1.4,
-                            "Amplitude":  0.3,
-                            "Octaves":  3,
-                            "Persistence":  0.5,
-                            "Lacunarity":  2.5,
-                            "BlendMode":  "Add",
-                            "Seed":  29,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Worley",
-                            "Frequency":  2.2,
-                            "Amplitude":  -0.55,
-                            "Octaves":  1,
-                            "BlendMode":  "Min",
-                            "Seed":  41,
-                            "Enabled":  true
-                        },
-                        {
-                            "Type":  "Perlin",
-                            "Frequency":  2.8,
-                            "Amplitude":  0.2,
-                            "Octaves":  2,
-                            "Persistence":  0.4,
-                            "BlendMode":  "Multiply",
-                            "Seed":  67,
-                            "Enabled":  true
-                        }
-                    ],
-    "ColorPalette":  {
-                         "Primary":  {
-                                         "R":  220,
-                                         "G":  20,
-                                         "B":  60,
-                                         "A":  255
-                                     },
-                         "Secondary":  {
-                                           "R":  10,
-                                           "G":  10,
-                                           "B":  10,
-                                           "A":  255
-                                       },
-                         "Accent":  {
-                                        "R":  0,
-                                        "G":  100,
-                                        "B":  0,
-                                        "A":  255
-                                    }
-                     },
-    "SurfaceTextures":  [
-                            {
-                                "TextureId":  "brown_mud_leaves",
-                                "BlendMin":  0.5,
-                                "BlendMax":  1.0
-                            }
-                        ],
-    "TextureRules":  {
-                         "brown_mud_leaves":  {
-                                                  "MinAltitude":  0.3,
-                                                  "MaxAltitude":  1.0,
-                                                  "SlopeMin":  20
-                                              }
-                     },
-    "AllowedObjects":  [
-
-                       ],
-    "DominantFlora":  [
-                          "Bloodvines",
-                          "Carnivorous Petal Trees"
-                      ],
-    "DominantFauna":  [
-
-                      ],
-    "SurfaceMaterial":  "Dark Soil",
-    "WeatherPatterns":  [
-                            "Red mist",
-                            "heavy rain"
-                        ],
-    "AssetTags":  [
-                      "organic",
-                      "vines",
-                      "overgrowth"
-                  ],
-    "LightingModifier":  0.9,
-    "FeatureDescription":  "A lush jungle of beauty and horror, where every flower hungers.",
-    "SpecialFeatures":  [
-                            "Plant-based predators"
-                        ],
-    "MusicTag":  "jungle",
-    "TerrainLayers":  {
-                          "SurfaceTextureId":  "brown_mud_leaves",
-                          "SubsurfaceTextureId":  "brown_mud",
-                          "DeepTextureId":  "rock_3",
-                          "SlopeTextureId":  "rock_3",
-                          "SubsurfaceDepth":  0.5,
-                          "DeepDepth":  1.6,
-                          "DepthVariation":  0.5,
-                          "SlopeRockThreshold":  0.45,
-                          "SlopeBlendRange":  0.2
-                      },
-    "Mining":  {
-                   "Ores":  [
-                                {
-                                    "OreType":  "coal",
-                                    "OreNoiseFrequency":  5,
-                                    "OreThreshold":  0.68,
-                                    "OreMinDepth":  0.4,
-                                    "OreMaxDepth":  1.3,
-                                    "OreSpawnChance":  0.12
-                                }
-                            ]
-               }
+    "Id": "bloodpetal_wilds",
+    "DisplayName": "Bloodpetal Wilds",
+    "Enabled": true,
+    "ProceduralData": {
+        "Base": {
+            "Temperature": 0.75,
+            "Moisture": 0.7,
+            "Altitude": 0.2,
+            "Fertility": 0.95,
+            "Roughness": 0.6,
+            "VegetationDensity": 1.0
+        },
+        "Weights": {
+            "WtTemp": 1.0,
+            "WtMoisture": 1.2,
+            "WtElevation": 0.8,
+            "WtFertility": 1.4
+        },
+        "NoiseModifiers": {
+            "HeightScale": 0.3,
+            "Frequency": 1.2,
+            "Persistence": 0.6,
+            "Lacunarity": 2.2,
+            "Detail": 0.85,
+            "RidgeWeight": 0.35,
+            "BillowWeight": 0.55,
+            "WarpStrength": 0.5,
+            "WarpFrequency": 0.65,
+            "ErosionStrength": 0.25,
+            "ValleyDepthBias": 0.45,
+            "MicroDetailFrequency": 3.0,
+            "MicroDetailAmplitude": 0.22,
+            "ContinentalScale": 0.7,
+            "CliffStrength": 0.32,
+            "CliffFrequency": 0.55,
+            "CliffSharpness": 0.11,
+            "CliffTiers": 5,
+            "CanyonDepth": 0.55,
+            "CanyonFrequency": 0.65,
+            "CanyonWidth": 0.32
+        }
+    },
+    "NoiseLayers": [
+        {
+            "Type": "Billow",
+            "Frequency": 0.9,
+            "Amplitude": 0.65,
+            "Octaves": 5,
+            "Persistence": 0.55,
+            "Lacunarity": 2.3,
+            "BlendMode": "Add",
+            "Seed": 13,
+            "Enabled": true
+        },
+        {
+            "Type": "Ridge",
+            "Frequency": 1.4,
+            "Amplitude": 0.3,
+            "Octaves": 3,
+            "Persistence": 0.5,
+            "Lacunarity": 2.5,
+            "BlendMode": "Add",
+            "Seed": 29,
+            "Enabled": true
+        },
+        {
+            "Type": "Worley",
+            "Frequency": 2.2,
+            "Amplitude": -0.55,
+            "Octaves": 1,
+            "BlendMode": "Min",
+            "Seed": 41,
+            "Enabled": true
+        },
+        {
+            "Type": "Perlin",
+            "Frequency": 2.8,
+            "Amplitude": 0.2,
+            "Octaves": 2,
+            "Persistence": 0.4,
+            "BlendMode": "Multiply",
+            "Seed": 67,
+            "Enabled": true
+        },
+        {
+            "Type": "Canyon",
+            "Frequency": 0.9,
+            "Amplitude": -0.5,
+            "Octaves": 4,
+            "BlendMode": "Add",
+            "Seed": 93,
+            "Enabled": true
+        }
+    ],
+    "ColorPalette": {
+        "Primary": {
+            "R": 220,
+            "G": 20,
+            "B": 60,
+            "A": 255
+        },
+        "Secondary": {
+            "R": 10,
+            "G": 10,
+            "B": 10,
+            "A": 255
+        },
+        "Accent": {
+            "R": 0,
+            "G": 100,
+            "B": 0,
+            "A": 255
+        }
+    },
+    "SurfaceTextures": [
+        {
+            "TextureId": "brown_mud_leaves",
+            "BlendMin": 0.5,
+            "BlendMax": 1.0
+        }
+    ],
+    "TextureRules": {
+        "brown_mud_leaves": {
+            "MinAltitude": 0.3,
+            "MaxAltitude": 1.0,
+            "SlopeMin": 20
+        }
+    },
+    "AllowedObjects": [],
+    "DominantFlora": [
+        "Bloodvines",
+        "Carnivorous Petal Trees"
+    ],
+    "DominantFauna": [],
+    "SurfaceMaterial": "Dark Soil",
+    "WeatherPatterns": [
+        "Red mist",
+        "heavy rain"
+    ],
+    "AssetTags": [
+        "organic",
+        "vines",
+        "overgrowth"
+    ],
+    "LightingModifier": 0.9,
+    "FeatureDescription": "A lush jungle of beauty and horror, where every flower hungers.",
+    "SpecialFeatures": [
+        "Plant-based predators"
+    ],
+    "MusicTag": "jungle",
+    "TerrainLayers": {
+        "SurfaceTextureId": "brown_mud_leaves",
+        "SubsurfaceTextureId": "brown_mud",
+        "DeepTextureId": "rock_3",
+        "SlopeTextureId": "rock_3",
+        "SubsurfaceDepth": 0.5,
+        "DeepDepth": 1.6,
+        "DepthVariation": 0.5,
+        "SlopeRockThreshold": 0.45,
+        "SlopeBlendRange": 0.2
+    },
+    "Mining": {
+        "Ores": [
+            {
+                "OreType": "coal",
+                "OreNoiseFrequency": 5,
+                "OreThreshold": 0.68,
+                "OreMinDepth": 0.4,
+                "OreMaxDepth": 1.3,
+                "OreSpawnChance": 0.12
+            }
+        ]
+    },
+    "BaseHeight": 0.0,
+    "HeightMultiplier": 1.15
 }
