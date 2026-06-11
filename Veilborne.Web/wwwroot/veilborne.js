@@ -435,7 +435,7 @@ window.veilborne = {
         drawImage: function(key, x, y, w, h) {
             this.executeBatch([{ t: 2, x: x, y: y, w: w, h: h, s: key }]);
         },
-        drawTerrainBatchFlat: function(data, triCount) {
+        drawTerrainBatchFlat8: function(data, triCount) {
             if (!data || triCount <= 0) return;
             const canvas = document.getElementById('veilborne-terrain-canvas');
             if (!canvas) return;
@@ -443,24 +443,26 @@ window.veilborne = {
                 this._terrainCtx = canvas.getContext('2d');
             }
             const ctx = this._terrainCtx;
-            if (!ctx) return;
+            const patterns = window.veilborne._terrainPatternData;
+            if (!ctx || !patterns) return;
 
             let lastStyle = '';
             for (let i = 0; i < triCount; i++) {
-                const o = i * 7;
-                const c = data[o];
-                const r = (c >> 16) & 255;
-                const g = (c >> 8) & 255;
-                const b = c & 255;
-                const style = 'rgb(' + r + ',' + g + ',' + b + ')';
+                const o = i * 9;
+                const texIdx = data[o];
+                const u = data[o + 1] & 255;
+                const v = data[o + 2] & 255;
+                const pdata = patterns[texIdx] || patterns[0];
+                const pi = (v * 256 + u) * 4;
+                const style = 'rgb(' + pdata[pi] + ',' + pdata[pi + 1] + ',' + pdata[pi + 2] + ')';
                 if (style !== lastStyle) {
                     ctx.fillStyle = style;
                     lastStyle = style;
                 }
                 ctx.beginPath();
-                ctx.moveTo(data[o + 1], data[o + 2]);
-                ctx.lineTo(data[o + 3], data[o + 4]);
+                ctx.moveTo(data[o + 3], data[o + 4]);
                 ctx.lineTo(data[o + 5], data[o + 6]);
+                ctx.lineTo(data[o + 7], data[o + 8]);
                 ctx.closePath();
                 ctx.fill();
             }
@@ -479,6 +481,107 @@ window.veilborne = {
                 }
             }
             this.drawUiOverlay();
+        }
+    },
+
+    _terrainPatternData: null,
+    _terrainInitDone: false,
+
+    initTerrainTextures: function() {
+        if (this._terrainInitDone) return;
+        this._terrainInitDone = true;
+
+        const defs = [
+            { id: 'brown_mud_leaves', base: [38, 62, 28], accent: [72, 98, 42], speck: [18, 32, 12] },
+            { id: 'aerial_rocks', base: [88, 86, 80], accent: [118, 114, 106], speck: [52, 50, 48] },
+            { id: 'lichen_rock', base: [72, 82, 62], accent: [98, 108, 78], speck: [48, 58, 38] },
+            { id: 'brown_mud', base: [82, 58, 34], accent: [102, 74, 44], speck: [58, 38, 22] },
+            { id: 'rock_3', base: [58, 56, 54], accent: [82, 78, 72], speck: [34, 32, 30] },
+            { id: 'snow', base: [220, 228, 238], accent: [245, 248, 252], speck: [180, 190, 210] }
+        ];
+
+        const albedoUrls = [
+            'assets/textures/terrain/brown_mud_leaves/brown_mud_leaves_01_diff_4k.png',
+            'assets/textures/terrain/aerial_rocks/aerial_rocks_04_diff_4k.png',
+            'assets/textures/terrain/lichen_rock/lichen_rock_diff_4k.png',
+            'assets/textures/terrain/brown_mud/brown_mud_02_diff_4k.jpg',
+            'assets/textures/terrain/rock_3/rock_3_diff_4k.jpg',
+            'assets/textures/terrain/snow/snow_02_diff_4k.png'
+        ];
+
+        this._terrainPatternData = [];
+        const size = 256;
+
+        function hash(x, y) {
+            let n = (x * 374761393 + y * 668265263) | 0;
+            n = ((n ^ (n >> 13)) * 1274126177) | 0;
+            return (n & 0xffffff) / 0xffffff;
+        }
+
+        function fbm(x, y, oct) {
+            let sum = 0, amp = 0.55, freq = 1;
+            for (let i = 0; i < oct; i++) {
+                sum += hash(Math.floor(x * freq * 32), Math.floor(y * freq * 32)) * amp;
+                freq *= 2.1;
+                amp *= 0.5;
+            }
+            return sum;
+        }
+
+        function makeProcedural(def) {
+            const data = new Uint8ClampedArray(size * size * 4);
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const nx = x / size;
+                    const ny = y / size;
+                    const n = fbm(nx * 4, ny * 4, 4);
+                    const n2 = fbm(nx * 9 + 1.3, ny * 9 - 0.7, 2);
+                    const n3 = hash(x, y);
+                    let r = def.base[0] + (def.accent[0] - def.base[0]) * n;
+                    let g = def.base[1] + (def.accent[1] - def.base[1]) * n2;
+                    let b = def.base[2] + (def.accent[2] - def.base[2]) * n;
+                    if (n3 > 0.88) {
+                        r = def.speck[0];
+                        g = def.speck[1];
+                        b = def.speck[2];
+                    }
+                    const i = (y * size + x) * 4;
+                    data[i] = Math.min(255, Math.max(0, r | 0));
+                    data[i + 1] = Math.min(255, Math.max(0, g | 0));
+                    data[i + 2] = Math.min(255, Math.max(0, b | 0));
+                    data[i + 3] = 255;
+                }
+            }
+            return data;
+        }
+
+        function downscaleImageData(img, targetSize) {
+            const tmp = document.createElement('canvas');
+            tmp.width = targetSize;
+            tmp.height = targetSize;
+            const tctx = tmp.getContext('2d');
+            tctx.drawImage(img, 0, 0, targetSize, targetSize);
+            return tctx.getImageData(0, 0, targetSize, targetSize).data;
+        }
+
+        for (let i = 0; i < defs.length; i++) {
+            this._terrainPatternData[i] = makeProcedural(defs[i]);
+        }
+
+        for (let i = 0; i < albedoUrls.length; i++) {
+            (function(idx, url) {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = function() {
+                    try {
+                        window.veilborne._terrainPatternData[idx] = downscaleImageData(img, size);
+                    } catch (e) {
+                        console.warn('[veilborne] terrain texture load failed', url);
+                    }
+                };
+                img.onerror = function() { /* keep procedural fallback */ };
+                img.src = '/' + url;
+            })(i, albedoUrls[i]);
         }
     }
 };

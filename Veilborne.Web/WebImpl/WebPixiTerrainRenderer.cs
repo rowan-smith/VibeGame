@@ -4,28 +4,39 @@ using Veilborne;
 using Veilborne.Biomes;
 using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
+using Veilborne.TerrainTexture;
 
 namespace Veilborne.Web.WebImpl;
 
 /// <summary>
-/// Projects terrain heightmaps to screen-space triangles and draws them via Canvas 2D.
-/// Uses a flat int buffer for fast WASM→JS interop (no per-triangle JSON objects).
+/// Projects terrain to screen-space triangles. Texture detail comes from JS tile
+/// patterns — C# only sends texture index + UV and screen coordinates.
 /// </summary>
 public sealed class WebPixiTerrainRenderer : ITerrainRenderer
 {
-    private const int GridStep = 8;
-    private const int MaxTriangles = 1500;
-    private const int FloatsPerTriangle = 7; // color, x1, y1, x2, y2, x3, y3
+    private const int GridStep = 10;
+    private const int MaxTriangles = 1200;
+    private const int IntsPerTriangle = 9; // texIdx, u, v, x1,y1,x2,y2,x3,y3
+
+    private static readonly Dictionary<string, int> TextureIndex = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["brown_mud_leaves"] = 0,
+        ["aerial_rocks"] = 1,
+        ["lichen_rock"] = 2,
+        ["brown_mud"] = 3,
+        ["rock_3"] = 4,
+        ["snow"] = 5,
+    };
 
     private readonly IJSInProcessRuntime _js;
     private readonly IGraphicsProvider _graphics;
-    private readonly WebTerrainProceduralTextures _textures;
+    private readonly ITerrainTextureRegistry _textureRegistry;
     private readonly List<PendingChunk> _pending = new(8);
-    private readonly List<int> _triangleBuffer = new(MaxTriangles * FloatsPerTriangle);
+    private readonly List<int> _triangleBuffer = new(MaxTriangles * IntsPerTriangle);
+    private readonly Dictionary<ChunkColorKey, GridSampleCache> _gridCache = new();
     private int[] _jsBuffer = Array.Empty<int>();
+    private bool _texturesInitialized;
 
-    private Vector4 _tint = Vector4.One;
-    private Vector3 _biomeColor = new(0.35f, 0.55f, 0.28f);
     private string _primaryTexId = "brown_mud_leaves";
     private string _secondaryTexId = "";
     private float _secondaryTexBlend;
@@ -40,18 +51,15 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
     private float _screenH;
     private bool _cameraReady;
 
-    public WebPixiTerrainRenderer(IJSRuntime js, IGraphicsProvider graphics, WebTerrainProceduralTextures textures)
+    public WebPixiTerrainRenderer(IJSRuntime js, IGraphicsProvider graphics, ITerrainTextureRegistry textureRegistry)
     {
         _js = (IJSInProcessRuntime)js;
         _graphics = graphics;
-        _textures = textures;
+        _textureRegistry = textureRegistry;
     }
 
-    public void Render(float[,] heights, float tileSize, CameraComponent camera, Vector3 baseColor)
-    {
-        _biomeColor = baseColor;
+    public void Render(float[,] heights, float tileSize, CameraComponent camera, Vector3 baseColor) =>
         RenderAt(heights, tileSize, Vector2.Zero, camera);
-    }
 
     public void RenderAt(float[,] heights, float tileSize, Vector2 originWorld, CameraComponent camera) =>
         RenderAt(heights, tileSize, originWorld, camera, null, null);
@@ -64,6 +72,7 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         if (heights == null || heights.Length == 0)
             return;
 
+        EnsureTerrainTextures();
         _pending.Add(new PendingChunk(heights, tileSize, originWorld));
         EnsureCamera(camera);
     }
@@ -71,8 +80,6 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
     public void ApplyBiomeTextures(BiomeData biome)
     {
         if (biome == null) return;
-        var c = biome.Color;
-        _biomeColor = new Vector3(c.R / 255f, c.G / 255f, c.B / 255f);
         _primaryTexId = ResolveTextureId(biome);
         _secondaryTexId = "";
         _secondaryTexBlend = 0f;
@@ -81,39 +88,24 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
     public void ApplyBiomeBlendTextures(BiomeData primary, BiomeData? secondary, float secondaryBlend)
     {
         if (primary == null) return;
-        var pc = primary.Color;
-        var primaryColor = new Vector3(pc.R / 255f, pc.G / 255f, pc.B / 255f);
         _primaryTexId = ResolveTextureId(primary);
         _secondaryTexBlend = Math.Clamp(secondaryBlend, 0f, 1f);
         if (secondary != null && _secondaryTexBlend > 0.01f)
-        {
-            var sc = secondary.Color;
-            var secondaryColor = new Vector3(sc.R / 255f, sc.G / 255f, sc.B / 255f);
-            _biomeColor = Vector3.Lerp(primaryColor, secondaryColor, _secondaryTexBlend);
             _secondaryTexId = ResolveTextureId(secondary);
-        }
         else
         {
-            _biomeColor = primaryColor;
             _secondaryTexId = "";
             _secondaryTexBlend = 0f;
         }
     }
 
-    private static string ResolveTextureId(BiomeData biome)
-    {
-        var layers = biome.SurfaceTextures;
-        if (layers is { Count: > 0 } && !string.IsNullOrWhiteSpace(layers[0].TextureId))
-            return layers[0].TextureId;
-        return "brown_mud_leaves";
-    }
-
-    public void SetColorTint(Vector4 color) => _tint = color;
+    public void SetColorTint(Vector4 color) { }
     public void BuildChunks(float[,] heights, float tileSize, Vector2 originWorld) { }
     public void EnqueueBuild(float[,] heights, float tileSize, Vector2 originWorld) { }
     public void ProcessBuildQueue(int maxPerFrame) { }
-    public void MarkOriginDirty(Vector2 originWorld) { }
-    public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1) { }
+    public void MarkOriginDirty(Vector2 originWorld) => RemoveCacheForOrigin(originWorld.X, originWorld.Y);
+    public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1) =>
+        RemoveCacheForOrigin(originWorld.X, originWorld.Y);
 
     public void Flush()
     {
@@ -121,30 +113,42 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
             return;
 
         _triangleBuffer.Clear();
+        int primaryIdx = ResolveTextureIndex(_primaryTexId);
+        int secondaryIdx = ResolveTextureIndex(_secondaryTexId);
+
         foreach (var chunk in _pending)
         {
-            if (_triangleBuffer.Count / FloatsPerTriangle >= MaxTriangles)
+            if (_triangleBuffer.Count / IntsPerTriangle >= MaxTriangles)
                 break;
-            BuildTriangles(chunk);
+            BuildTriangles(chunk, primaryIdx, secondaryIdx);
         }
 
-        int triCount = _triangleBuffer.Count / FloatsPerTriangle;
+        int triCount = _triangleBuffer.Count / IntsPerTriangle;
         if (triCount > 0)
         {
             if (_jsBuffer.Length < _triangleBuffer.Count)
                 _jsBuffer = new int[_triangleBuffer.Count];
             _triangleBuffer.CopyTo(_jsBuffer, 0);
-            _js.InvokeVoid("veilborne.pixi.drawTerrainBatchFlat", _jsBuffer, triCount);
+            _js.InvokeVoid("veilborne.pixi.drawTerrainBatchFlat8", _jsBuffer, triCount);
         }
 
         _pending.Clear();
         _cameraReady = false;
+
+        if (_gridCache.Count > 64)
+            _gridCache.Clear();
+    }
+
+    private void EnsureTerrainTextures()
+    {
+        if (_texturesInitialized) return;
+        _js.InvokeVoid("veilborne.initTerrainTextures");
+        _texturesInitialized = true;
     }
 
     private void EnsureCamera(CameraComponent camera)
     {
         if (_cameraReady) return;
-
         _camForward = Vector3.Normalize(camera.Target - camera.Position);
         _camRight = Vector3.Normalize(Vector3.Cross(_camForward, camera.Up));
         _camUp = Vector3.Normalize(Vector3.Cross(_camRight, _camForward));
@@ -161,7 +165,7 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         _cameraReady = true;
     }
 
-    private void BuildTriangles(PendingChunk chunk)
+    private void BuildTriangles(PendingChunk chunk, int primaryIdx, int secondaryIdx)
     {
         var heights = chunk.Heights;
         int width = heights.GetLength(0);
@@ -173,9 +177,16 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         int gridH = (depth - 1) / GridStep + 1;
         int gridCount = gridW * gridH;
 
-        Span<int> px = gridCount <= 256 ? stackalloc int[gridCount] : new int[gridCount];
-        Span<int> py = gridCount <= 256 ? stackalloc int[gridCount] : new int[gridCount];
-        Span<bool> ok = gridCount <= 256 ? stackalloc bool[gridCount] : new bool[gridCount];
+        var cacheKey = new ChunkColorKey(chunk.Origin.X, chunk.Origin.Y, _primaryTexId, _secondaryTexId, _secondaryTexBlend);
+        if (!_gridCache.TryGetValue(cacheKey, out var samples))
+        {
+            samples = BuildGridSamples(chunk, gridW, gridH, primaryIdx, secondaryIdx);
+            _gridCache[cacheKey] = samples;
+        }
+
+        Span<int> px = gridCount <= 128 ? stackalloc int[gridCount] : new int[gridCount];
+        Span<int> py = gridCount <= 128 ? stackalloc int[gridCount] : new int[gridCount];
+        Span<bool> ok = gridCount <= 128 ? stackalloc bool[gridCount] : new bool[gridCount];
 
         for (int gz = 0; gz < gridH; gz++)
         {
@@ -200,7 +211,7 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         {
             for (int gx = 0; gx < gridW - 1; gx++)
             {
-                if (_triangleBuffer.Count / FloatsPerTriangle >= MaxTriangles)
+                if (_triangleBuffer.Count / IntsPerTriangle >= MaxTriangles)
                     return;
 
                 int i00 = gz * gridW + gx;
@@ -211,27 +222,59 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
                 if (!ok[i00] && !ok[i10] && !ok[i01] && !ok[i11])
                     continue;
 
-                int ix0 = Math.Min(gx * GridStep, width - 1);
-                int iz0 = Math.Min(gz * GridStep, depth - 1);
-                int ix1 = Math.Min((gx + 1) * GridStep, width - 1);
-                int iz1 = Math.Min((gz + 1) * GridStep, depth - 1);
-
-                float avgH = (heights[ix0, iz0] + heights[ix1, iz0] + heights[ix0, iz1] + heights[ix1, iz1]) * 0.25f;
-                float wx = chunk.Origin.X + (ix0 + ix1) * 0.5f * chunk.TileSize;
-                float wz = chunk.Origin.Y + (iz0 + iz1) * 0.5f * chunk.TileSize;
-                int color = SampleTerrainColor(wx, wz, avgH);
+                int texIdx = samples.TexIdx[i00];
+                int u = samples.U[i00];
+                int v = samples.V[i00];
 
                 if (ok[i00] && ok[i10] && ok[i01])
-                    AddTriangle(color, px[i00], py[i00], px[i10], py[i10], px[i01], py[i01]);
+                    AddTriangle(texIdx, u, v, px[i00], py[i00], px[i10], py[i10], px[i01], py[i01]);
                 if (ok[i10] && ok[i11] && ok[i01])
-                    AddTriangle(color, px[i10], py[i10], px[i11], py[i11], px[i01], py[i01]);
+                    AddTriangle(texIdx, u, v, px[i10], py[i10], px[i11], py[i11], px[i01], py[i01]);
             }
         }
     }
 
-    private void AddTriangle(int color, int x1, int y1, int x2, int y2, int x3, int y3)
+    private GridSampleCache BuildGridSamples(PendingChunk chunk, int gridW, int gridH, int primaryIdx, int secondaryIdx)
     {
-        _triangleBuffer.Add(color);
+        int count = gridW * gridH;
+        var tex = new int[count];
+        var u = new int[count];
+        var v = new int[count];
+        var heights = chunk.Heights;
+        int width = heights.GetLength(0);
+        int depth = heights.GetLength(1);
+
+        for (int gz = 0; gz < gridH; gz++)
+        {
+            int iz = Math.Min(gz * GridStep, depth - 1);
+            for (int gx = 0; gx < gridW; gx++)
+            {
+                int ix = Math.Min(gx * GridStep, width - 1);
+                int idx = gz * gridW + gx;
+                float wx = chunk.Origin.X + ix * chunk.TileSize;
+                float wz = chunk.Origin.Y + iz * chunk.TileSize;
+                float tileWorld = _textureRegistry.GetTileSizeOrDefault(_primaryTexId, 6f);
+                float uvScale = 256f / Math.Max(tileWorld, 0.5f);
+
+                int pu = (int)(MathF.Abs(wx * uvScale) % 256f);
+                int pv = (int)(MathF.Abs(wz * uvScale) % 256f);
+                u[idx] = pu;
+                v[idx] = pv;
+                tex[idx] = primaryIdx;
+
+                if (_secondaryTexBlend > 0.01f && secondaryIdx >= 0)
+                    tex[idx] = _secondaryTexBlend > 0.5f ? secondaryIdx : primaryIdx;
+            }
+        }
+
+        return new GridSampleCache(tex, u, v);
+    }
+
+    private void AddTriangle(int texIdx, int u, int v, int x1, int y1, int x2, int y2, int x3, int y3)
+    {
+        _triangleBuffer.Add(texIdx);
+        _triangleBuffer.Add(u);
+        _triangleBuffer.Add(v);
         _triangleBuffer.Add(x1);
         _triangleBuffer.Add(y1);
         _triangleBuffer.Add(x2);
@@ -240,36 +283,22 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         _triangleBuffer.Add(y3);
     }
 
-    private int SampleTerrainColor(float worldX, float worldZ, float height)
+    private static string ResolveTextureId(BiomeData biome)
     {
-        int primary = _textures.Sample(_primaryTexId, worldX, worldZ, height, _biomeColor);
-        if (_secondaryTexBlend > 0.01f && !string.IsNullOrEmpty(_secondaryTexId))
-        {
-            int secondary = _textures.Sample(_secondaryTexId, worldX, worldZ, height, _biomeColor);
-            return LerpRgb(primary, secondary, _secondaryTexBlend);
-        }
-        return ApplyTint(primary);
+        var layers = biome.SurfaceTextures;
+        if (layers is { Count: > 0 } && !string.IsNullOrWhiteSpace(layers[0].TextureId))
+            return layers[0].TextureId;
+        return "brown_mud_leaves";
     }
 
-    private int ApplyTint(int rgb)
-    {
-        int r = (rgb >> 16) & 255;
-        int g = (rgb >> 8) & 255;
-        int b = rgb & 255;
-        r = (int)Math.Clamp(r * _tint.X, 0, 255);
-        g = (int)Math.Clamp(g * _tint.Y, 0, 255);
-        b = (int)Math.Clamp(b * _tint.Z, 0, 255);
-        return (r << 16) | (g << 8) | b;
-    }
+    private static int ResolveTextureIndex(string id) =>
+        TextureIndex.TryGetValue(id, out int idx) ? idx : 0;
 
-    private static int LerpRgb(int a, int b, float t)
+    private void RemoveCacheForOrigin(float originX, float originZ)
     {
-        int ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
-        int br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
-        int r = (int)(ar + (br - ar) * t);
-        int g = (int)(ag + (bg - ag) * t);
-        int bl = (int)(ab + (bb - ab) * t);
-        return (r << 16) | (g << 8) | bl;
+        var keys = _gridCache.Keys.Where(k => MathF.Abs(k.OriginX - originX) < 0.01f && MathF.Abs(k.OriginZ - originZ) < 0.01f).ToList();
+        foreach (var key in keys)
+            _gridCache.Remove(key);
     }
 
     private bool TryProject(float wx, float wy, float wz, out int sx, out int sy)
@@ -303,4 +332,20 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
     }
 
     private readonly record struct PendingChunk(float[,] Heights, float TileSize, Vector2 Origin);
+
+    private readonly record struct ChunkColorKey(float OriginX, float OriginZ, string PrimaryTex, string SecondaryTex, float Blend);
+
+    private sealed class GridSampleCache
+    {
+        public GridSampleCache(int[] texIdx, int[] u, int[] v)
+        {
+            TexIdx = texIdx;
+            U = u;
+            V = v;
+        }
+
+        public int[] TexIdx { get; }
+        public int[] U { get; }
+        public int[] V { get; }
+    }
 }
