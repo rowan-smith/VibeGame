@@ -1,0 +1,41 @@
+{
+  "WorldObjects": [
+    {
+      "Id": "surface_grass",
+      "DisplayName": "Surface Grass",
+      "Description": "Short surface grass patches for biome floors.",
+      "Category": "Foliage",
+      "SpawnRules": {
+        "BiomeIds": ["aetherwild_grove", "solaris_steppe", "verdigris_expanse", "glimmerfall_ridge"],
+        "SpawnDensity": 0.65,
+        "AltitudeRange": [0.0, 1.0],
+        "TemperatureRange": [0.2, 1.0],
+        "MoistureRange": [0.1, 1.0],
+        "ClusterRadius": 0
+      },
+      "Physics": {
+        "CollisionType": "Static",
+        "Interactable": false,
+        "Mass": 1,
+        "AreaRadius": 0.2,
+        "ColliderRadius": 0.0
+      },
+      "Assets": {
+        "Models": [
+          { "Path": "models/world/foliage/grass.glb", "Weight": 1.0, "Rotation": 0 }
+        ]
+      },
+      "Visual": {
+        "SeasonalTint": {
+          "Spring": [0.95, 1.0, 0.95],
+          "Summer": [1.0, 1.0, 1.0],
+          "Autumn": [0.95, 0.9, 0.75],
+          "Winter": [0.85, 0.9, 0.85]
+        },
+        "BaseScale": [2.2, 2.2, 2.2],
+        "ScaleVariance": 0.35,
+        "RandomRotationY": true
+      }
+    }
+  ]
+}

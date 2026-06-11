@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "textures": [
+    {
+      "id": "brown_mud_leaves",
+      "index": 0,
+      "path": "assets/textures/terrain/brown_mud_leaves/albedo_web.jpg",
+      "tileSize": 6,
+      "source": "downscaled"
+    },
+    {
+      "id": "aerial_rocks",
+      "index": 1,
+      "path": "assets/textures/terrain/aerial_rocks/albedo_web.jpg",
+      "tileSize": 8,
+      "source": "downscaled"
+    },
+    {
+      "id": "lichen_rock",
+      "index": 2,
+      "path": "assets/textures/terrain/lichen_rock/albedo_web.jpg",
+      "tileSize": 8,
+      "source": "downscaled"
+    },
+    {
+      "id": "brown_mud",
+      "index": 3,
+      "path": "assets/textures/terrain/brown_mud/albedo_web.jpg",
+      "tileSize": 6,
+      "source": "downscaled"
+    },
+    {
+      "id": "rock_3",
+      "index": 4,
+      "path": "assets/textures/terrain/rock_3/albedo_web.jpg",
+      "tileSize": 7,
+      "source": "downscaled"
+    },
+    {
+      "id": "snow",
+      "index": 5,
+      "path": "assets/textures/terrain/snow/albedo_web.jpg",
+      "tileSize": 8,
+      "source": "downscaled"
+    }
+  ]
+}

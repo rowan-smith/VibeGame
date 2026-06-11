@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <RootNamespace>Veilborne.Web</RootNamespace>
+    <WebTerrainTextureSize>512</WebTerrainTextureSize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Veilborne.Core\Veilborne.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KNI.Extended" Version="5.5.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.5" PrivateAssets="all" />
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Sinks.BrowserConsole" Version="2.1.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0" />
+  </ItemGroup>
+
+  <Target Name="DownscaleWebTerrainTextures" BeforeTargets="CopySharedAssets">
+    <Message Text="Preparing web terrain textures (downscale or procedural fallback)..." Importance="high" />
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
+          Command="dotnet run --project &quot;$(MSBuildProjectDirectory)/../tools/DownscaleWebTerrainTextures/DownscaleWebTerrainTextures.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/..&quot; $(WebTerrainTextureSize)" />
+  </Target>
+
+  <Target Name="CopySharedAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
+    <ItemGroup>
+      <CoreAssets Include="..\Veilborne.Core\assets\**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CoreAssets)" DestinationFiles="@(CoreAssets->'wwwroot\assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\Veilborne.Core\appsettings.json" DestinationFiles="wwwroot\appsettings.json" SkipUnchangedFiles="true" Condition="Exists('..\Veilborne.Core\appsettings.json')" />
+  </Target>
+</Project>

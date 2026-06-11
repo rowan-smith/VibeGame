@@ -1,0 +1,20 @@
+@page "/"
+
+@inject ILogger<Index> Logger
+
+<PageTitle>Veilborne Web</PageTitle>
+
+<section class="game-container">
+    <div class="game-viewport">
+        <canvas id="veilborne-terrain-canvas" width="1280" height="720" aria-hidden="true"></canvas>
+        <canvas id="veilborne-game-canvas" width="1280" height="720" aria-label="Veilborne game canvas"></canvas>
+        <canvas id="veilborne-text-canvas" width="1280" height="720" class="text-overlay" aria-hidden="true"></canvas>
+    </div>
+</section>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Logger.LogInformation("Test log: Index page initialized at {Time}", DateTime.Now);
+    }
+}

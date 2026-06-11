@@ -125,6 +125,8 @@ namespace Veilborne.UI
                 int x = w / 2 - drawW / 2;
                 int y = Math.Max(0, startY - drawH - 6);
                 _ui.DrawTexture(SplashTextureKey, x, y, scale, Vector4.One);
+                int splashBottom = y + drawH;
+                startY = Math.Max(startY, splashBottom + 20);
                 drewSplash = true;
             }
 

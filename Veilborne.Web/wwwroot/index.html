@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Veilborne Web</title>
+    <base href="/" />
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
+    <link rel="stylesheet" href="app.css" />
+    <HeadOutlet />
+</head>
+<body>
+    <div id="app">
+        <div class="boot">Loading Veilborne Web...</div>
+    </div>
+    <script src="pixi.min.js"></script>
+    <script src="veilborne.js"></script>
+    <script>window.veilborne && window.veilborne.initTerrainTextures();</script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+</html>

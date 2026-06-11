@@ -1,0 +1,10 @@
+{
+  "Id": "brown_mud",
+  "DisplayName": "Brown Mud",
+  "Textures": {
+    "Albedo": "textures/terrain/brown_mud/brown_mud_02_diff_4k.jpg",
+    "Normal": "textures/terrain/brown_mud/brown_mud_02_nor_gl_4k.jpg",
+    "Rough": "textures/terrain/brown_mud/brown_mud_02_rough_4k.jpg"
+  },
+  "TileSize": 6.0
+}

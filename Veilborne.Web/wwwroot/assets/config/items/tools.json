@@ -1,0 +1,34 @@
+{
+  "Items": [
+    {
+      "Id": "shovel",
+      "DisplayName": "Shovel",
+      "Description": "A sturdy shovel for digging soil, sand, and clay.",
+      "Type": "Tool",
+      "Category": "Digging",
+      "Stackable": false,
+      "MaxStack": 1,
+      "Weight": 2.8,
+      "Value": 35,
+
+      "Stats": {
+        "Durability": 150,
+        "Efficiency": 1.0
+      },
+
+      "ToolProperties": {
+        "ToolType": "Shovel",
+        "EffectiveMaterials": ["Dirt", "Sand", "Clay", "Gravel"],
+        "BreakSpeedMultiplier": 1.25,
+        "StaminaCost": 5
+      },
+
+      "Tags": ["tool", "digging", "metal"],
+
+      "Assets": {
+        "Icon": "textures/items/icons/shovel.png",
+        "Model": "models/items/shovel.glb"
+      }
+    }
+  ]
+}
