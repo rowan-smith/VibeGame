@@ -24,6 +24,9 @@ namespace Veilborne.MonoGameImpl
         private readonly GraphicsDevice _graphicsDevice;
         private readonly BasicEffect _basicEffect;
         private readonly RasterizerState _wireframeRasterizer;
+        private readonly RasterizerState _rasterizerNear;
+        private readonly RasterizerState _rasterizerMid;
+        private readonly RasterizerState _rasterizerFar;
         private readonly Dictionary<string, Texture2D?> _textureCache = new();
         private readonly ILogger _log = Log.ForContext<MonoGameTerrainRenderer>();
         private readonly IBiomeProvider? _biomeProvider;
@@ -120,6 +123,19 @@ namespace Veilborne.MonoGameImpl
             _secondaryPassDistanceScale = Math.Clamp(terrainRuntime?.SecondaryPassDistanceScale ?? 0.40f, 0.1f, 1.0f);
             _basicEffect = new BasicEffect(graphicsDevice) { LightingEnabled = false };
             _wireframeRasterizer = new RasterizerState { FillMode = FillMode.WireFrame, CullMode = CullMode.CullCounterClockwiseFace };
+            _rasterizerNear = RasterizerState.CullCounterClockwise;
+            _rasterizerMid = new RasterizerState
+            {
+                CullMode = CullMode.CullCounterClockwiseFace,
+                DepthBias = 1,
+                SlopeScaleDepthBias = 1f
+            };
+            _rasterizerFar = new RasterizerState
+            {
+                CullMode = CullMode.CullCounterClockwiseFace,
+                DepthBias = 2,
+                SlopeScaleDepthBias = 2f
+            };
             _biomeBlendShaderAvailable = DetectBiomeBlendShaderAssets();
         }
 
@@ -684,6 +700,35 @@ namespace Veilborne.MonoGameImpl
             return Math.Clamp(depth / MathF.Max(0.05f, config.SubsurfaceDepth), 0f, 1f);
         }
 
+        private RasterizerState SelectRasterizerForTileSize(float tileSize)
+        {
+            if (tileSize <= 1.5f) return _rasterizerNear;
+            if (tileSize <= 3f) return _rasterizerMid;
+            return _rasterizerFar;
+        }
+
+        private static bool TryGetVisibleChunkState(
+            ChunkData chunk,
+            XnaVector3 cameraPos,
+            XnaBoundingFrustum frustum,
+            float drawDistance,
+            out float distanceSq)
+        {
+            float half = chunk.WorldSize * 0.5f;
+            float yPad = 2f;
+            var min = new XnaVector3(chunk.OriginX, chunk.MinY - yPad, chunk.OriginZ);
+            var max = new XnaVector3(chunk.OriginX + chunk.WorldSize, chunk.MaxY + yPad, chunk.OriginZ + chunk.WorldSize);
+            var bounds = new XnaBoundingBox(min, max);
+            var center = new XnaVector3(chunk.OriginX + half, (chunk.MinY + chunk.MaxY) * 0.5f, chunk.OriginZ + half);
+
+            var camDelta = center - cameraPos;
+            distanceSq = camDelta.LengthSquared();
+            float chunkDistanceLimit = drawDistance + chunk.WorldSize * 0.75f;
+            if (distanceSq > chunkDistanceLimit * chunkDistanceLimit)
+                return false;
+            return frustum.Contains(bounds) != Microsoft.Xna.Framework.ContainmentType.Disjoint;
+        }
+
         private static float ComputeLayerBlendAlphaFromSplat(Vector4 splat, ChunkData.LayerBlendMode mode)
         {
             if (mode == ChunkData.LayerBlendMode.SubsurfaceToDeep)
@@ -786,25 +831,24 @@ namespace Veilborne.MonoGameImpl
                 return da.CompareTo(db);
             });
 
+            float secondaryPassDistance = drawDistance * _secondaryPassDistanceScale;
+            float layeredCutoffSq = secondaryPassDistance * secondaryPassDistance * 0.25f;
+            float crossfadeCutoffSq = secondaryPassDistance * secondaryPassDistance;
+            const int MaxSecondaryDrawCallsPerFrame = 20;
+
+            // Phase 1: draw every visible chunk's primary pass first so distant terrain
+            // is not dropped when nearby chunks consume the budget on secondary passes.
             foreach (var key in _sortedActiveKeysScratch)
             {
                 if (drawCalls >= MaxDrawCallsPerFrame) break;
                 if (!_chunks.TryGetValue(key, out var chunk)) continue;
-                float half = chunk.WorldSize * 0.5f;
-                float yPad = 2f;
-                var min = new XnaVector3(chunk.OriginX, chunk.MinY - yPad, chunk.OriginZ);
-                var max = new XnaVector3(chunk.OriginX + chunk.WorldSize, chunk.MaxY + yPad, chunk.OriginZ + chunk.WorldSize);
-                var bounds = new XnaBoundingBox(min, max);
-                var center = new XnaVector3(chunk.OriginX + half, (chunk.MinY + chunk.MaxY) * 0.5f, chunk.OriginZ + half);
-
-                var camDelta = center - pos;
-                float distanceSq = camDelta.LengthSquared();
-                float chunkDistanceLimit = drawDistance + chunk.WorldSize * 0.75f;
-                if (distanceSq > chunkDistanceLimit * chunkDistanceLimit) continue;
-                if (frustum.Contains(bounds) == Microsoft.Xna.Framework.ContainmentType.Disjoint) continue;
+                if (!TryGetVisibleChunkState(chunk, pos, frustum, drawDistance, out _))
+                    continue;
 
                 _graphicsDevice.SetVertexBuffer(chunk.Vb);
                 _graphicsDevice.Indices = chunk.Ib;
+                if (!wireframe)
+                    _graphicsDevice.RasterizerState = SelectRasterizerForTileSize(key.Item3);
                 bool isLayeredChunk = chunk.UseSplatLayering &&
                                       chunk.LayerMode != ChunkData.LayerBlendMode.None;
 
@@ -814,7 +858,6 @@ namespace Veilborne.MonoGameImpl
                     _basicEffect.VertexColorEnabled = true;
                     _basicEffect.Texture = chunk.PrimaryTexture;
                     _basicEffect.Alpha = 1f;
-                    // Keep terrain lighting stable while digging; avoid chunk-level shadow toggles.
                     var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.50f;
                     float primaryLightMod = isLayeredChunk ? 1f : chunk.PrimaryLightingModifier;
                     _basicEffect.DiffuseColor = new XnaVector3(
@@ -836,39 +879,50 @@ namespace Veilborne.MonoGameImpl
                     drawCalls++;
                 }
                 chunksDrawn++;
+            }
 
-                // Only spend the second terrain pass when near enough for visible benefit.
-                // Layered chunks get a tighter distance cutoff since the blend is subtle beyond close range.
-                float secondaryPassDistance = drawDistance * _secondaryPassDistanceScale;
-                float layeredCutoffSq = secondaryPassDistance * secondaryPassDistance * 0.25f; // 50% distance for layered
-                float crossfadeCutoffSq = secondaryPassDistance * secondaryPassDistance;
-                bool shouldDrawSecondary = chunk.SecondaryTexture != null &&
+            // Phase 2: optional subsurface / crossfade passes on a separate budget.
+            foreach (var key in _sortedActiveKeysScratch)
+            {
+                if (secondaryPasses >= MaxSecondaryDrawCallsPerFrame) break;
+                if (!_chunks.TryGetValue(key, out var chunk)) continue;
+                if (!TryGetVisibleChunkState(chunk, pos, frustum, drawDistance, out float distanceSq))
+                    continue;
+
+                bool isLayeredChunk = chunk.UseSplatLayering &&
+                                      chunk.LayerMode != ChunkData.LayerBlendMode.None;
+                bool hasVisibleLayerBlend = !isLayeredChunk || chunk.LayerBlendCoverage > 0.02f;
+                bool shouldDrawSecondary = hasVisibleLayerBlend &&
+                                            chunk.SecondaryTexture != null &&
                                             ((isLayeredChunk && distanceSq <= layeredCutoffSq) ||
                                              (crossfadeEnabled && !isLayeredChunk && distanceSq <= crossfadeCutoffSq));
-                if (shouldDrawSecondary)
-                {
-                    var prevChunkBlend = _graphicsDevice.BlendState;
-                    _graphicsDevice.BlendState = isLayeredChunk ? BlendState.NonPremultiplied : BlendState.AlphaBlend;
-                    _basicEffect.TextureEnabled = true;
-                    _basicEffect.VertexColorEnabled = true;
-                    _basicEffect.Texture = chunk.SecondaryTexture;
-                    _basicEffect.Alpha = 1f;
-                    var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.50f;
-                    float secondaryLightMod = isLayeredChunk ? 1f : chunk.SecondaryLightingModifier;
-                    _basicEffect.DiffuseColor = new XnaVector3(
-                        Math.Clamp(lit.X * secondaryLightMod, 0.20f, 1f) * brightness,
-                        Math.Clamp(lit.Y * secondaryLightMod, 0.20f, 1f) * brightness,
-                        Math.Clamp(lit.Z * secondaryLightMod, 0.20f, 1f) * brightness);
-                    foreach (var pass in _basicEffect.CurrentTechnique.Passes)
-                    {
-                        pass.Apply();
-                        _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
-                        drawCalls++;
-                    }
-                    _graphicsDevice.BlendState = prevChunkBlend;
-                    secondaryPasses++;
-                }
+                if (!shouldDrawSecondary) continue;
 
+                _graphicsDevice.SetVertexBuffer(chunk.Vb);
+                _graphicsDevice.Indices = chunk.Ib;
+                if (!wireframe)
+                    _graphicsDevice.RasterizerState = SelectRasterizerForTileSize(key.Item3);
+
+                var prevChunkBlend = _graphicsDevice.BlendState;
+                _graphicsDevice.BlendState = isLayeredChunk ? BlendState.NonPremultiplied : BlendState.AlphaBlend;
+                _basicEffect.TextureEnabled = true;
+                _basicEffect.VertexColorEnabled = true;
+                _basicEffect.Texture = chunk.SecondaryTexture;
+                _basicEffect.Alpha = 1f;
+                var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.50f;
+                float secondaryLightMod = isLayeredChunk ? 1f : chunk.SecondaryLightingModifier;
+                _basicEffect.DiffuseColor = new XnaVector3(
+                    Math.Clamp(lit.X * secondaryLightMod, 0.20f, 1f) * brightness,
+                    Math.Clamp(lit.Y * secondaryLightMod, 0.20f, 1f) * brightness,
+                    Math.Clamp(lit.Z * secondaryLightMod, 0.20f, 1f) * brightness);
+                foreach (var pass in _basicEffect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
+                    drawCalls++;
+                }
+                _graphicsDevice.BlendState = prevChunkBlend;
+                secondaryPasses++;
             }
 
             _lastChunksDrawn = chunksDrawn;
