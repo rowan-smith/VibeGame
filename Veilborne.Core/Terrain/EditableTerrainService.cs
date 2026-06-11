@@ -350,9 +350,9 @@ namespace Veilborne.Terrain
         {
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
-                var (_, _, _, _, maxMerge, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
+                var (maxMerge, mergeBiome) = BiomeSampling.ResolveBoundaryCrossfade(
                     simple, _terrainGen, origin, gridWidth, gridHeight, TileSize);
-                if (mergeBiome is not null && maxMerge > 0.001f)
+                if (mergeBiome is not null && maxMerge > 0.015f)
                     return (mergeBiome.Data, maxMerge);
             }
 
@@ -372,11 +372,11 @@ namespace Veilborne.Terrain
             string primaryId = _primaryBiomeByChunk.TryGetValue(key, out var biome) ? biome.Id : string.Empty;
             var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, w, h);
             string mergeId = mergeBiome?.Id ?? string.Empty;
-            bool hasMerge = !string.IsNullOrEmpty(mergeId) && maxMerge > 0.001f;
+            bool hasMerge = !string.IsNullOrEmpty(mergeId) && maxMerge > 0.015f;
 
             float[,]? mergeMap = null;
             if (hasMerge && _biomeProvider is SimpleBiomeProvider simple)
-                mergeMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, chunk.Origin, w, h, TileSize);
+                mergeMap = BiomeSampling.BuildVertexBlendMapGrid(simple, _terrainGen, chunk.Origin, w, h, TileSize, 4);
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)

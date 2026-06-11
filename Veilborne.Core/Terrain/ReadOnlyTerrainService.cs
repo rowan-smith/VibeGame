@@ -470,9 +470,9 @@ namespace Veilborne.Terrain
         {
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
-                var (_, _, _, _, maxMerge, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
+                var (maxMerge, mergeBiome) = BiomeSampling.ResolveBoundaryCrossfade(
                     simple, _terrainGen, origin, gridWidth, gridHeight, TileSize);
-                if (mergeBiome is not null && maxMerge > 0.001f)
+                if (mergeBiome is not null && maxMerge > 0.015f)
                     return (mergeBiome.Data, maxMerge);
             }
 
@@ -529,17 +529,17 @@ namespace Veilborne.Terrain
             float[,]? mergeMap = null;
             if (_biomeProvider is SimpleBiomeProvider simpleProvider)
             {
-                var (_, _, _, _, maxMerge, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
+                var (maxMerge, mergeBiome) = BiomeSampling.ResolveBoundaryCrossfade(
                     simpleProvider, _terrainGen, origin, w, h, TileSize);
-                if (mergeBiome is not null && maxMerge > 0.001f)
+                if (mergeBiome is not null && maxMerge > 0.015f)
                 {
                     effectiveMerge = mergeBiome.Data;
                     effectiveMaxMerge = maxMerge;
                 }
-                mergeMap = BiomeSampling.BuildVertexBlendMap(simpleProvider, _terrainGen, origin, w, h, TileSize);
+                mergeMap = BiomeSampling.BuildVertexBlendMapGrid(simpleProvider, _terrainGen, origin, w, h, TileSize, 4);
             }
 
-            bool hasMerge = effectiveMerge != null && effectiveMaxMerge > 0.001f && mergeMap != null;
+            bool hasMerge = effectiveMerge != null && effectiveMaxMerge > 0.015f && mergeMap != null;
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)

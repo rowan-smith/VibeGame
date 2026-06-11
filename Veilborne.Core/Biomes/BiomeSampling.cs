@@ -165,6 +165,102 @@ namespace Veilborne.Biomes
         }
 
         /// <summary>
+        /// Samples corners, edge midpoints, and center to catch transitions that fall on
+        /// chunk sides between adjacent single-biome chunks.
+        /// </summary>
+        public static (float maxBlend, IBiome? secondaryBiome) ResolveBoundaryCrossfade(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize)
+        {
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+            float midX = origin.X + chunkW * 0.5f;
+            float midZ = origin.Y + chunkH * 0.5f;
+            float maxBlend = 0f;
+            IBiome? bestSecondary = null;
+
+            void Sample(float wx, float wz)
+            {
+                var (_, secondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+                if (blend > maxBlend && secondary is not null)
+                {
+                    maxBlend = blend;
+                    bestSecondary = secondary;
+                }
+            }
+
+            Sample(origin.X, origin.Y);
+            Sample(origin.X + chunkW, origin.Y);
+            Sample(origin.X, origin.Y + chunkH);
+            Sample(origin.X + chunkW, origin.Y + chunkH);
+            Sample(midX, origin.Y);
+            Sample(midX, origin.Y + chunkH);
+            Sample(origin.X, midZ);
+            Sample(origin.X + chunkW, midZ);
+            Sample(midX, midZ);
+
+            return (maxBlend, bestSecondary);
+        }
+
+        /// <summary>
+        /// Builds a per-vertex blend map from a coarse grid (default 4x4) of biome samples.
+        /// Much faster than per-vertex weight queries while catching edge transitions.
+        /// </summary>
+        public static float[,] BuildVertexBlendMapGrid(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize,
+            int samplesPerAxis = 4)
+        {
+            samplesPerAxis = Math.Max(2, samplesPerAxis);
+            var grid = new float[samplesPerAxis, samplesPerAxis];
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+
+            for (int j = 0; j < samplesPerAxis; j++)
+            {
+                float tz = samplesPerAxis > 1 ? j / (float)(samplesPerAxis - 1) : 0f;
+                for (int i = 0; i < samplesPerAxis; i++)
+                {
+                    float tx = samplesPerAxis > 1 ? i / (float)(samplesPerAxis - 1) : 0f;
+                    float wx = origin.X + tx * chunkW;
+                    float wz = origin.Y + tz * chunkH;
+                    grid[i, j] = SampleBiomeBlend(provider, terrain, wx, wz);
+                }
+            }
+
+            var map = new float[width, height];
+            for (int z = 0; z < height; z++)
+            {
+                float tz = height > 1 ? z / (float)(height - 1) : 0f;
+                float gz = tz * (samplesPerAxis - 1);
+                int j0 = (int)MathF.Floor(gz);
+                int j1 = Math.Min(j0 + 1, samplesPerAxis - 1);
+                float fz = gz - j0;
+                for (int x = 0; x < width; x++)
+                {
+                    float tx = width > 1 ? x / (float)(width - 1) : 0f;
+                    float gx = tx * (samplesPerAxis - 1);
+                    int i0 = (int)MathF.Floor(gx);
+                    int i1 = Math.Min(i0 + 1, samplesPerAxis - 1);
+                    float fx = gx - i0;
+                    float top = grid[i0, j0] + (grid[i1, j0] - grid[i0, j0]) * fx;
+                    float bot = grid[i0, j1] + (grid[i1, j1] - grid[i0, j1]) * fx;
+                    map[x, z] = top + (bot - top) * fz;
+                }
+            }
+
+            return map;
+        }
+
+        /// <summary>
         /// Builds a per-vertex blend factor map by sampling biome blend weights at chunk corners
         /// and bilinearly interpolating across the chunk.
         /// </summary>
@@ -306,6 +402,14 @@ namespace Veilborne.Biomes
             float b10 = SampleCorner(origin.X + chunkW, origin.Y);
             float b01 = SampleCorner(origin.X, origin.Y + chunkH);
             float b11 = SampleCorner(origin.X + chunkW, origin.Y + chunkH);
+
+            var (boundaryMax, boundarySecondary) = ResolveBoundaryCrossfade(
+                provider, terrain, origin, width, height, tileSize);
+            if (boundaryMax > maxBlend)
+            {
+                maxBlend = boundaryMax;
+                bestSecondary = boundarySecondary;
+            }
 
             return (b00, b10, b01, b11, maxBlend, bestSecondary);
         }
