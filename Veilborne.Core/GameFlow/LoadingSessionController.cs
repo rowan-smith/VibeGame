@@ -71,11 +71,13 @@ namespace Veilborne.GameFlow
                 if (PumpTask is { IsFaulted: true })
                     _ = PumpTask.Exception;
 
-                int loadedBefore = terrainStreaming.GetLoadingProgress().LoadedChunks;
+                var before = terrainStreaming.GetLoadingProgress();
                 PumpTask = terrainStreaming.PumpAsyncJobs();
                 terrainStreaming.ProcessPendingMeshBuilds();
-                int loadedAfter = terrainStreaming.GetLoadingProgress().LoadedChunks;
-                if (loadedBefore == loadedAfter && round > 0)
+                var after = terrainStreaming.GetLoadingProgress();
+                if (after.LoadedChunks == before.LoadedChunks &&
+                    after.GeneratingChunks == before.GeneratingChunks &&
+                    round > 0)
                     break;
             }
 

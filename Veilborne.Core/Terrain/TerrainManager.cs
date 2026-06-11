@@ -785,19 +785,13 @@ namespace Veilborne.Terrain
             int desiredPlayable = desiredEditable + desiredReadOnly;
             int loadedPlayable = loadedEditable + loadedReadOnly;
 
-            // Treat in-flight generation as partial progress so the bar does not stall at ~94%
-            // when entity spawning finishes before the last playable chunks land.
-            float effectiveLoaded = loadedPlayable + generatingPlayable * 0.9f;
-            float chunkProgress = desiredPlayable > 0
-                ? Math.Clamp(effectiveLoaded / (float)desiredPlayable, 0f, 1f)
-                : 1f;
-            bool playableReady = generatingPlayable == 0 && loadedPlayable >= desiredPlayable;
-            float entityProgress = !playableReady
-                ? 0f
-                : (pendingSpawnObjects <= 0 ? 1f : 0.6f);
-            float progress = chunkProgress * 0.92f + entityProgress * 0.08f;
-            if (playableReady && pendingSpawnObjects == 0)
-                progress = 1f;
+            float progress = TerrainLoadingMetrics.ComputeProgress01(
+                desiredPlayable,
+                loadedPlayable,
+                generatingPlayable,
+                desiredLod,
+                loadedLod,
+                pendingSpawnObjects);
 
             string stage;
             if (desiredPlayable == 0) stage = "Preparing world";
