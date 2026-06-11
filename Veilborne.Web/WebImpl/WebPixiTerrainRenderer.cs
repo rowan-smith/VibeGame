@@ -19,12 +19,16 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
 
     private readonly IJSInProcessRuntime _js;
     private readonly IGraphicsProvider _graphics;
+    private readonly WebTerrainProceduralTextures _textures;
     private readonly List<PendingChunk> _pending = new(8);
     private readonly List<int> _triangleBuffer = new(MaxTriangles * FloatsPerTriangle);
     private int[] _jsBuffer = Array.Empty<int>();
 
     private Vector4 _tint = Vector4.One;
     private Vector3 _biomeColor = new(0.35f, 0.55f, 0.28f);
+    private string _primaryTexId = "brown_mud_leaves";
+    private string _secondaryTexId = "";
+    private float _secondaryTexBlend;
 
     private Vector3 _camPos;
     private Vector3 _camRight;
@@ -36,10 +40,11 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
     private float _screenH;
     private bool _cameraReady;
 
-    public WebPixiTerrainRenderer(IJSRuntime js, IGraphicsProvider graphics)
+    public WebPixiTerrainRenderer(IJSRuntime js, IGraphicsProvider graphics, WebTerrainProceduralTextures textures)
     {
         _js = (IJSInProcessRuntime)js;
         _graphics = graphics;
+        _textures = textures;
     }
 
     public void Render(float[,] heights, float tileSize, CameraComponent camera, Vector3 baseColor)
@@ -68,6 +73,9 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         if (biome == null) return;
         var c = biome.Color;
         _biomeColor = new Vector3(c.R / 255f, c.G / 255f, c.B / 255f);
+        _primaryTexId = ResolveTextureId(biome);
+        _secondaryTexId = "";
+        _secondaryTexBlend = 0f;
     }
 
     public void ApplyBiomeBlendTextures(BiomeData primary, BiomeData? secondary, float secondaryBlend)
@@ -75,14 +83,29 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         if (primary == null) return;
         var pc = primary.Color;
         var primaryColor = new Vector3(pc.R / 255f, pc.G / 255f, pc.B / 255f);
-        if (secondary != null && secondaryBlend > 0.01f)
+        _primaryTexId = ResolveTextureId(primary);
+        _secondaryTexBlend = Math.Clamp(secondaryBlend, 0f, 1f);
+        if (secondary != null && _secondaryTexBlend > 0.01f)
         {
             var sc = secondary.Color;
             var secondaryColor = new Vector3(sc.R / 255f, sc.G / 255f, sc.B / 255f);
-            _biomeColor = Vector3.Lerp(primaryColor, secondaryColor, Math.Clamp(secondaryBlend, 0f, 1f));
+            _biomeColor = Vector3.Lerp(primaryColor, secondaryColor, _secondaryTexBlend);
+            _secondaryTexId = ResolveTextureId(secondary);
         }
         else
+        {
             _biomeColor = primaryColor;
+            _secondaryTexId = "";
+            _secondaryTexBlend = 0f;
+        }
+    }
+
+    private static string ResolveTextureId(BiomeData biome)
+    {
+        var layers = biome.SurfaceTextures;
+        if (layers is { Count: > 0 } && !string.IsNullOrWhiteSpace(layers[0].TextureId))
+            return layers[0].TextureId;
+        return "brown_mud_leaves";
     }
 
     public void SetColorTint(Vector4 color) => _tint = color;
@@ -194,7 +217,9 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
                 int iz1 = Math.Min((gz + 1) * GridStep, depth - 1);
 
                 float avgH = (heights[ix0, iz0] + heights[ix1, iz0] + heights[ix0, iz1] + heights[ix1, iz1]) * 0.25f;
-                int color = HeightColorInt(avgH);
+                float wx = chunk.Origin.X + (ix0 + ix1) * 0.5f * chunk.TileSize;
+                float wz = chunk.Origin.Y + (iz0 + iz1) * 0.5f * chunk.TileSize;
+                int color = SampleTerrainColor(wx, wz, avgH);
 
                 if (ok[i00] && ok[i10] && ok[i01])
                     AddTriangle(color, px[i00], py[i00], px[i10], py[i10], px[i01], py[i01]);
@@ -215,13 +240,36 @@ public sealed class WebPixiTerrainRenderer : ITerrainRenderer
         _triangleBuffer.Add(y3);
     }
 
-    private int HeightColorInt(float height)
+    private int SampleTerrainColor(float worldX, float worldZ, float height)
     {
-        float t = Math.Clamp((height + 4f) / 48f, 0f, 1f);
-        int r = (int)Math.Clamp((0.18f + t * 0.45f) * _biomeColor.X * _tint.X * 255f, 8, 255);
-        int g = (int)Math.Clamp((0.42f - t * 0.18f) * _biomeColor.Y * _tint.Y * 255f, 8, 255);
-        int b = (int)Math.Clamp((0.14f + t * 0.22f) * _biomeColor.Z * _tint.Z * 255f, 8, 255);
+        int primary = _textures.Sample(_primaryTexId, worldX, worldZ, height, _biomeColor);
+        if (_secondaryTexBlend > 0.01f && !string.IsNullOrEmpty(_secondaryTexId))
+        {
+            int secondary = _textures.Sample(_secondaryTexId, worldX, worldZ, height, _biomeColor);
+            return LerpRgb(primary, secondary, _secondaryTexBlend);
+        }
+        return ApplyTint(primary);
+    }
+
+    private int ApplyTint(int rgb)
+    {
+        int r = (rgb >> 16) & 255;
+        int g = (rgb >> 8) & 255;
+        int b = rgb & 255;
+        r = (int)Math.Clamp(r * _tint.X, 0, 255);
+        g = (int)Math.Clamp(g * _tint.Y, 0, 255);
+        b = (int)Math.Clamp(b * _tint.Z, 0, 255);
         return (r << 16) | (g << 8) | b;
+    }
+
+    private static int LerpRgb(int a, int b, float t)
+    {
+        int ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+        int br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+        int r = (int)(ar + (br - ar) * t);
+        int g = (int)(ag + (bg - ag) * t);
+        int bl = (int)(ab + (bb - ab) * t);
+        return (r << 16) | (g << 8) | bl;
     }
 
     private bool TryProject(float wx, float wy, float wz, out int sx, out int sy)

@@ -37,7 +37,8 @@ public sealed class WebEcsRuntime : IEcsRuntime
     {
         _terrainRenderer = new WebPixiTerrainRenderer(
             _serviceProvider.GetRequiredService<Microsoft.JSInterop.IJSRuntime>(),
-            _serviceProvider.GetRequiredService<IGraphicsProvider>());
+            _serviceProvider.GetRequiredService<IGraphicsProvider>(),
+            _serviceProvider.GetRequiredService<WebTerrainProceduralTextures>());
         _terrainProxy.SetInner(_terrainRenderer);
 
         _systems.Clear();

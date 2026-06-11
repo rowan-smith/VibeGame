@@ -291,7 +291,9 @@ internal static class Program
             }
         }
 
-        services.AddSingleton<ITerrainTextureRegistry>(new WebTerrainTextureRegistry(defs));
+        var textureRegistry = new WebTerrainTextureRegistry(defs);
+        services.AddSingleton<ITerrainTextureRegistry>(textureRegistry);
+        services.AddSingleton(new WebTerrainProceduralTextures(textureRegistry));
     }
 
     private static async Task StartEngineAsync(WebAssemblyHost host)
