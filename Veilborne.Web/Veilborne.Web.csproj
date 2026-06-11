@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <RootNamespace>Veilborne.Web</RootNamespace>
+    <WebTerrainTextureSize>512</WebTerrainTextureSize>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +22,12 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0" />
   </ItemGroup>
+
+  <Target Name="DownscaleWebTerrainTextures" BeforeTargets="CopySharedAssets">
+    <Message Text="Preparing web terrain textures (downscale or procedural fallback)..." Importance="high" />
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
+          Command="dotnet run --project &quot;$(MSBuildProjectDirectory)/../tools/DownscaleWebTerrainTextures/DownscaleWebTerrainTextures.csproj&quot; -- &quot;$(MSBuildProjectDirectory)/..&quot; $(WebTerrainTextureSize)" />
+  </Target>
 
   <Target Name="CopySharedAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
     <ItemGroup>

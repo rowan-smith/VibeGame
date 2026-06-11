@@ -500,15 +500,6 @@ window.veilborne = {
             { id: 'snow', base: [220, 228, 238], accent: [245, 248, 252], speck: [180, 190, 210] }
         ];
 
-        const albedoUrls = [
-            'assets/textures/terrain/brown_mud_leaves/brown_mud_leaves_01_diff_4k.png',
-            'assets/textures/terrain/aerial_rocks/aerial_rocks_04_diff_4k.png',
-            'assets/textures/terrain/lichen_rock/lichen_rock_diff_4k.png',
-            'assets/textures/terrain/brown_mud/brown_mud_02_diff_4k.jpg',
-            'assets/textures/terrain/rock_3/rock_3_diff_4k.jpg',
-            'assets/textures/terrain/snow/snow_02_diff_4k.png'
-        ];
-
         this._terrainPatternData = [];
         const size = 256;
 
@@ -568,20 +559,36 @@ window.veilborne = {
             this._terrainPatternData[i] = makeProcedural(defs[i]);
         }
 
-        for (let i = 0; i < albedoUrls.length; i++) {
-            (function(idx, url) {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = function() {
-                    try {
-                        window.veilborne._terrainPatternData[idx] = downscaleImageData(img, size);
-                    } catch (e) {
-                        console.warn('[veilborne] terrain texture load failed', url);
-                    }
-                };
-                img.onerror = function() { /* keep procedural fallback */ };
-                img.src = '/' + url;
-            })(i, albedoUrls[i]);
+        function loadBuiltTexture(idx, url) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function() {
+                try {
+                    window.veilborne._terrainPatternData[idx] = downscaleImageData(img, size);
+                } catch (e) {
+                    console.warn('[veilborne] terrain texture load failed', url, e);
+                }
+            };
+            img.onerror = function() {
+                console.warn('[veilborne] terrain texture missing', url);
+            };
+            img.src = url.startsWith('/') ? url : '/' + url;
         }
+
+        fetch('/assets/textures/terrain/web_manifest.json')
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(manifest) {
+                const entries = manifest && (manifest.textures || manifest.Textures);
+                if (!entries) return;
+                for (let i = 0; i < entries.length; i++) {
+                    const tex = entries[i];
+                    const path = tex.path || tex.Path;
+                    const index = tex.index != null ? tex.index : tex.Index;
+                    if (path != null && index != null) {
+                        loadBuiltTexture(index, path);
+                    }
+                }
+            })
+            .catch(function() { /* procedural fallback already in place */ });
     }
 };
