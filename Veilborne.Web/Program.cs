@@ -192,12 +192,23 @@ internal static class Program
         var worldConfig = WebJsonUtils.LoadString<WorldConfig>(worldJson)
             ?? throw new InvalidOperationException("Failed to deserialize world.json");
 
-        worldConfig.LowLodRadius = 6;
-        worldConfig.ReadOnlyRadius = 3;
-        worldConfig.TerrainRuntime.MaxLowLodRadius = 8;
-        worldConfig.TerrainRuntime.MaxReadOnlyRadius = 5;
-        Log.Information("WASM radius overrides: LowLod={LowLod}, ReadOnly={ReadOnly}",
-            worldConfig.LowLodRadius, worldConfig.ReadOnlyRadius);
+        worldConfig.EditableRadius = 2;
+        worldConfig.ReadOnlyRadius = 2;
+        worldConfig.LowLodRadius = 3;
+        worldConfig.TerrainLoadQueueRadius = 2;
+        worldConfig.MaxActiveVoxelChunks = 48;
+        worldConfig.TerrainRuntime.MaxEditableRadius = 2;
+        worldConfig.TerrainRuntime.MaxReadOnlyRadius = 2;
+        worldConfig.TerrainRuntime.MinReadOnlyRadius = 2;
+        worldConfig.TerrainRuntime.MaxLowLodRadius = 3;
+        worldConfig.TerrainRuntime.MinLowLodRadius = 0;
+        worldConfig.TerrainRuntime.MaxTerrainDrawDistance = 350f;
+        worldConfig.TerrainRuntime.MaxMeshBuildsPerFrame = 2;
+        worldConfig.TerrainRuntime.MaxReadOnlyConcurrentJobs = 2;
+        worldConfig.TerrainRuntime.MaxLowLodConcurrentJobs = 2;
+        Log.Information(
+            "WASM terrain overrides: Editable={Editable}, ReadOnly={ReadOnly}, LowLod={LowLod}",
+            worldConfig.EditableRadius, worldConfig.ReadOnlyRadius, worldConfig.LowLodRadius);
 
         builder.Services.AddSingleton<IWorldConfigService>(new WebWorldConfigService(worldConfig));
 

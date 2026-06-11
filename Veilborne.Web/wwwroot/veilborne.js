@@ -30,26 +30,36 @@ window.veilborne = {
         let pendingMouseY = -1;
         let mouseRafPending = false;
 
+        function getLogicalCoords(e) {
+            const canvas = document.getElementById('veilborne-game-canvas');
+            if (!canvas) return { x: e.clientX, y: e.clientY };
+            const rect = canvas.getBoundingClientRect();
+            const logicalW = parseInt(canvas.getAttribute('width') || '1280', 10);
+            const logicalH = parseInt(canvas.getAttribute('height') || '720', 10);
+            const x = Math.round(((e.clientX - rect.left) / rect.width) * logicalW);
+            const y = Math.round(((e.clientY - rect.top) / rect.height) * logicalH);
+            return {
+                x: Math.max(0, Math.min(logicalW, x)),
+                y: Math.max(0, Math.min(logicalH, y))
+            };
+        }
+
+        function sendMouseMove(x, y) {
+            dotNetRef.invokeMethodAsync('OnMouseMove', x, y);
+        }
+
         function flushMouseMove() {
             mouseRafPending = false;
             if (pendingMouseX < 0) return;
-            dotNetRef.invokeMethodAsync('OnMouseMove', pendingMouseX, pendingMouseY);
+            sendMouseMove(pendingMouseX, pendingMouseY);
             pendingMouseX = -1;
             pendingMouseY = -1;
         }
 
         window.addEventListener('mousemove', e => {
-            const canvas = document.getElementById('veilborne-game-canvas');
-            if (canvas) {
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                pendingMouseX = Math.round((e.clientX - rect.left) * scaleX);
-                pendingMouseY = Math.round((e.clientY - rect.top) * scaleY);
-            } else {
-                pendingMouseX = e.clientX;
-                pendingMouseY = e.clientY;
-            }
+            const pos = getLogicalCoords(e);
+            pendingMouseX = pos.x;
+            pendingMouseY = pos.y;
             if (!mouseRafPending) {
                 mouseRafPending = true;
                 window.requestAnimationFrame(flushMouseMove);
@@ -57,9 +67,13 @@ window.veilborne = {
         }, { passive: true });
 
         window.addEventListener('mousedown', e => {
+            const pos = getLogicalCoords(e);
+            sendMouseMove(pos.x, pos.y);
             dotNetRef.invokeMethodAsync('OnMouseDown', e.button);
         });
         window.addEventListener('mouseup', e => {
+            const pos = getLogicalCoords(e);
+            sendMouseMove(pos.x, pos.y);
             dotNetRef.invokeMethodAsync('OnMouseUp', e.button);
         });
         window.addEventListener('wheel', e => {
@@ -95,7 +109,8 @@ window.veilborne = {
         _pools: { graphics: [], texts: [], sprites: [] },
         _poolIdx: { g: 0, t: 0, s: 0 },
         _cappedDpr: function() {
-            return Math.min(window.devicePixelRatio || 1, 1.5);
+            // Match game logical resolution (1280x720) — avoids pointer/render scale mismatch.
+            return 1;
         },
         ensureApp: function() {
             if (this.failed) return null;
@@ -275,15 +290,26 @@ window.veilborne = {
                     g.drawRect(c.x, c.y, c.w, c.h);
                     g.endFill();
                 } else if (t === 1) {
+                    const content = c.s || c.textOrKey || '';
+                    if (!content) continue;
                     const txt = this._getText();
                     const hex = this.parseColor(c.c);
-                    txt.text = c.s;
-                    txt.style.fontSize = c.f || 16;
-                    txt.style.fill = hex;
-                    txt.style.fontFamily = 'Arial';
-                    txt.style.fontWeight = 'bold';
+                    const fill = typeof hex === 'number'
+                        ? '#' + hex.toString(16).padStart(6, '0')
+                        : (c.c || '#ffffff');
+                    txt.text = content;
+                    txt.style = new PIXI.TextStyle({
+                        fontFamily: 'Arial, Helvetica, sans-serif',
+                        fontSize: c.f || 16,
+                        fill: fill,
+                        fontWeight: 'bold'
+                    });
+                    txt.anchor.set(0, 0);
+                    txt.roundPixels = true;
                     txt.x = c.x;
                     txt.y = c.y;
+                    txt.visible = true;
+                    txt.alpha = 1;
                 } else if (t === 2) {
                     const tex = this.textures[c.s];
                     if (!tex || !tex.baseTexture || !tex.baseTexture.valid) {
