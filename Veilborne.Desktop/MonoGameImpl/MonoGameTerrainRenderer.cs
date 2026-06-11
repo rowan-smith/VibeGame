@@ -9,6 +9,7 @@ using Veilborne.Ecs.Components;
 using Veilborne.Interfaces;
 using Veilborne.Settings;
 using Veilborne.Sky;
+using Veilborne.Terrain;
 
 namespace Veilborne.MonoGameImpl
 {
@@ -98,6 +99,11 @@ namespace Veilborne.MonoGameImpl
         private bool _hasPendingCamera;
         private int _syncBuildBudget; // cap synchronous BuildChunkMesh calls per frame
         private bool _fastMeshBuild; // loading warmup: corner blend instead of per-vertex merge
+        private int _visibilitySerial;
+        private int _visibilitySerialUsed = -1;
+        private XnaBoundingFrustum _visibilityFrustum;
+        private XnaVector3 _visibilityCamPos;
+        private float _visibilityDrawDistance;
 
         // Per-frame rendering metrics (reset each Flush)
         private int _lastChunksDrawn;
@@ -291,6 +297,43 @@ namespace Veilborne.MonoGameImpl
             }
 
             _activeChunkKeys.Clear();
+            _visibilitySerial++;
+        }
+
+        public bool IsChunkVisibleForRender(
+            Vector2 chunkOrigin,
+            float tileSize,
+            int gridWidth,
+            int gridHeight,
+            CameraComponent camera)
+        {
+            EnsureVisibilityCache(camera);
+            var key = (chunkOrigin.X, chunkOrigin.Y, tileSize);
+            if (_chunks.TryGetValue(key, out var chunk))
+                return TryGetVisibleChunkState(chunk, _visibilityCamPos, _visibilityFrustum, _visibilityDrawDistance, out _);
+
+            return TerrainRenderCull.IsChunkRoughlyVisible(
+                camera, chunkOrigin, tileSize, gridWidth, gridHeight, _visibilityDrawDistance);
+        }
+
+        private void EnsureVisibilityCache(CameraComponent camera)
+        {
+            if (_visibilitySerialUsed == _visibilitySerial)
+                return;
+
+            _visibilitySerialUsed = _visibilitySerial;
+            var pos = new XnaVector3(camera.Position.X, camera.Position.Y, camera.Position.Z);
+            var target = new XnaVector3(camera.Target.X, camera.Target.Y, camera.Target.Z);
+            var up = new XnaVector3(camera.Up.X, camera.Up.Y, camera.Up.Z);
+            int w = _graphicsDevice.Viewport.Width, h = _graphicsDevice.Viewport.Height;
+            float aspect = w > 0 && h > 0 ? (float)w / h : 16f / 9f;
+            var view = XnaMatrix.CreateLookAt(pos, target, up);
+            var proj = XnaMatrix.CreatePerspectiveFieldOfView(
+                XnaMathHelper.ToRadians(camera.FovY), aspect, 0.1f, 5000f);
+            _visibilityFrustum = new XnaBoundingFrustum(view * proj);
+            _visibilityCamPos = pos;
+            float renderDistanceScale = _settings.Current.Graphics.TerrainViewDistance / 100f;
+            _visibilityDrawDistance = _maxTerrainDrawDistance * renderDistanceScale;
         }
 
         public void RenderAt(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, CameraComponent camera)
@@ -912,6 +955,8 @@ namespace Veilborne.MonoGameImpl
                 int rasterTier = GetRasterTier(key.Item3);
                 _visibleChunksScratch.Add(new VisibleTerrainChunk(key, distanceSq, rasterTier));
             }
+
+            _visibleChunksScratch.Sort((a, b) => a.DistanceSq.CompareTo(b.DistanceSq));
         }
 
         private void BuildPrimaryDrawItems(XnaVector3 litDiffuse, XnaVector3 fallbackDiffuse, bool crossfadeEnabled)

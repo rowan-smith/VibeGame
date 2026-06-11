@@ -36,6 +36,9 @@ namespace Veilborne.MonoGameImpl
         public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1) =>
             _inner.PatchRegion(heights, tileSize, originWorld, x0, z0, x1, z1);
 
+        public bool IsChunkVisibleForRender(
+            Vector2 chunkOrigin, float tileSize, int gridWidth, int gridHeight, CameraComponent camera) =>
+            _inner.IsChunkVisibleForRender(chunkOrigin, tileSize, gridWidth, gridHeight, camera);
         public void Flush() => _inner.Flush();
         public void SetWarmupMode(bool enabled) => _inner.SetWarmupMode(enabled);
     }

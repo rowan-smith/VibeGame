@@ -30,6 +30,7 @@ namespace Veilborne.Terrain
         private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
         private readonly Dictionary<(int cx, int cz), BiomeData> _primaryBiomeByChunk = new();
         private readonly Dictionary<(int cx, int cz), (BiomeData? secondary, float blend)> _biomeBlendByChunk = new();
+        private readonly Dictionary<(int cx, int cz), (BiomeData? merge, float maxMerge)> _renderMergeByChunk = new();
         private readonly Dictionary<string, BiomeData> _biomeConfigById = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<(int cx, int cz)> _desiredKeysScratch = new();
         private readonly List<(int cx, int cz)> _toRemoveScratch = new();
@@ -190,6 +191,7 @@ namespace Veilborne.Terrain
                 {
                     _loadedChunks.Remove(key);
                     _primaryBiomeByChunk.Remove(key);
+                    _renderMergeByChunk.Remove(key);
                     _biomeBlendByChunk.Remove(key);
                     _pendingSpawnsByChunk.Remove(key);
                     if (_entitiesByChunk.TryGetValue(key, out var entities))
@@ -480,7 +482,16 @@ namespace Veilborne.Terrain
                     }
                     int gridW = chunk.Heights.GetLength(0);
                     int gridH = chunk.Heights.GetLength(1);
-                    var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                    if (!_renderer.IsChunkVisibleForRender(chunk.Origin, TileSize, gridW, gridH, camera))
+                        continue;
+
+                    if (!_renderMergeByChunk.TryGetValue(key, out var mergeInfo))
+                    {
+                        mergeInfo = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                        _renderMergeByChunk[key] = mergeInfo;
+                    }
+
+                    var (mergeBiome, maxMerge) = mergeInfo;
                     _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, GetTerrainLayersForBiomeId(primaryBiome.Id), chunk.Splatmap);
                 }

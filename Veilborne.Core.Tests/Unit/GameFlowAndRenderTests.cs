@@ -223,6 +223,8 @@ public class RenderSystemsTests
         public void MarkOriginDirty(Vector2 originWorld) => _inner.MarkOriginDirty(originWorld);
         public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1)
             => _inner.PatchRegion(heights, tileSize, originWorld, x0, z0, x1, z1);
+        public bool IsChunkVisibleForRender(
+            Vector2 chunkOrigin, float tileSize, int gridWidth, int gridHeight, CameraComponent camera) => true;
         public void Flush() => FlushCallCount++;
         public void SetWarmupMode(bool enabled) => _inner.SetWarmupMode(enabled);
     }

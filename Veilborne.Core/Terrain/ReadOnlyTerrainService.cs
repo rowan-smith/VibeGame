@@ -29,6 +29,7 @@ namespace Veilborne.Terrain
         private readonly Dictionary<(int cx, int cz), List<Entity>> _entitiesByChunk = new();
         private readonly Dictionary<(int cx, int cz), BiomeData> _biomeByChunk = new();
         private readonly Dictionary<(int cx, int cz), (BiomeData? secondary, float blend)> _biomeBlendByChunk = new();
+        private readonly Dictionary<(int cx, int cz), (BiomeData? merge, float maxMerge)> _renderMergeByChunk = new();
         private readonly HashSet<(int cx, int cz)> _desiredKeysScratch = new();
         private readonly List<(int cx, int cz)> _toRemoveScratch = new();
         private readonly List<KeyValuePair<(int cx, int cz), TerrainChunk>> _pairSnapshotBuffer = new();
@@ -261,6 +262,7 @@ namespace Veilborne.Terrain
             {
                 _loadedChunks.Remove(key);
                 _biomeByChunk.Remove(key);
+                _renderMergeByChunk.Remove(key);
                 lock (_pendingSpawnsLock)
                     _pendingSpawnsByChunk.Remove(key);
                 lock (_biomeBlendByChunk)
@@ -427,15 +429,24 @@ namespace Veilborne.Terrain
                 if (exclude != null && exclude.Contains(key))
                     continue;
 
+                int gridW = chunk.Heights.GetLength(0);
+                int gridH = chunk.Heights.GetLength(1);
+                if (!_renderer.IsChunkVisibleForRender(chunk.Origin, TileSize, gridW, gridH, camera))
+                    continue;
+
                 BiomeData primaryBiome;
                 if (biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary))
                     primaryBiome = cachedPrimary;
                 else
                     primaryBiome = GetDominantBiomeForChunk(chunk).Data;
 
-                int gridW = chunk.Heights.GetLength(0);
-                int gridH = chunk.Heights.GetLength(1);
-                var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                if (!_renderMergeByChunk.TryGetValue(key, out var mergeInfo))
+                {
+                    mergeInfo = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                    _renderMergeByChunk[key] = mergeInfo;
+                }
+
+                var (mergeBiome, maxMerge) = mergeInfo;
                 _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
 
                 _renderer.RenderAt(

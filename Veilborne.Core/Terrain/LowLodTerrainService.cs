@@ -96,6 +96,7 @@ namespace Veilborne.Terrain
         private readonly Dictionary<(int cx, int cz), TerrainChunk> _loadedChunks = new();
         private readonly Dictionary<(int cx, int cz), BiomeData> _biomeByChunk = new();
         private readonly Dictionary<(int cx, int cz), (BiomeData? secondary, float blend)> _biomeBlendByChunk = new();
+        private readonly Dictionary<(int cx, int cz), (BiomeData? merge, float maxMerge)> _renderMergeByChunk = new();
 
         private readonly IBiomeProvider _biomeProvider;
         private readonly ITerrainRenderer _renderer;
@@ -189,6 +190,7 @@ namespace Veilborne.Terrain
             {
                 _loadedChunks.Remove(key);
                 _biomeByChunk.Remove(key);
+                _renderMergeByChunk.Remove(key);
                 lock (_biomeBlendByChunk)
                     _biomeBlendByChunk.Remove(key);
             }
@@ -250,7 +252,16 @@ namespace Veilborne.Terrain
 
                 int gridW = chunk.Heights.GetLength(0);
                 int gridH = chunk.Heights.GetLength(1);
-                var (mergeBiome, maxMerge) = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                if (!_renderer.IsChunkVisibleForRender(chunk.Origin, TileSize, gridW, gridH, camera))
+                    continue;
+
+                if (!_renderMergeByChunk.TryGetValue(key, out var mergeInfo))
+                {
+                    mergeInfo = ResolveChunkRenderMerge(chunk.Origin, gridW, gridH);
+                    _renderMergeByChunk[key] = mergeInfo;
+                }
+
+                var (mergeBiome, maxMerge) = mergeInfo;
                 _renderer.ApplyBiomeBlendTextures(primaryBiome, mergeBiome, maxMerge);
                 _renderer.RenderAt(
                     chunk.Heights,
