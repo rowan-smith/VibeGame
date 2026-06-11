@@ -5,7 +5,10 @@
 <PageTitle>Veilborne Web</PageTitle>
 
 <section class="game-container">
-    <canvas id="veilborne-game-canvas" width="1280" height="720" aria-label="Veilborne game canvas"></canvas>
+    <div class="game-viewport">
+        <canvas id="veilborne-game-canvas" width="1280" height="720" aria-label="Veilborne game canvas"></canvas>
+        <canvas id="veilborne-text-canvas" width="1280" height="720" class="text-overlay" aria-hidden="true"></canvas>
+    </div>
 </section>
 
 @code {

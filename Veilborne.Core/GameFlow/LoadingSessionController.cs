@@ -78,7 +78,7 @@ namespace Veilborne.GameFlow
             bool loadingReady = Progress >= 0.999f &&
                                 GeneratingChunks == 0 &&
                                 LoadedChunks >= DesiredChunks &&
-                                PendingSpawnObjects == 0;
+                                (OperatingSystem.IsBrowser() || PendingSpawnObjects == 0);
             if (loadingReady)
                 CompleteTime += dt;
             else

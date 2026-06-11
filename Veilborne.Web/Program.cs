@@ -192,15 +192,16 @@ internal static class Program
         var worldConfig = WebJsonUtils.LoadString<WorldConfig>(worldJson)
             ?? throw new InvalidOperationException("Failed to deserialize world.json");
 
-        worldConfig.EditableRadius = 2;
-        worldConfig.ReadOnlyRadius = 2;
-        worldConfig.LowLodRadius = 3;
-        worldConfig.TerrainLoadQueueRadius = 2;
-        worldConfig.MaxActiveVoxelChunks = 48;
-        worldConfig.TerrainRuntime.MaxEditableRadius = 2;
-        worldConfig.TerrainRuntime.MaxReadOnlyRadius = 2;
-        worldConfig.TerrainRuntime.MinReadOnlyRadius = 2;
-        worldConfig.TerrainRuntime.MaxLowLodRadius = 3;
+        worldConfig.EditableRadius = 1;
+        worldConfig.ReadOnlyRadius = 1;
+        worldConfig.LowLodRadius = 0;
+        worldConfig.TerrainLoadQueueRadius = 1;
+        worldConfig.MaxActiveVoxelChunks = 32;
+        worldConfig.TerrainRuntime.MaxEditableRadius = 1;
+        worldConfig.TerrainRuntime.MinEditableRadius = 1;
+        worldConfig.TerrainRuntime.MaxReadOnlyRadius = 1;
+        worldConfig.TerrainRuntime.MinReadOnlyRadius = 1;
+        worldConfig.TerrainRuntime.MaxLowLodRadius = 0;
         worldConfig.TerrainRuntime.MinLowLodRadius = 0;
         worldConfig.TerrainRuntime.MaxTerrainDrawDistance = 350f;
         worldConfig.TerrainRuntime.MaxMeshBuildsPerFrame = 2;

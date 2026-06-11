@@ -108,6 +108,7 @@ window.veilborne = {
         _lastCanvasWarn: 0,
         _pools: { graphics: [], texts: [], sprites: [] },
         _poolIdx: { g: 0, t: 0, s: 0 },
+        _textQueue: [],
         _cappedDpr: function() {
             // Match game logical resolution (1280x720) — avoids pointer/render scale mismatch.
             return 1;
@@ -275,15 +276,43 @@ window.veilborne = {
         clearStage: function() {
             this._resetPoolIndices();
             this._hideUnusedPool();
+            this._textQueue = [];
+        },
+        drawTextOverlay: function() {
+            const gameCanvas = document.getElementById('veilborne-game-canvas');
+            const textCanvas = document.getElementById('veilborne-text-canvas');
+            if (!gameCanvas || !textCanvas || !this._textQueue.length) {
+                if (textCanvas) {
+                    const ctx = textCanvas.getContext('2d');
+                    if (ctx) ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+                }
+                return;
+            }
+            const logicalW = parseInt(gameCanvas.getAttribute('width') || '1280', 10);
+            const logicalH = parseInt(gameCanvas.getAttribute('height') || '720', 10);
+            if (textCanvas.width !== logicalW) textCanvas.width = logicalW;
+            if (textCanvas.height !== logicalH) textCanvas.height = logicalH;
+            const ctx = textCanvas.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, logicalW, logicalH);
+            for (let i = 0; i < this._textQueue.length; i++) {
+                const cmd = this._textQueue[i];
+                const size = cmd.f || 16;
+                ctx.font = 'bold ' + size + 'px Arial, Helvetica, sans-serif';
+                ctx.fillStyle = cmd.c && cmd.c.startsWith('#') ? cmd.c : '#ffffff';
+                ctx.textBaseline = 'top';
+                ctx.fillText(cmd.s, cmd.x, cmd.y);
+            }
         },
         executeBatch: function(commands) {
             const app = this.ensureApp();
-            if (!app || !commands || commands.length === 0) return;
+            if (!commands || commands.length === 0) return;
 
             for (let i = 0; i < commands.length; i++) {
                 const c = commands[i];
                 const t = c.t;
                 if (t === 0) {
+                    if (!app) continue;
                     const g = this._getGraphics();
                     const hex = this.parseColor(c.c);
                     g.beginFill(hex);
@@ -292,25 +321,15 @@ window.veilborne = {
                 } else if (t === 1) {
                     const content = c.s || c.textOrKey || '';
                     if (!content) continue;
-                    const txt = this._getText();
-                    const hex = this.parseColor(c.c);
-                    const fill = typeof hex === 'number'
-                        ? '#' + hex.toString(16).padStart(6, '0')
-                        : (c.c || '#ffffff');
-                    txt.text = content;
-                    txt.style = new PIXI.TextStyle({
-                        fontFamily: 'Arial, Helvetica, sans-serif',
-                        fontSize: c.f || 16,
-                        fill: fill,
-                        fontWeight: 'bold'
+                    this._textQueue.push({
+                        s: content,
+                        x: c.x,
+                        y: c.y,
+                        f: c.f || 16,
+                        c: c.c || '#ffffff'
                     });
-                    txt.anchor.set(0, 0);
-                    txt.roundPixels = true;
-                    txt.x = c.x;
-                    txt.y = c.y;
-                    txt.visible = true;
-                    txt.alpha = 1;
                 } else if (t === 2) {
+                    if (!app) continue;
                     const tex = this.textures[c.s];
                     if (!tex || !tex.baseTexture || !tex.baseTexture.valid) {
                         const g = this._getGraphics();
@@ -326,6 +345,7 @@ window.veilborne = {
                         sprite.height = c.h;
                     }
                 } else if (t === 3) {
+                    if (!app) continue;
                     const hex = this.parseColor(c.c);
                     const x = c.x, y = c.y, w = c.w, h = c.h;
                     const g = this._getGraphics();
@@ -336,6 +356,7 @@ window.veilborne = {
                     g.drawRect(x, y + h - 2, w, 2);
                     g.endFill();
                 } else if (t === 4) {
+                    if (!app) continue;
                     const g = this._getGraphics();
                     const hex = this.parseColor(c.c);
                     g.lineStyle(1, hex);
@@ -355,16 +376,18 @@ window.veilborne = {
         },
         present: function() {
             const app = this.ensureApp();
-            if (!app || this.failed) return;
-            try {
-                if (typeof app.render === 'function') {
-                    app.render();
-                } else {
-                    app.renderer.render(app.stage);
+            if (app && !this.failed) {
+                try {
+                    if (typeof app.render === 'function') {
+                        app.render();
+                    } else {
+                        app.renderer.render(app.stage);
+                    }
+                } catch (e) {
+                    console.error('[PIXI] render error', e);
                 }
-            } catch (e) {
-                console.error('[PIXI] render error', e);
             }
+            this.drawTextOverlay();
         }
     }
 };

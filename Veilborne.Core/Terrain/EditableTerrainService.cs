@@ -235,7 +235,10 @@ namespace Veilborne.Terrain
                     originZ + ChunkSize * TileSize * 0.5f);
                 var (primaryBiome, secondaryBiome, secondaryBlend) = ResolveBiomeBlend(center);
                 var spawnBiome = _biomeProvider.GetBiomeAt(center, _terrainGen);
-                var objects = spawnBiome.ObjectSpawner.GenerateObjects(spawnBiome.Id, _terrainGen, heights, origin, 18);
+                // Browser WASM: skip object scatter during chunk gen — main-thread cost dominates load time.
+                List<SpawnedObject> objects = OperatingSystem.IsBrowser()
+                    ? new List<SpawnedObject>()
+                    : spawnBiome.ObjectSpawner.GenerateObjects(spawnBiome.Id, _terrainGen, heights, origin, 18);
                 _completed.Enqueue(new GeneratedEditableChunk(key, heights, origin, primaryBiome, secondaryBiome, secondaryBlend, objects));
             });
         }
