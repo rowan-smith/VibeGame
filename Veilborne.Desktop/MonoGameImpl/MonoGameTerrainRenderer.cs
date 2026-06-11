@@ -77,7 +77,10 @@ namespace Veilborne.MonoGameImpl
             public float LayerBlendCoverage;
             public float BiomeBlendCoverage;
             public float TileSize;
+            public bool BiomeMergeEvaluated;
         }
+
+        private const float BiomeMergeCornerThreshold = 0.03f;
         private readonly Dictionary<(float x, float z, float tile), ChunkData> _chunks = new();
         private readonly HashSet<(float x, float z, float tile)> _activeChunkKeys = new();
         private readonly List<(float x, float z, float tile)> _sortedActiveKeysScratch = new();
@@ -163,28 +166,7 @@ namespace Veilborne.MonoGameImpl
             // Applied per-chunk at draw time via the active biome
         }
 
-        public void SetWarmupMode(bool enabled)
-        {
-            bool wasWarmup = _fastMeshBuild;
-            _fastMeshBuild = enabled;
-            if (wasWarmup && !enabled)
-                QueueQualityBiomeRebuilds();
-        }
-
-        private void QueueQualityBiomeRebuilds()
-        {
-            foreach (var key in _chunks.Keys.ToArray())
-            {
-                if (!_chunks.TryGetValue(key, out var chunk) || chunk.CurrentHeights is not { } heights)
-                    continue;
-                if (chunk.BiomeBlendCoverage <= 0.001f && string.IsNullOrEmpty(chunk.MergeBiomeId))
-                    continue;
-
-                var origin = new System.Numerics.Vector2(key.Item1, key.Item2);
-                MarkOriginDirty(origin);
-                EnqueueBuild(heights, chunk.TileSize > 0f ? chunk.TileSize : key.Item3, origin);
-            }
-        }
+        public void SetWarmupMode(bool enabled) => _fastMeshBuild = enabled;
 
         public void Render(float[,] heights, float tileSize, CameraComponent camera, System.Numerics.Vector3 baseColor)
         {
@@ -244,9 +226,9 @@ namespace Veilborne.MonoGameImpl
                 existing.CurrentHeights = heights;
                 existing.TileSize = tileSize;
                 var (mergeBiome, maxMerge, needsBiomeMeshRebuild) =
-                    ResolveChunkMergeInfo(heights, tileSize, originWorld, existing.BiomeBlendCoverage);
-                if (needsBiomeMeshRebuild && existing.Vb != null)
-                    BuildChunkMesh(heights, tileSize, originWorld);
+                    ResolveChunkMergeInfo(heights, tileSize, originWorld, existing);
+                if (needsBiomeMeshRebuild)
+                    EnqueueBuild(heights, tileSize, originWorld);
 
                 if (_chunks.TryGetValue(key, out existing))
                 {
@@ -294,16 +276,19 @@ namespace Veilborne.MonoGameImpl
 
                 existing.TileSize = tileSize;
                 var (mergeBiome, maxMerge, needsBiomeMeshRebuild) =
-                    ResolveChunkMergeInfo(heights, tileSize, originWorld, existing.BiomeBlendCoverage);
+                    ResolveChunkMergeInfo(heights, tileSize, originWorld, existing);
 
                 // Rebuild when layer/splat data first arrives or when biome merge weights were missing from mesh.
                 if ((!hadLayerData && baseHeights != null && layerConfig != null) ||
-                    (!hadSplatmap && splatmap != null) ||
-                    (needsBiomeMeshRebuild && existing.Vb != null))
+                    (!hadSplatmap && splatmap != null))
                 {
-                    BuildChunkMesh(heights, tileSize, originWorld);
+                    EnqueueBuild(heights, tileSize, originWorld);
                     if (_chunks.TryGetValue(key, out var rebuilt))
                         existing = rebuilt;
+                }
+                else if (needsBiomeMeshRebuild)
+                {
+                    EnqueueBuild(heights, tileSize, originWorld);
                 }
 
                 ApplyChunkVisual(ref existing, _activeBiome, mergeBiome, maxMerge);
@@ -343,8 +328,16 @@ namespace Veilborne.MonoGameImpl
         public void MarkOriginDirty(System.Numerics.Vector2 originWorld)
         {
             foreach (var key in _chunks.Keys)
-                if (Math.Abs(key.x - originWorld.X) < 1e-4f && Math.Abs(key.z - originWorld.Y) < 1e-4f)
-                    _dirtyKeys.Add(key);
+            {
+                if (Math.Abs(key.x - originWorld.X) > 1e-4f || Math.Abs(key.z - originWorld.Y) > 1e-4f)
+                    continue;
+                _dirtyKeys.Add(key);
+                if (_chunks.TryGetValue(key, out var chunk))
+                {
+                    chunk.BiomeMergeEvaluated = false;
+                    _chunks[key] = chunk;
+                }
+            }
         }
 
         public void PatchRegion(float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, int x0, int z0, int x1, int z1)
@@ -380,7 +373,7 @@ namespace Veilborne.MonoGameImpl
             {
                 (_, _, _, _, float maxCornerBlend, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
                     simple, null!, origin, width, depth, tileSize);
-                if (maxCornerBlend > 0.03f)
+                if (maxCornerBlend > BiomeMergeCornerThreshold)
                 {
                     if (_fastMeshBuild)
                         mergeMap = BiomeSampling.BuildVertexBlendMap(simple, null!, origin, width, depth, tileSize);
@@ -512,12 +505,13 @@ namespace Veilborne.MonoGameImpl
                 LayerMode = layerMode,
                 LayerBlendCoverage = blendSamples > 0 ? blendNonZero / (float)blendSamples : 0f,
                 BiomeBlendCoverage = biomeBlendSamples > 0 ? biomeBlendNonZero / (float)biomeBlendSamples : 0f,
-                TileSize = tileSize
+                TileSize = tileSize,
+                BiomeMergeEvaluated = true
             };
         }
 
         private (BiomeData? mergeBiome, float maxMerge, bool needsBiomeMeshRebuild) ResolveChunkMergeInfo(
-            float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, float currentBiomeBlendCoverage)
+            float[,] heights, float tileSize, System.Numerics.Vector2 originWorld, ChunkData chunk)
         {
             if (_biomeProvider is not SimpleBiomeProvider simple)
                 return (null, 0f, false);
@@ -526,7 +520,9 @@ namespace Veilborne.MonoGameImpl
             int depth = heights.GetLength(1);
             var (_, _, _, _, maxMerge, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
                 simple, null!, originWorld, width, depth, tileSize);
-            bool needsRebuild = maxMerge > 0.001f && currentBiomeBlendCoverage < 0.001f;
+            bool needsRebuild = _settings.Current.Graphics.BiomeTextureCrossfade
+                && maxMerge > BiomeMergeCornerThreshold
+                && !chunk.BiomeMergeEvaluated;
             return (mergeBiome?.Data, maxMerge, needsRebuild);
         }
 
@@ -605,7 +601,7 @@ namespace Veilborne.MonoGameImpl
 
             bool useBiomeMerge = _settings.Current.Graphics.BiomeTextureCrossfade &&
                                  mergeBiome is not null &&
-                                 (maxMerge > 0.03f || chunk.BiomeBlendCoverage > 0.02f);
+                                 (maxMerge > BiomeMergeCornerThreshold || chunk.BiomeBlendCoverage > 0.02f);
 
             if (chunk.BaseHeights != null && chunk.LayerConfig != null)
             {
