@@ -60,7 +60,7 @@
                           "Jitter":  0.85,
                           "WarpFrequencyScale":  1.0,
                           "WarpAmplitudeScale":  1.0,
-                          "BlendWidthWorld":  120.0
+                          "BlendWidthWorld":  180.0
                       },
     "Dig":  {
                 "Radius":  0.5,

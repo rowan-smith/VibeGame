@@ -159,9 +159,51 @@ namespace Veilborne.Biomes
             float blend = 0f;
             float denom = primaryWeight + secondaryWeight;
             if (secondary is not null && denom > 1e-5f)
-                blend = Math.Clamp(secondaryWeight / denom, 0f, 0.49f);
+                blend = Math.Clamp(secondaryWeight / denom, 0f, 1f);
 
             return (primary, secondary, blend);
+        }
+
+        /// <summary>
+        /// Builds a per-vertex blend factor map by sampling biome blend weights at chunk corners
+        /// and bilinearly interpolating across the chunk.
+        /// </summary>
+        public static float[,] BuildVertexBlendMap(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize)
+        {
+            var map = new float[width, height];
+            float chunkW = (width - 1) * tileSize;
+            float chunkH = (height - 1) * tileSize;
+
+            float b00 = SampleBiomeBlend(provider, terrain, origin.X, origin.Y);
+            float b10 = SampleBiomeBlend(provider, terrain, origin.X + chunkW, origin.Y);
+            float b01 = SampleBiomeBlend(provider, terrain, origin.X, origin.Y + chunkH);
+            float b11 = SampleBiomeBlend(provider, terrain, origin.X + chunkW, origin.Y + chunkH);
+
+            for (int z = 0; z < height; z++)
+            {
+                float tz = height > 1 ? z / (float)(height - 1) : 0f;
+                for (int x = 0; x < width; x++)
+                {
+                    float tx = width > 1 ? x / (float)(width - 1) : 0f;
+                    float top = b00 + (b10 - b00) * tx;
+                    float bot = b01 + (b11 - b01) * tx;
+                    map[x, z] = top + (bot - top) * tz;
+                }
+            }
+
+            return map;
+        }
+
+        private static float SampleBiomeBlend(SimpleBiomeProvider provider, ITerrainGenerator terrain, float wx, float wz)
+        {
+            var (_, _, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+            return blend;
         }
     }
 }

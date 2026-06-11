@@ -368,7 +368,7 @@ namespace Veilborne.Terrain
             // Compute per-vertex blend factor by sampling at chunk corners + center
             float[,]? blendMap = null;
             if (hasSecondary && _biomeProvider is SimpleBiomeProvider simple)
-                blendMap = BuildVertexBlendMap(simple, chunk.Origin, w, h);
+                blendMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, chunk.Origin, w, h, TileSize);
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -430,43 +430,6 @@ namespace Veilborne.Terrain
                 }
                 chunk.Splatmap[x, z] = primary;
             }
-        }
-
-        /// <summary>
-        /// Builds a per-vertex blend factor map by sampling the biome provider at chunk corners
-        /// and bilinearly interpolating across the chunk. Only called at chunk generation, not per frame.
-        /// </summary>
-        private float[,] BuildVertexBlendMap(SimpleBiomeProvider provider, Vector2 origin, int w, int h)
-        {
-            var map = new float[w, h];
-            float chunkW = (w - 1) * TileSize;
-            float chunkH = (h - 1) * TileSize;
-
-            // Sample blend factor at 5 points: 4 corners + center
-            float b00 = SampleBlend(provider, origin.X, origin.Y);
-            float b10 = SampleBlend(provider, origin.X + chunkW, origin.Y);
-            float b01 = SampleBlend(provider, origin.X, origin.Y + chunkH);
-            float b11 = SampleBlend(provider, origin.X + chunkW, origin.Y + chunkH);
-
-            for (int z = 0; z < h; z++)
-            {
-                float tz = h > 1 ? z / (float)(h - 1) : 0f;
-                for (int x = 0; x < w; x++)
-                {
-                    float tx = w > 1 ? x / (float)(w - 1) : 0f;
-                    // Bilinear interpolation of blend factors
-                    float top = b00 + (b10 - b00) * tx;
-                    float bot = b01 + (b11 - b01) * tx;
-                    map[x, z] = top + (bot - top) * tz;
-                }
-            }
-            return map;
-        }
-
-        private float SampleBlend(SimpleBiomeProvider provider, float wx, float wz)
-        {
-            var (_, _, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), _terrainGen);
-            return blend;
         }
 
         public void Render(CameraComponent camera)

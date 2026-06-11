@@ -142,7 +142,7 @@ namespace Veilborne.Biomes
                 secondary = _biomes[GetCellData(secondSX, secondSY).BiomeIndex];
                 float delta = secondDist - bestDist;
                 blend = 1f - Math.Clamp(delta / _blendWidthWorld, 0f, 1f);
-                blend = SmoothStep(blend) * 0.49f;
+                blend = SmoothStep(blend);
             }
 
             if (secondary is null || string.Equals(secondary.Id, primary.Id, StringComparison.OrdinalIgnoreCase))

@@ -302,7 +302,7 @@ namespace Veilborne.Terrain
                 {
                     Heights = item.heights,
                     BaseHeights = (float[,])item.heights.Clone(),
-                    Splatmap = BuildSplatmap(item.heights, item.heights, item.biome, secBiome, secBlend),
+                    Splatmap = BuildSplatmap(item.heights, item.heights, item.biome, secBiome, secBlend, item.origin),
                     Origin = item.origin,
                     IsMeshGenerated = false,
                     BuiltFromVersion = -1
@@ -498,11 +498,16 @@ namespace Veilborne.Terrain
         }
 
         private Vector4[,] BuildSplatmap(float[,] heights, float[,]? baseHeights, BiomeData biome,
-            BiomeData? secondaryBiome = null, float blendFactor = 0f)
+            BiomeData? secondaryBiome = null, float blendFactor = 0f, Vector2 origin = default)
         {
             int w = heights.GetLength(0);
             int h = heights.GetLength(1);
             var splat = new Vector4[w, h];
+
+            float[,]? blendMap = null;
+            bool hasSecondary = secondaryBiome != null && blendFactor > 0.001f;
+            if (hasSecondary && _biomeProvider is SimpleBiomeProvider simple)
+                blendMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, origin, w, h, TileSize);
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)
@@ -511,54 +516,21 @@ namespace Veilborne.Terrain
                 if (baseHeights != null)
                     depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
 
-                float hL = x > 0 ? heights[x - 1, z] : heights[x, z];
-                float hR = x < w - 1 ? heights[x + 1, z] : heights[x, z];
-                float hU = z > 0 ? heights[x, z - 1] : heights[x, z];
-                float hD = z < h - 1 ? heights[x, z + 1] : heights[x, z];
-                float dx = (hR - hL) * 0.5f;
-                float dz = (hD - hU) * 0.5f;
-                float slope = MathF.Sqrt(dx * dx + dz * dz);
+                float slope = ComputeSlopeAt(heights, x, z, w, h);
+                Vector4 primary = ComputeSplatForLayers(biome.TerrainLayers, depth, slope);
 
-                splat[x, z] = ComputeSplatForLayers(biome.TerrainLayers, depth, slope);
-            }
-
-            // Multi-biome per-vertex blend overlay: sample biome blend weights at a grid
-            // and interpolate splatmap where secondary biomes have influence.
-            if (_biomeProvider is SimpleBiomeProvider simple && w > 1 && h > 1)
-            {
-                for (int z = 0; z < h; z++)
-                for (int x = 0; x < w; x++)
+                if (hasSecondary && blendMap != null)
                 {
-                    // Skip interior vertices on even grid for LowLod perf — only every 4th
-                    // vertex gets a full biome lookup, rest are interpolated implicitly by GPU.
-                    // For RO ring we do every vertex since quality matters.
-                    float depth = 0f;
-                    if (baseHeights != null)
-                        depth = MathF.Max(0f, baseHeights[x, z] - heights[x, z]);
-                    float slopeVal = ComputeSlopeAt(heights, x, z, w, h);
-
-                    // World position of this vertex
-                    // (origin is set externally; we use biome to get nearest chunk origin)
-                    // We don't have origin here; use relative blend from primary
-                    if (secondaryBiome == null || blendFactor <= 0.001f)
-                        continue;
-
-                    // Spatially-varying blend using smooth gradient across chunk
-                    float tx = x / (float)(w - 1);
-                    float tz = z / (float)(h - 1);
-                    // Hermite-style blend that peaks at edges and fades to center
-                    float edgeFade = MathF.Max(
-                        MathF.Abs(tx - 0.5f) * 2f,
-                        MathF.Abs(tz - 0.5f) * 2f);
-                    float vertexBlend = blendFactor * (0.3f + 0.7f * edgeFade);
-                    vertexBlend = vertexBlend * vertexBlend * (3f - 2f * vertexBlend); // smoothstep
-
-                    if (vertexBlend > 0.005f)
+                    float vertexBlend = blendMap[x, z];
+                    if (vertexBlend > 0.001f)
                     {
-                        Vector4 secondary = ComputeSplatForLayers(secondaryBiome.TerrainLayers, depth, slopeVal);
-                        splat[x, z] = Vector4.Lerp(splat[x, z], secondary, vertexBlend);
+                        Vector4 secondary = ComputeSplatForLayers(secondaryBiome!.TerrainLayers, depth, slope);
+                        splat[x, z] = Vector4.Lerp(primary, secondary, vertexBlend);
+                        continue;
                     }
                 }
+
+                splat[x, z] = primary;
             }
 
             return splat;
