@@ -18,80 +18,94 @@
             "WtFertility": 1.2
         },
         "NoiseModifiers": {
-            "HeightScale": 0.35,
-            "Frequency": 0.8,
-            "Persistence": 0.45,
-            "Lacunarity": 1.8,
-            "Detail": 0.55,
-            "RidgeWeight": 0.3,
-            "BillowWeight": 0.5,
-            "WarpStrength": 0.4,
-            "WarpFrequency": 0.55,
-            "ErosionStrength": 0.35,
-            "ValleyDepthBias": 0.3,
-            "MicroDetailFrequency": 2.2,
-            "MicroDetailAmplitude": 0.18,
-            "ContinentalScale": 0.9,
-            "CliffStrength": 0.22,
-            "CliffFrequency": 0.4,
-            "CliffSharpness": 0.14,
-            "CliffTiers": 4,
-            "CanyonDepth": 0.45,
-            "CanyonFrequency": 0.5,
-            "CanyonWidth": 0.4
+            "HeightScale": 0.38,
+            "Frequency": 0.75,
+            "Persistence": 0.42,
+            "Lacunarity": 1.85,
+            "Detail": 0.6,
+            "RidgeWeight": 0.22,
+            "BillowWeight": 0.62,
+            "RidgeSharpness": 1.3,
+            "WarpStrength": 0.48,
+            "WarpFrequency": 0.5,
+            "ErosionStrength": 0.4,
+            "ValleyDepthBias": 0.35,
+            "ContinentalScale": 0.75,
+            "CliffStrength": 0.18,
+            "CliffFrequency": 0.38,
+            "CliffSharpness": 0.16,
+            "CliffTiers": 3,
+            "CanyonDepth": 0.38,
+            "CanyonFrequency": 0.45,
+            "CanyonWidth": 0.48,
+            "PondDepth": 0.55,
+            "PondFrequency": 1.8,
+            "RollingHillsAmplitude": 0.35,
+            "RollingHillsFrequency": 0.65,
+            "MicroDetailFrequency": 2.4,
+            "MicroDetailAmplitude": 0.16
         }
     },
     "NoiseLayers": [
         {
+            "Enabled": true,
             "Type": "Billow",
-            "Frequency": 0.6,
-            "Amplitude": 0.55,
+            "Frequency": 0.55,
+            "Amplitude": 0.6,
             "Octaves": 4,
-            "Persistence": 0.45,
+            "Persistence": 0.42,
             "Lacunarity": 1.9,
             "BlendMode": "Add",
             "Seed": 11,
-            "Enabled": true
+            "Offset": 0.0
         },
         {
+            "Enabled": true,
             "Type": "Perlin",
-            "Frequency": 1.1,
-            "Amplitude": 0.35,
+            "Frequency": 0.95,
+            "Amplitude": 0.32,
             "Octaves": 3,
-            "Persistence": 0.4,
+            "Persistence": 0.38,
             "Lacunarity": 2.0,
             "BlendMode": "Add",
             "Seed": 23,
-            "Enabled": true
+            "Offset": 0.0
         },
         {
-            "Type": "Worley",
-            "Frequency": 1.8,
-            "Amplitude": -0.45,
+            "Enabled": true,
+            "Type": "Pond",
+            "Frequency": 1.6,
+            "Amplitude": 0.5,
             "Octaves": 1,
-            "BlendMode": "Min",
-            "Offset": 0.0,
-            "Seed": 37,
-            "Enabled": true
-        },
-        {
-            "Type": "Value",
-            "Frequency": 3.5,
-            "Amplitude": 0.12,
-            "Octaves": 2,
-            "Persistence": 0.35,
-            "BlendMode": "Screen",
-            "Seed": 59,
-            "Enabled": true
-        },
-        {
-            "Type": "Cliff",
-            "Frequency": 0.35,
-            "Amplitude": 0.35,
-            "Octaves": 4,
             "BlendMode": "Add",
-            "Seed": 91,
-            "Enabled": true
+            "Seed": 37,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Canyon",
+            "Frequency": 0.55,
+            "Amplitude": -0.35,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 49,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Value",
+            "Frequency": 3.2,
+            "Amplitude": 0.1,
+            "Octaves": 2,
+            "BlendMode": "Screen",
+            "Seed": 61,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
         }
     ],
     "ColorPalette": {
@@ -182,5 +196,5 @@
         ]
     },
     "BaseHeight": 0.0,
-    "HeightMultiplier": 1.0
+    "HeightMultiplier": 1.05
 }

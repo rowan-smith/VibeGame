@@ -123,15 +123,34 @@ namespace Veilborne.Biomes
                 localShape -= SampleCanyonCut(wx, wz, seedB + 777, freq, n, roughAmp);
             }
 
+            // Rolling hills: readable golden waves and gentle savanna undulation
+            if (n.RollingHillsAmplitude > 0.001f)
+            {
+                localShape += SampleRollingHills(wx, wz, seedC + 333, freq, n);
+            }
+
+            // Basin bowls: marsh depressions and volcanic caldera floors
+            if (n.BasinStrength > 0.001f)
+            {
+                localShape -= SampleBasinBowl(wx, wz, seedA + 444, freq, n, roughAmp);
+            }
+
+            // Pond/lake depressions: glowing pools, acid pools, sinkholes
+            if (n.PondDepth > 0.001f)
+            {
+                localShape -= SamplePondDepressions(wx, wz, seedC + 999, freq, n);
+            }
+
+            // Volcanic/magical pulse: molten roots bulging beneath scorched ground
+            if (n.VolcanicPulse > 0.001f)
+            {
+                localShape += SampleVolcanicPulse(wx, wz, seedB + 888, freq, n, roughAmp);
+            }
+
             // Dune directional noise: wind-sculpted sand dune or rolling hill patterns
             if (n.DuneFrequency > 0.001f && n.DuneAmplitude > 0.001f)
             {
-                float dirRad = n.DuneDirection * MathF.PI / 180f;
-                float projected = wx * MathF.Cos(dirRad) + wz * MathF.Sin(dirRad);
-                float duneFreq = freq * n.DuneFrequency * 3f;
-                float perpNoise = ValueNoise2D(wx * duneFreq * 0.3f, wz * duneFreq * 0.3f, seedC + 50) * 0.3f;
-                float duneVal = MathF.Sin(projected * duneFreq + perpNoise * MathF.PI * 2f) * 0.5f + 0.5f;
-                localShape += duneVal * n.DuneAmplitude;
+                localShape += SampleDuneField(wx, wz, seedC + 50, freq, n);
             }
 
             // Crater noise: Worley/cellular-like depressions with raised rims
@@ -177,6 +196,22 @@ namespace Veilborne.Biomes
 
             float heightMult = biome.HeightMultiplier > 0.01f ? biome.HeightMultiplier : 1f;
             float h = baseHeight + (elevationBias + localShape) * heightMult;
+
+            // Wetland/glass-sea flattening for readable low terrain
+            float wetlandFlatten = n.WetlandFlatten > 0.001f
+                ? n.WetlandFlatten
+                : (b.Moisture > 0.88f ? (b.Moisture - 0.88f) * 4f : 0f);
+            if (wetlandFlatten > 0.001f)
+            {
+                float anchor = baseHeight + elevationBias * 0.35f;
+                h = anchor + (h - anchor) * (1f - Math.Clamp(wetlandFlatten, 0f, 0.92f));
+            }
+
+            // Floating island platforms for surreal/void biomes
+            if (n.IslandScale > 0.001f)
+            {
+                h = ApplyFloatingIslands(h, wx, wz, seedW + 666, freq, n, baseHeight + elevationBias);
+            }
 
             // Strata cliffs: flat-topped elevation tiers with near-vertical faces
             if (n.CliffStrength > 0.001f)
@@ -254,6 +289,73 @@ namespace Veilborne.Biomes
             return depth * n.CanyonDepth * roughAmp;
         }
 
+        private static float SampleRollingHills(float wx, float wz, int seed, float freq, BiomeNoiseModifiers n)
+        {
+            float rf = freq * MathF.Max(0.2f, n.RollingHillsFrequency) * 2.5f;
+            float waveA = MathF.Sin(wx * rf + ValueNoise2D(wx * rf * 0.2f, wz * rf * 0.2f, seed) * 1.5f);
+            float waveB = MathF.Cos(wz * rf * 0.85f + ValueNoise2D(wx * rf * 0.15f, wz * rf * 0.15f, seed + 3) * 1.2f);
+            float blend = Fbm(wx, wz, seed + 11, rf * 0.35f, 2, 0.45f, 2f) * 0.35f;
+            return (waveA * 0.55f + waveB * 0.45f + blend) * n.RollingHillsAmplitude;
+        }
+
+        private static float SampleBasinBowl(float wx, float wz, int seed, float freq, BiomeNoiseModifiers n, float roughAmp)
+        {
+            float bf = freq * 0.18f;
+            float bowlNoise = Fbm(wx, wz, seed, bf, 3, 0.5f, 2f);
+            float bowl = MathF.Max(0f, -bowlNoise);
+            bowl = bowl * bowl * n.BasinStrength * roughAmp * 0.85f;
+            float rim = MathF.Max(0f, bowlNoise - 0.15f) * n.BasinStrength * roughAmp * 0.2f;
+            return bowl - rim * 0.3f;
+        }
+
+        private static float SamplePondDepressions(float wx, float wz, int seed, float freq, BiomeNoiseModifiers n)
+        {
+            float pf = freq * MathF.Max(0.5f, n.PondFrequency) * 2.2f;
+            float dist = WorleyNoise2D(wx * pf, wz * pf, seed);
+            float radius = 0.32f + ValueNoise2D(wx * pf * 0.5f, wz * pf * 0.5f, seed + 5) * 0.08f;
+            if (dist >= radius) return 0f;
+            float t = 1f - dist / radius;
+            return t * t * n.PondDepth;
+        }
+
+        private static float SampleVolcanicPulse(float wx, float wz, int seed, float freq, BiomeNoiseModifiers n, float roughAmp)
+        {
+            float pf = freq * 1.4f;
+            float pulse = Fbm(wx, wz, seed, pf, 3, 0.55f, 2.2f);
+            float bulge = MathF.Max(0f, pulse) * MathF.Max(0f, pulse);
+            float crack = (1f - MathF.Abs(Fbm(wx, wz, seed + 40, pf * 2.2f, 2, 0.5f, 2.5f))) * 0.4f;
+            return (bulge + crack) * n.VolcanicPulse * roughAmp * 0.35f;
+        }
+
+        private static float SampleDuneField(float wx, float wz, int seed, float freq, BiomeNoiseModifiers n)
+        {
+            float dirRad = n.DuneDirection * MathF.PI / 180f;
+            float cosD = MathF.Cos(dirRad);
+            float sinD = MathF.Sin(dirRad);
+            float perpX = -sinD;
+            float perpZ = cosD;
+            float projected = wx * cosD + wz * sinD;
+            float cross = wx * perpX + wz * perpZ;
+            float duneFreq = freq * n.DuneFrequency * 3.2f;
+            float envelope = 0.65f + ValueNoise2D(wx * duneFreq * 0.25f, wz * duneFreq * 0.25f, seed) * 0.35f;
+            float crestNoise = ValueNoise2D(wx * duneFreq * 0.4f, wz * duneFreq * 0.4f, seed + 17) * 0.25f;
+            float duneVal = MathF.Sin(projected * duneFreq + crestNoise * MathF.PI * 2f) * 0.5f + 0.5f;
+            float barchan = MathF.Exp(-MathF.Abs(cross) * duneFreq * 0.18f) * 0.35f + 0.65f;
+            return duneVal * n.DuneAmplitude * envelope * barchan;
+        }
+
+        private static float ApplyFloatingIslands(float height, float wx, float wz, int seed, float freq, BiomeNoiseModifiers n, float platformBase)
+        {
+            float islandFreq = freq * MathF.Max(0.15f, n.IslandScale) * 1.8f;
+            float cellDist = WorleyNoise2D(wx * islandFreq, wz * islandFreq, seed);
+            float islandRadius = 0.42f;
+            float edge = Math.Clamp((islandRadius - cellDist) / 0.12f, 0f, 1f);
+            edge = edge * edge * (3f - 2f * edge);
+            float drop = MathF.Max(0.5f, n.IslandDrop);
+            float voidFloor = platformBase - drop;
+            return voidFloor + (height - voidFloor) * edge;
+        }
+
         /// <summary>Evaluate a single data-driven noise layer by type.</summary>
         private static float EvaluateNoiseLayer(NoiseLayerConfig layer, float wx, float wz, int seed, float freq, float roughAmp, float ridgeAmp)
         {
@@ -269,6 +371,10 @@ namespace Veilborne.Biomes
                 "worley" => WorleyNoise2D(wx * freq, wz * freq, seed),
                 "cliff" => EvaluateCliffLayer(wx, wz, seed, freq, oct, roughAmp + ridgeAmp * 0.5f),
                 "canyon" => EvaluateCanyonLayer(wx, wz, seed, freq, oct),
+                "pond" => EvaluatePondLayer(wx, wz, seed, freq),
+                "rolling" => SampleRollingHills(wx, wz, seed, freq, new BiomeNoiseModifiers { RollingHillsAmplitude = 1f, RollingHillsFrequency = layer.Frequency }),
+                "basin" => EvaluateBasinLayer(wx, wz, seed, freq, roughAmp),
+                "island" => EvaluateIslandLayer(wx, wz, seed, freq),
                 _ => Fbm(wx, wz, seed, freq, oct, pers, lac), // "perlin" or default
             };
         }
@@ -286,6 +392,27 @@ namespace Veilborne.Biomes
         {
             float ridge = Fbm(wx, wz, seed, freq, octaves, 0.5f, 2.2f);
             return MathF.Pow(Math.Clamp(1f - MathF.Abs(ridge), 0f, 1f), 2f);
+        }
+
+        private static float EvaluatePondLayer(float wx, float wz, int seed, float freq)
+        {
+            float dist = WorleyNoise2D(wx * freq, wz * freq, seed);
+            float radius = 0.34f;
+            if (dist >= radius) return 0f;
+            float t = 1f - dist / radius;
+            return -(t * t);
+        }
+
+        private static float EvaluateBasinLayer(float wx, float wz, int seed, float freq, float roughAmp)
+        {
+            float bowlNoise = Fbm(wx, wz, seed, freq * 0.35f, 3, 0.5f, 2f);
+            return -MathF.Max(0f, -bowlNoise) * roughAmp * 0.4f;
+        }
+
+        private static float EvaluateIslandLayer(float wx, float wz, int seed, float freq)
+        {
+            float dist = WorleyNoise2D(wx * freq, wz * freq, seed);
+            return Math.Clamp((0.4f - dist) / 0.15f, 0f, 1f);
         }
 
         /// <summary>Combine a noise layer value with the existing terrain shape.</summary>

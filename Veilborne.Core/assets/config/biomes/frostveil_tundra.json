@@ -18,80 +18,82 @@
             "WtFertility": 1.1
         },
         "NoiseModifiers": {
-            "HeightScale": 0.25,
-            "Frequency": 0.7,
-            "Persistence": 0.35,
-            "Lacunarity": 1.8,
-            "Detail": 0.4,
-            "RidgeWeight": 0.15,
-            "WarpStrength": 0.25,
-            "WarpFrequency": 0.4,
-            "ErosionStrength": 0.6,
-            "ContinentalScale": 2.0,
-            "ContinentalFrequency": 0.08,
-            "MicroDetailFrequency": 2.0,
-            "MicroDetailAmplitude": 0.1,
-            "BillowWeight": 0.35,
-            "ValleyDepthBias": 0.2,
-            "CliffStrength": 0.28,
-            "CliffFrequency": 0.25,
-            "CliffSharpness": 0.16,
+            "HeightScale": 0.22,
+            "Frequency": 0.62,
+            "Persistence": 0.32,
+            "Lacunarity": 1.75,
+            "Detail": 0.38,
+            "RidgeWeight": 0.12,
+            "BillowWeight": 0.48,
+            "RidgeSharpness": 1.2,
+            "WarpStrength": 0.22,
+            "WarpFrequency": 0.35,
+            "ErosionStrength": 0.55,
+            "ContinentalScale": 1.85,
+            "ContinentalFrequency": 0.07,
+            "CliffStrength": 0.22,
+            "CliffFrequency": 0.22,
+            "CliffSharpness": 0.18,
             "CliffTiers": 3,
-            "CanyonDepth": 0.25,
-            "CanyonFrequency": 0.4,
-            "CanyonWidth": 0.5
+            "CanyonDepth": 0.18,
+            "CanyonFrequency": 0.35,
+            "CanyonWidth": 0.52,
+            "PondDepth": 0.35,
+            "PondFrequency": 1.4,
+            "RollingHillsAmplitude": 0.22,
+            "RollingHillsFrequency": 0.45,
+            "MicroDetailFrequency": 2.2,
+            "MicroDetailAmplitude": 0.09
         }
     },
     "NoiseLayers": [
         {
-            "Type": "Billow",
-            "Frequency": 0.5,
-            "Amplitude": 0.4,
-            "Octaves": 3,
-            "Persistence": 0.35,
-            "Lacunarity": 1.8,
-            "BlendMode": "Add",
-            "Seed": 9,
-            "Enabled": true
-        },
-        {
+            "Enabled": true,
             "Type": "Perlin",
-            "Frequency": 0.25,
-            "Amplitude": 0.3,
+            "Frequency": 0.22,
+            "Amplitude": 0.35,
             "Octaves": 3,
             "Persistence": 0.3,
             "Lacunarity": 1.6,
             "BlendMode": "Add",
-            "Seed": 21,
-            "Enabled": true
+            "Seed": 9,
+            "Offset": 0.0
         },
         {
-            "Type": "Worley",
-            "Frequency": 1.2,
-            "Amplitude": -0.35,
-            "Octaves": 1,
-            "BlendMode": "Min",
-            "Seed": 43,
-            "Enabled": true
-        },
-        {
-            "Type": "Value",
-            "Frequency": 3.0,
-            "Amplitude": 0.08,
-            "Octaves": 2,
-            "Persistence": 0.35,
-            "BlendMode": "Screen",
-            "Seed": 61,
-            "Enabled": true
-        },
-        {
-            "Type": "Cliff",
-            "Frequency": 0.2,
-            "Amplitude": 0.25,
+            "Enabled": true,
+            "Type": "Billow",
+            "Frequency": 0.48,
+            "Amplitude": 0.38,
             "Octaves": 3,
             "BlendMode": "Add",
-            "Seed": 101,
-            "Enabled": true
+            "Seed": 21,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Pond",
+            "Frequency": 1.2,
+            "Amplitude": 0.3,
+            "Octaves": 1,
+            "BlendMode": "Add",
+            "Seed": 43,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Value",
+            "Frequency": 2.8,
+            "Amplitude": 0.07,
+            "Octaves": 2,
+            "BlendMode": "Screen",
+            "Seed": 61,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
         }
     ],
     "ColorPalette": {
@@ -176,6 +178,6 @@
             }
         ]
     },
-    "BaseHeight": 0.5,
-    "HeightMultiplier": 0.95
+    "BaseHeight": 0.3,
+    "HeightMultiplier": 0.92
 }

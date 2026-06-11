@@ -18,82 +18,78 @@
             "WtFertility": 1.2
         },
         "NoiseModifiers": {
-            "HeightScale": 0.18,
-            "Frequency": 0.7,
-            "Persistence": 0.3,
-            "Lacunarity": 1.8,
-            "Detail": 0.35,
-            "RidgeWeight": 0.45,
-            "WarpStrength": 0.35,
-            "WarpFrequency": 0.5,
-            "DuneFrequency": 2.0,
-            "DuneAmplitude": 1.2,
-            "DuneDirection": 120,
-            "ErosionStrength": 0.4,
-            "MicroDetailFrequency": 4.0,
-            "MicroDetailAmplitude": 0.18,
-            "ContinentalScale": 0.45,
-            "CliffStrength": 0.2,
-            "CliffFrequency": 0.38,
-            "CliffSharpness": 0.15,
-            "CliffTiers": 4,
-            "CanyonDepth": 0.15,
-            "CanyonFrequency": 0.5,
-            "CanyonWidth": 0.45
+            "HeightScale": 0.16,
+            "Frequency": 0.62,
+            "Persistence": 0.28,
+            "Lacunarity": 1.75,
+            "Detail": 0.32,
+            "RidgeWeight": 0.52,
+            "BillowWeight": 0.28,
+            "RidgeSharpness": 2.2,
+            "WarpStrength": 0.38,
+            "WarpFrequency": 0.48,
+            "ErosionStrength": 0.35,
+            "ContinentalScale": 0.38,
+            "CliffStrength": 0.15,
+            "CliffFrequency": 0.35,
+            "CliffSharpness": 0.14,
+            "CliffTiers": 3,
+            "DuneFrequency": 2.2,
+            "DuneAmplitude": 1.35,
+            "DuneDirection": 115,
+            "WetlandFlatten": 0.18,
+            "MicroDetailFrequency": 5.2,
+            "MicroDetailAmplitude": 0.2
         }
     },
     "NoiseLayers": [
         {
-            "Type": "Billow",
-            "Frequency": 1.2,
-            "Amplitude": 0.45,
-            "Octaves": 3,
-            "Persistence": 0.35,
-            "Lacunarity": 1.9,
-            "BlendMode": "Add",
-            "Seed": 16,
-            "Enabled": true
-        },
-        {
+            "Enabled": true,
             "Type": "Ridge",
-            "Frequency": 2.2,
-            "Amplitude": 0.4,
+            "Frequency": 1.85,
+            "Amplitude": 0.38,
             "Octaves": 3,
-            "Persistence": 0.45,
+            "Persistence": 0.42,
             "Lacunarity": 2.4,
             "BlendMode": "Max",
-            "Seed": 32,
-            "Enabled": true
+            "Seed": 16,
+            "Offset": 0.0
         },
         {
-            "Type": "Perlin",
-            "Frequency": 0.5,
-            "Amplitude": 0.2,
-            "Octaves": 2,
-            "Persistence": 0.3,
-            "Lacunarity": 1.7,
+            "Enabled": true,
+            "Type": "Billow",
+            "Frequency": 1.05,
+            "Amplitude": 0.38,
+            "Octaves": 3,
             "BlendMode": "Add",
-            "Seed": 48,
-            "Enabled": true
+            "Seed": 32,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
         },
         {
+            "Enabled": true,
             "Type": "Worley",
-            "Frequency": 0.7,
-            "Amplitude": 0.5,
+            "Frequency": 0.62,
+            "Amplitude": 0.55,
             "Octaves": 1,
             "BlendMode": "Max",
-            "Seed": 64,
-            "Enabled": true
+            "Seed": 48,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
         },
         {
+            "Enabled": true,
             "Type": "Value",
-            "Frequency": 5.0,
+            "Frequency": 5.5,
             "Amplitude": 0.14,
             "Octaves": 2,
-            "Persistence": 0.35,
             "BlendMode": "Screen",
-            "Seed": 80,
-            "Enabled": true
+            "Seed": 64,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
         }
     ],
     "ColorPalette": {
@@ -183,6 +179,6 @@
             }
         ]
     },
-    "BaseHeight": -0.5,
-    "HeightMultiplier": 0.88
+    "BaseHeight": -0.8,
+    "HeightMultiplier": 0.82
 }

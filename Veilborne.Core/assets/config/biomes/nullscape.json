@@ -18,74 +18,79 @@
             "WtFertility": 1.0
         },
         "NoiseModifiers": {
-            "HeightScale": 0.08,
-            "Frequency": 0.3,
-            "Persistence": 0.2,
-            "Lacunarity": 1.5,
-            "Detail": 0.15,
-            "RidgeWeight": 0.7,
-            "WarpStrength": 0.8,
-            "WarpFrequency": 1.2,
-            "TerracingStrength": 0.7,
-            "TerracingSteps": 4,
-            "CliffStrength": 0.78,
-            "CliffFrequency": 0.5,
-            "CliffSharpness": 0.04,
+            "HeightScale": 0.1,
+            "Frequency": 0.28,
+            "Persistence": 0.18,
+            "Lacunarity": 1.45,
+            "Detail": 0.12,
+            "RidgeWeight": 0.65,
+            "BillowWeight": 0.08,
+            "RidgeSharpness": 2.8,
+            "WarpStrength": 0.92,
+            "WarpFrequency": 1.1,
+            "CliffStrength": 0.72,
+            "CliffFrequency": 0.48,
+            "CliffSharpness": 0.03,
             "CliffTiers": 5,
-            "CanyonDepth": 0.85,
-            "CanyonFrequency": 0.9,
-            "CanyonWidth": 0.25
+            "CanyonDepth": 0.75,
+            "CanyonFrequency": 0.85,
+            "CanyonWidth": 0.22,
+            "IslandScale": 0.55,
+            "IslandDrop": 6.0,
+            "TerracingStrength": 0.65,
+            "TerracingSteps": 4,
+            "MicroDetailFrequency": 5.5,
+            "MicroDetailAmplitude": 0.2
         }
     },
     "NoiseLayers": [
         {
-            "Type": "Worley",
-            "Frequency": 0.6,
-            "Amplitude": 1.2,
+            "Enabled": true,
+            "Type": "Island",
+            "Frequency": 0.42,
+            "Amplitude": 1.0,
             "Octaves": 1,
             "BlendMode": "Max",
             "Seed": 0,
-            "Enabled": true
-        },
-        {
-            "Type": "Value",
-            "Frequency": 5.0,
-            "Amplitude": 0.35,
-            "Octaves": 3,
             "Persistence": 0.5,
-            "Lacunarity": 2.5,
-            "BlendMode": "Add",
-            "Seed": 99,
-            "Enabled": true
+            "Lacunarity": 2.0,
+            "Offset": 0.0
         },
         {
-            "Type": "Ridge",
-            "Frequency": 2.5,
-            "Amplitude": 0.4,
-            "Octaves": 2,
-            "Persistence": 0.4,
-            "BlendMode": "Screen",
-            "Seed": 77,
-            "Enabled": true
-        },
-        {
-            "Type": "Perlin",
-            "Frequency": 1.5,
-            "Amplitude": -0.5,
-            "Octaves": 2,
-            "Persistence": 0.3,
-            "BlendMode": "Min",
-            "Seed": 88,
-            "Enabled": true
-        },
-        {
+            "Enabled": true,
             "Type": "Cliff",
-            "Frequency": 0.45,
-            "Amplitude": 0.9,
+            "Frequency": 0.5,
+            "Amplitude": 0.85,
             "Octaves": 4,
             "BlendMode": "Max",
-            "Seed": 109,
-            "Enabled": true
+            "Seed": 77,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Value",
+            "Frequency": 4.8,
+            "Amplitude": 0.32,
+            "Octaves": 3,
+            "BlendMode": "Add",
+            "Seed": 99,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
+        },
+        {
+            "Enabled": true,
+            "Type": "Ridge",
+            "Frequency": 2.2,
+            "Amplitude": 0.35,
+            "Octaves": 2,
+            "BlendMode": "Screen",
+            "Seed": 88,
+            "Persistence": 0.5,
+            "Lacunarity": 2.0,
+            "Offset": 0.0
         }
     ],
     "ColorPalette": {
@@ -165,5 +170,5 @@
         ]
     },
     "BaseHeight": 0.0,
-    "HeightMultiplier": 1.1
+    "HeightMultiplier": 1.15
 }
