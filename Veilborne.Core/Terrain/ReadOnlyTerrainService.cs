@@ -236,7 +236,7 @@ namespace Veilborne.Terrain
                         }
 
                         // Spawn world objects for this chunk using biome spawner
-                        var (biome, secondaryBiome, secondaryBlend) = ResolveChunkBiome(origin);
+                        var (biome, secondaryBiome, secondaryBlend) = ResolveVisualBiome(origin);
                         var raw = biome.ObjectSpawner.GenerateObjects(biome.Id, _terrainGen, heights, origin, 18);
                         _completed.Enqueue((key, heights, origin, raw, biome.Data));
                         lock (_biomeBlendByChunk)
@@ -412,7 +412,6 @@ namespace Veilborne.Terrain
         public void RenderTiles(CameraComponent camera, HashSet<(int cx, int cz)>? exclude = null)
         {
             var loadedPairs = SnapshotPairsSafe(_loadedChunks);
-            var biomeByChunkSnapshot = SnapshotBiomesSafe(_biomeByChunk);
             foreach (var kvp in loadedPairs)
             {
                 var key = kvp.Key;
@@ -421,15 +420,11 @@ namespace Veilborne.Terrain
                 if (exclude != null && exclude.Contains(key))
                     continue;
 
-                BiomeData primaryBiome;
-                if (biomeByChunkSnapshot.TryGetValue(key, out var cachedPrimary))
-                    primaryBiome = cachedPrimary;
-                else
-                    primaryBiome = ResolveChunkBiome(chunk.Origin).primary.Data;
-
-                (BiomeData? secondary, float blend) blendInfo;
-                lock (_biomeBlendByChunk)
-                    blendInfo = _biomeBlendByChunk.TryGetValue(key, out var info) ? info : (null, 0f);
+                var (primaryIbiome, secondaryIbiome, secondaryBlend) = ResolveVisualBiome(chunk.Origin);
+                BiomeData primaryBiome = primaryIbiome.Data;
+                (BiomeData? secondary, float blend) blendInfo = (null, 0f);
+                if (secondaryIbiome is not null && secondaryBlend > 0.001f)
+                    blendInfo = (secondaryIbiome.Data, secondaryBlend);
                 _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
 
                 _renderer.RenderAt(
@@ -443,8 +438,8 @@ namespace Veilborne.Terrain
             }
         }
 
-        private (IBiome primary, IBiome? secondary, float blend) ResolveChunkBiome(Vector2 chunkOrigin)
-            => BiomeSampling.ResolveChunkBiomeBlend(_biomeProvider, _terrainGen, chunkOrigin, ChunkSize, TileSize);
+        private (IBiome primary, IBiome? secondary, float blend) ResolveVisualBiome(Vector2 chunkOrigin)
+            => BiomeSampling.ResolveVisualBiomeForChunk(_biomeProvider, _terrainGen, chunkOrigin, ChunkSize, TileSize);
 
         public void Render(CameraComponent camera) => RenderTiles(camera);
 

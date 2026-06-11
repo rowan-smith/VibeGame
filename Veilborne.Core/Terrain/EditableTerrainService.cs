@@ -230,7 +230,7 @@ namespace Veilborne.Terrain
                     heights[x, z] = BiomeTerrainHeightBlender.ComputeHeight(wx, wz, baseHeight, _biomeProvider, _terrainGen);
                 }
 
-                var (spawnBiome, secondaryIbiome, secondaryBlend) = BiomeSampling.ResolveChunkBiomeBlend(
+                var (spawnBiome, secondaryIbiome, secondaryBlend) = BiomeSampling.ResolveVisualBiomeForChunk(
                     _biomeProvider, _terrainGen, origin, ChunkSize, TileSize);
                 var primaryBiome = spawnBiome.Data;
                 var secondaryBiome = secondaryIbiome?.Data;
@@ -341,9 +341,9 @@ namespace Veilborne.Terrain
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
-        private (BiomeData primary, BiomeData? secondary, float blend) ResolveChunkBiome(Vector2 chunkOrigin)
+        private (BiomeData primary, BiomeData? secondary, float blend) ResolveVisualBiome(Vector2 chunkOrigin)
         {
-            var (primary, secondary, blend) = BiomeSampling.ResolveChunkBiomeBlend(
+            var (primary, secondary, blend) = BiomeSampling.ResolveVisualBiomeForChunk(
                 _biomeProvider, _terrainGen, chunkOrigin, ChunkSize, TileSize);
             return (primary.Data, secondary?.Data, blend);
         }
@@ -473,16 +473,10 @@ namespace Veilborne.Terrain
                 {
                     var key = kvp.Key;
                     var chunk = kvp.Value;
-                    if (!_primaryBiomeByChunk.TryGetValue(key, out var primaryBiome))
-                    {
-                        var (primary, secondary, blend) = ResolveChunkBiome(chunk.Origin);
-                        primaryBiome = primary;
-                        _primaryBiomeByChunk[key] = primaryBiome;
-                        _biomeBlendByChunk[key] = (secondary, blend);
-                    }
-                    if (!_biomeBlendByChunk.TryGetValue(key, out var blendInfo))
-                        blendInfo = (null, 0f);
-                _renderer.ApplyBiomeBlendTextures(primaryBiome, blendInfo.secondary, blendInfo.blend);
+                    var (primaryBiome, secondary, blend) = ResolveVisualBiome(chunk.Origin);
+                    _primaryBiomeByChunk[key] = primaryBiome;
+                    _biomeBlendByChunk[key] = (secondary, blend);
+                    _renderer.ApplyBiomeBlendTextures(primaryBiome, secondary, blend);
                     _renderer.RenderAt(chunk.Heights, TileSize, chunk.Origin, camera, chunk.BaseHeights, GetTerrainLayersForBiomeId(primaryBiome.Id), chunk.Splatmap);
                 }
             }

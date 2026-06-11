@@ -886,8 +886,10 @@ namespace Veilborne.MonoGameImpl
 
                 bool isLayeredChunk = chunk.UseSplatLayering &&
                                       chunk.LayerMode != ChunkData.LayerBlendMode.None;
+                // Coarse rings are never dug — skip subsurface overlay to avoid splat artifacts.
+                bool isCoarseLod = chunk.TileSize > 1.5f;
                 // Layered secondary is for dig exposure / biome crossfade only — not slope rock.
-                bool hasVisibleLayerBlend = !isLayeredChunk || chunk.LayerBlendCoverage > 0.02f;
+                bool hasVisibleLayerBlend = !isLayeredChunk || (!isCoarseLod && chunk.LayerBlendCoverage > 0.02f);
                 bool shouldDrawSecondary = hasVisibleLayerBlend &&
                                             chunk.SecondaryTexture != null &&
                                             chunk.SecondaryTexture != chunk.PrimaryTexture &&
