@@ -37,5 +37,6 @@ namespace Veilborne.MonoGameImpl
             _inner.PatchRegion(heights, tileSize, originWorld, x0, z0, x1, z1);
 
         public void Flush() => _inner.Flush();
+        public void SetWarmupMode(bool enabled) => _inner.SetWarmupMode(enabled);
     }
 }

@@ -836,6 +836,7 @@ namespace Veilborne.Terrain
         public void SetWarmupMode(bool enabled)
         {
             _isWarmupMode = enabled;
+            _renderer.SetWarmupMode(enabled);
             int roJobs = enabled
                 ? Math.Max(12, _cfg.MaxReadOnlyConcurrentJobs * 2)
                 : Math.Max(1, _cfg.MaxReadOnlyConcurrentJobs);

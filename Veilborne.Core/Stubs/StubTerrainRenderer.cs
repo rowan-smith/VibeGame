@@ -23,5 +23,6 @@ namespace Veilborne.Stubs
         public void MarkOriginDirty(Vector2 originWorld) { }
         public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int startX, int startZ, int endX, int endZ) { }
         public void Flush() { }
+        public void SetWarmupMode(bool enabled) { }
     }
 }

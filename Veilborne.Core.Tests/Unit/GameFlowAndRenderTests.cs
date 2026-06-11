@@ -224,6 +224,7 @@ public class RenderSystemsTests
         public void PatchRegion(float[,] heights, float tileSize, Vector2 originWorld, int x0, int z0, int x1, int z1)
             => _inner.PatchRegion(heights, tileSize, originWorld, x0, z0, x1, z1);
         public void Flush() => FlushCallCount++;
+        public void SetWarmupMode(bool enabled) => _inner.SetWarmupMode(enabled);
     }
 
     private sealed class RecordingWorldObjectRenderer : Objects.IWorldObjectRenderer

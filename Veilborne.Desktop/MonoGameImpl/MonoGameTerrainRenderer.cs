@@ -94,6 +94,7 @@ namespace Veilborne.MonoGameImpl
         private CameraComponent _pendingCamera;  // Deferred draw — render once per frame after all RenderAt calls
         private bool _hasPendingCamera;
         private int _syncBuildBudget; // cap synchronous BuildChunkMesh calls per frame
+        private bool _fastMeshBuild; // loading warmup: corner blend instead of per-vertex merge
 
         // Per-frame rendering metrics (reset each Flush)
         private int _lastChunksDrawn;
@@ -160,6 +161,29 @@ namespace Veilborne.MonoGameImpl
         public void SetColorTint(System.Numerics.Vector4 color)
         {
             // Applied per-chunk at draw time via the active biome
+        }
+
+        public void SetWarmupMode(bool enabled)
+        {
+            bool wasWarmup = _fastMeshBuild;
+            _fastMeshBuild = enabled;
+            if (wasWarmup && !enabled)
+                QueueQualityBiomeRebuilds();
+        }
+
+        private void QueueQualityBiomeRebuilds()
+        {
+            foreach (var key in _chunks.Keys.ToArray())
+            {
+                if (!_chunks.TryGetValue(key, out var chunk) || chunk.CurrentHeights is not { } heights)
+                    continue;
+                if (chunk.BiomeBlendCoverage <= 0.001f && string.IsNullOrEmpty(chunk.MergeBiomeId))
+                    continue;
+
+                var origin = new System.Numerics.Vector2(key.Item1, key.Item2);
+                MarkOriginDirty(origin);
+                EnqueueBuild(heights, chunk.TileSize > 0f ? chunk.TileSize : key.Item3, origin);
+            }
         }
 
         public void Render(float[,] heights, float tileSize, CameraComponent camera, System.Numerics.Vector3 baseColor)
@@ -348,14 +372,22 @@ namespace Veilborne.MonoGameImpl
                 ? ChunkData.LayerBlendMode.SurfaceToSubsurface
                 : ChunkData.LayerBlendMode.None;
 
-            // Corner-interpolated biome merge weights (4 samples) — fast enough for loading warmup.
+            // Biome merge only at real transition zones; quality path at runtime, fast corners during warmup.
             float[,]? mergeMap = null;
             IBiome? mergeBiome = null;
-            if (_biomeProvider is SimpleBiomeProvider simple)
+            if (_settings.Current.Graphics.BiomeTextureCrossfade &&
+                _biomeProvider is SimpleBiomeProvider simple)
             {
-                mergeMap = BiomeSampling.BuildVertexBlendMap(simple, null!, origin, width, depth, tileSize);
-                (_, _, _, _, _, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
+                (_, _, _, _, float maxCornerBlend, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
                     simple, null!, origin, width, depth, tileSize);
+                if (maxCornerBlend > 0.03f)
+                {
+                    if (_fastMeshBuild)
+                        mergeMap = BiomeSampling.BuildVertexBlendMap(simple, null!, origin, width, depth, tileSize);
+                    else
+                        (mergeMap, mergeBiome, _) = BiomeSampling.BuildVertexMergeMap(
+                            simple, null!, origin, width, depth, tileSize);
+                }
             }
             bool hasBiomeMerge = mergeMap != null;
 
@@ -401,7 +433,7 @@ namespace Veilborne.MonoGameImpl
                     if (biomeAlpha > 0.02f) biomeBlendNonZero++;
                 }
 
-                float alpha = biomeAlpha > 0.001f ? biomeAlpha : layerAlpha;
+                float alpha = hasBiomeMerge && biomeAlpha > 0.001f ? biomeAlpha : layerAlpha;
                 byte blendAlpha = (byte)Math.Clamp((int)(alpha * 255f), 0, 255);
                 XnaColor vertexColor = new XnaColor((byte)255, (byte)255, (byte)255, blendAlpha);
 
@@ -571,8 +603,9 @@ namespace Veilborne.MonoGameImpl
             chunk.SecondaryLightingModifier = 1f;
             chunk.Tint = ComputeStableTerrainTint(biome);
 
-            bool useBiomeMerge = mergeBiome is not null &&
-                                 (maxMerge > 0.001f || chunk.BiomeBlendCoverage > 0.02f);
+            bool useBiomeMerge = _settings.Current.Graphics.BiomeTextureCrossfade &&
+                                 mergeBiome is not null &&
+                                 (maxMerge > 0.03f || chunk.BiomeBlendCoverage > 0.02f);
 
             if (chunk.BaseHeights != null && chunk.LayerConfig != null)
             {
@@ -805,7 +838,7 @@ namespace Veilborne.MonoGameImpl
             int chunksDrawn = 0;
             int drawCalls = 0;
             int secondaryPasses = 0;
-            const int MaxDrawCallsPerFrame = 110;
+            const int MaxDrawCallsPerFrame = 70;
 
             var pos = new XnaVector3(camera.Position.X, camera.Position.Y, camera.Position.Z);
             var target = new XnaVector3(camera.Target.X, camera.Target.Y, camera.Target.Z);
@@ -850,9 +883,11 @@ namespace Veilborne.MonoGameImpl
 
             float secondaryPassDistance = drawDistance * _secondaryPassDistanceScale;
             float layeredCutoffSq = secondaryPassDistance * secondaryPassDistance * 0.25f;
-            const int MaxLayerDrawCallsPerFrame = 20;
+            float crossfadeCutoffSq = secondaryPassDistance * secondaryPassDistance;
+            const int MaxSecondaryDrawCallsPerFrame = 20;
+            bool crossfadeEnabled = graphics.BiomeTextureCrossfade;
 
-            // Phase 1: primary + immediate biome merge per chunk (no merge budget — prevents hard seams).
+            // Phase 1: draw every visible chunk's primary pass first.
             foreach (var key in _sortedActiveKeysScratch)
             {
                 if (drawCalls >= MaxDrawCallsPerFrame) break;
@@ -894,38 +929,54 @@ namespace Veilborne.MonoGameImpl
                     _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
                     drawCalls++;
                 }
-
-                bool hasBiomeMerge = chunk.MergeTexture != null && chunk.BiomeBlendCoverage > 0.02f;
-                if (hasBiomeMerge && drawCalls < MaxDrawCallsPerFrame)
-                {
-                    var prevChunkBlend = _graphicsDevice.BlendState;
-                    _graphicsDevice.BlendState = BlendState.AlphaBlend;
-                    _basicEffect.TextureEnabled = true;
-                    _basicEffect.VertexColorEnabled = true;
-                    _basicEffect.Texture = chunk.MergeTexture;
-                    _basicEffect.Alpha = 1f;
-                    var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.50f;
-                    _basicEffect.DiffuseColor = new XnaVector3(
-                        Math.Clamp(lit.X, 0.20f, 1f) * brightness,
-                        Math.Clamp(lit.Y, 0.20f, 1f) * brightness,
-                        Math.Clamp(lit.Z, 0.20f, 1f) * brightness);
-                    foreach (var pass in _basicEffect.CurrentTechnique.Passes)
-                    {
-                        pass.Apply();
-                        _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
-                        drawCalls++;
-                    }
-                    _graphicsDevice.BlendState = prevChunkBlend;
-                    secondaryPasses++;
-                }
-
                 chunksDrawn++;
             }
 
-            // Phase 2: subsurface layer pass (digging) on a separate budget.
+            // Phase 2a: biome merge overlay (near camera, budgeted).
             foreach (var key in _sortedActiveKeysScratch)
             {
-                if (secondaryPasses >= MaxLayerDrawCallsPerFrame) break;
+                if (secondaryPasses >= MaxSecondaryDrawCallsPerFrame) break;
+                if (drawCalls >= MaxDrawCallsPerFrame) break;
+                if (!_chunks.TryGetValue(key, out var chunk)) continue;
+                if (!TryGetVisibleChunkState(chunk, pos, frustum, drawDistance, out float distanceSq))
+                    continue;
+
+                bool hasBiomeMerge = crossfadeEnabled &&
+                                     chunk.MergeTexture != null &&
+                                     chunk.BiomeBlendCoverage > 0.02f &&
+                                     distanceSq <= crossfadeCutoffSq;
+                if (!hasBiomeMerge) continue;
+
+                _graphicsDevice.SetVertexBuffer(chunk.Vb);
+                _graphicsDevice.Indices = chunk.Ib;
+                if (!wireframe)
+                    _graphicsDevice.RasterizerState = SelectRasterizerForTileSize(key.Item3);
+
+                var prevChunkBlend = _graphicsDevice.BlendState;
+                _graphicsDevice.BlendState = BlendState.NonPremultiplied;
+                _basicEffect.TextureEnabled = true;
+                _basicEffect.VertexColorEnabled = true;
+                _basicEffect.Texture = chunk.MergeTexture;
+                _basicEffect.Alpha = 1f;
+                var lit = _sky.AmbientColor + _sky.SunColor * _sky.SunIntensity * 0.50f;
+                _basicEffect.DiffuseColor = new XnaVector3(
+                    Math.Clamp(lit.X, 0.20f, 1f) * brightness,
+                    Math.Clamp(lit.Y, 0.20f, 1f) * brightness,
+                    Math.Clamp(lit.Z, 0.20f, 1f) * brightness);
+                foreach (var pass in _basicEffect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    _graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, chunk.IndexCount / 3);
+                    drawCalls++;
+                }
+                _graphicsDevice.BlendState = prevChunkBlend;
+                secondaryPasses++;
+            }
+
+            // Phase 2b: subsurface layer pass (digging) on the same budget.
+            foreach (var key in _sortedActiveKeysScratch)
+            {
+                if (secondaryPasses >= MaxSecondaryDrawCallsPerFrame) break;
                 if (drawCalls >= MaxDrawCallsPerFrame) break;
                 if (!_chunks.TryGetValue(key, out var chunk)) continue;
                 if (!TryGetVisibleChunkState(chunk, pos, frustum, drawDistance, out float distanceSq))

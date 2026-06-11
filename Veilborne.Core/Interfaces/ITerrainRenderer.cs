@@ -37,5 +37,8 @@ namespace Veilborne.Interfaces
 
         // Issue the actual GPU draw for all queued RenderAt calls. Call once per frame after all RenderAt calls.
         void Flush();
+
+        /// <summary>Toggle loading warmup (fast mesh builds); no-op for stubs.</summary>
+        void SetWarmupMode(bool enabled);
     }
 }
