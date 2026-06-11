@@ -170,38 +170,84 @@ namespace Veilborne.Biomes
         /// </summary>
         public static (float maxBlend, IBiome? secondaryBiome) ResolveBoundaryCrossfade(
             SimpleBiomeProvider provider,
-            ITerrainGenerator terrain,
+            ITerrainGenerator? terrain,
             Vector2 origin,
             int width,
             int height,
-            float tileSize)
+            float tileSize,
+            string? primaryBiomeId = null)
         {
             float chunkW = (width - 1) * tileSize;
             float chunkH = (height - 1) * tileSize;
-            float midX = origin.X + chunkW * 0.5f;
-            float midZ = origin.Y + chunkH * 0.5f;
             float maxBlend = 0f;
             IBiome? bestSecondary = null;
+            var weights = new BiomeWeight[4];
+
+            void Consider(float candidateBlend, IBiome? candidateBiome)
+            {
+                if (candidateBiome is null || candidateBlend <= maxBlend)
+                    return;
+                if (!string.IsNullOrEmpty(primaryBiomeId) &&
+                    string.Equals(candidateBiome.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    return;
+                maxBlend = candidateBlend;
+                bestSecondary = candidateBiome;
+            }
 
             void Sample(float wx, float wz)
             {
-                var (_, secondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
-                if (blend > maxBlend && secondary is not null)
+                var (localPrimary, localSecondary, blend) = provider.GetBiomeBlendAt(new Vector2(wx, wz), terrain);
+                if (!string.IsNullOrEmpty(primaryBiomeId))
                 {
-                    maxBlend = blend;
-                    bestSecondary = secondary;
+                    // At chunk edges the nearest Voronoi site is often the neighbor biome while
+                    // secondary is this chunk's area primary. Filtering secondary == primaryBiomeId
+                    // dropped those transitions and left one-sided hard seams.
+                    if (!string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        float towardNeighbor = blend;
+                        if (localSecondary is not null &&
+                            string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                            towardNeighbor = 1f - blend;
+                        Consider(towardNeighbor, localPrimary);
+                    }
+                    else if (localSecondary is not null &&
+                             !string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Consider(blend, localSecondary);
+                    }
+                }
+                else
+                {
+                    Consider(blend, localSecondary);
+                }
+
+                provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
+                for (int i = 0; i < count; i++)
+                {
+                    var biome = weights[i].Biome;
+                    if (!string.IsNullOrEmpty(primaryBiomeId) &&
+                        string.Equals(biome.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    float candidate = weights[i].Weight;
+                    if (!string.IsNullOrEmpty(primaryBiomeId))
+                        candidate = SamplePairBlendAlpha(
+                            provider, terrain, wx, wz, primaryBiomeId, biome.Id, weights);
+                    Consider(candidate, biome);
                 }
             }
 
-            Sample(origin.X, origin.Y);
-            Sample(origin.X + chunkW, origin.Y);
-            Sample(origin.X, origin.Y + chunkH);
-            Sample(origin.X + chunkW, origin.Y + chunkH);
-            Sample(midX, origin.Y);
-            Sample(midX, origin.Y + chunkH);
-            Sample(origin.X, midZ);
-            Sample(origin.X + chunkW, midZ);
-            Sample(midX, midZ);
+            int edgeSamples = Math.Clamp(Math.Max(width, height) / 8, 4, 32);
+            for (int i = 0; i <= edgeSamples; i++)
+            {
+                float t = edgeSamples == 0 ? 0f : i / (float)edgeSamples;
+                float wx = origin.X + chunkW * t;
+                float wz = origin.Y + chunkH * t;
+                Sample(wx, origin.Y);
+                Sample(wx, origin.Y + chunkH);
+                Sample(origin.X, wz);
+                Sample(origin.X + chunkW, wz);
+            }
 
             return (maxBlend, bestSecondary);
         }
@@ -375,11 +421,14 @@ namespace Veilborne.Biomes
                 maxMerge = Math.Clamp(secondaryWeight / denom, 0f, 1f);
 
             var (boundaryMax, boundarySecondary) = ResolveBoundaryCrossfade(
-                provider, terrain!, origin, gridWidth, gridHeight, tileSize);
+                provider, terrain, origin, gridWidth, gridHeight, tileSize, primaryId);
             if (boundaryMax > maxMerge)
                 maxMerge = boundaryMax;
             if (boundarySecondary is not null &&
                 !string.Equals(boundarySecondary.Id, primaryId, StringComparison.OrdinalIgnoreCase))
+                mergeId = boundarySecondary.Id;
+
+            if (string.IsNullOrEmpty(mergeId) && boundaryMax > 0.001f && boundarySecondary is not null)
                 mergeId = boundarySecondary.Id;
 
             if (string.Equals(mergeId, primaryId, StringComparison.OrdinalIgnoreCase))
@@ -459,7 +508,62 @@ namespace Veilborne.Biomes
                 }
             }
 
+            if (sampleStride > 1)
+                RefinePairBlendPerimeter(provider, terrain, origin, width, height, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+
             return (map, maxMerge);
+        }
+
+        private static void RefinePairBlendPerimeter(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int width,
+            int height,
+            float tileSize,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            float[,] map,
+            Span<BiomeWeight> weights,
+            ref float maxMerge)
+        {
+            int lastX = width - 1;
+            int lastZ = height - 1;
+            for (int x = 0; x < width; x++)
+            {
+                RefinePairBlendVertex(provider, terrain, origin, x, 0, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+                if (lastZ > 0)
+                    RefinePairBlendVertex(provider, terrain, origin, x, lastZ, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+            }
+
+            for (int z = 1; z < lastZ; z++)
+            {
+                RefinePairBlendVertex(provider, terrain, origin, 0, z, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+                if (lastX > 0)
+                    RefinePairBlendVertex(provider, terrain, origin, lastX, z, tileSize, primaryBiomeId, mergeBiomeId, map, weights, ref maxMerge);
+            }
+        }
+
+        private static void RefinePairBlendVertex(
+            SimpleBiomeProvider provider,
+            ITerrainGenerator? terrain,
+            Vector2 origin,
+            int x,
+            int z,
+            float tileSize,
+            string primaryBiomeId,
+            string mergeBiomeId,
+            float[,] map,
+            Span<BiomeWeight> weights,
+            ref float maxMerge)
+        {
+            float wx = origin.X + x * tileSize;
+            float wz = origin.Y + z * tileSize;
+            float alpha = SamplePairBlendAlpha(provider, terrain, wx, wz, primaryBiomeId, mergeBiomeId, weights);
+            alpha = PerturbMergeWeight(wx, wz, alpha);
+            map[x, z] = alpha;
+            if (alpha > maxMerge)
+                maxMerge = alpha;
         }
 
         /// <summary>
@@ -485,10 +589,6 @@ namespace Veilborne.Biomes
                     string.Equals(localSecondary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
                     return 1f - blend;
             }
-            else if (string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
-                return 0f;
-            else if (string.Equals(localPrimary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
-                return 1f;
 
             provider.GetBlendWeightsAt(new Vector2(wx, wz), terrain!, weights, out int count, 4);
             float primaryW = 0f;
@@ -503,7 +603,14 @@ namespace Veilborne.Biomes
             }
 
             float pairSum = primaryW + mergeW;
-            return pairSum > 1e-5f ? mergeW / pairSum : mergeW;
+            if (pairSum > 1e-5f)
+                return mergeW / pairSum;
+
+            if (string.Equals(localPrimary.Id, primaryBiomeId, StringComparison.OrdinalIgnoreCase))
+                return 0f;
+            if (string.Equals(localPrimary.Id, mergeBiomeId, StringComparison.OrdinalIgnoreCase))
+                return 1f;
+            return 0f;
         }
 
         private static float PerturbMergeWeight(float worldX, float worldZ, float merge)

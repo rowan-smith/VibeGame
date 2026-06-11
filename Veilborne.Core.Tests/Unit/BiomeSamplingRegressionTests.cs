@@ -79,4 +79,49 @@ public class BiomeSamplingRegressionTests
             edgeMax = MathF.Max(edgeMax, map[xEdge, z]);
         Assert.True(edgeMax > 0.02f, "Expected non-zero merge alpha along chunk edge at biome boundary.");
     }
+
+    [Fact]
+    public void ResolveBoundaryCrossfade_detects_neighbor_when_edge_local_primary_differs_from_area_primary()
+    {
+        var provider = BiomeTestFactory.CreateProvider(
+            seed: 5150,
+            cellSize: 150f,
+            blendWidth: 130f,
+            ("highland", 0.85f, 0.2f),
+            ("lowland", 0.2f, 0.85f),
+            ("coast", 0.5f, 0.95f));
+
+        const int grid = 65;
+        const float tile = 2f;
+        float chunkWorld = (grid - 1) * tile;
+
+        for (float z = -2000f; z <= 2000f; z += 80f)
+        for (float x = -2000f; x <= 2000f; x += 80f)
+        {
+            var origin = new Vector2(x, z);
+            var (areaPrimary, _, _, _) = BiomeSampling.GetDominantAndSecondaryBiomeForAreaWithWeights(
+                provider, null, origin, grid - 1, tile, 7, 2f, tile * 4f);
+            string areaPrimaryId = areaPrimary.Id;
+
+            float edgeX = origin.X + chunkWorld;
+            var (edgePrimary, edgeSecondary, edgeBlend) = provider.GetBiomeBlendAt(
+                new Vector2(edgeX, origin.Y + chunkWorld * 0.5f), null);
+            if (edgeSecondary is null || edgeBlend <= 0.05f)
+                continue;
+            if (string.Equals(edgePrimary.Id, areaPrimaryId, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!string.Equals(edgeSecondary.Id, areaPrimaryId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var (boundaryMax, boundarySecondary) = BiomeSampling.ResolveBoundaryCrossfade(
+                provider, null, origin, grid, grid, tile, areaPrimaryId);
+
+            Assert.True(boundaryMax > TerrainChunkBiomeBlendPolicy.BiomeMergeCornerThreshold);
+            Assert.NotNull(boundarySecondary);
+            Assert.Equal(edgePrimary.Id, boundarySecondary.Id);
+            return;
+        }
+
+        Assert.Fail("Could not find edge-local-primary mismatch scenario in search area.");
+    }
 }
