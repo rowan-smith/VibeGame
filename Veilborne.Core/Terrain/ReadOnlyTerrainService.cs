@@ -35,6 +35,7 @@ namespace Veilborne.Terrain
         private readonly List<TerrainChunk> _chunkSnapshotBuffer = new();
         private readonly Queue<(int cx, int cz)> _pendingSpawnOrder = new();
         private readonly Dictionary<(int cx, int cz), PendingSpawnBatch> _pendingSpawnsByChunk = new();
+        private readonly object _pendingSpawnsLock = new();
         private const int MaxObjectSpawnsPerFrame = 32;
 
         // Async generation state
@@ -70,7 +71,20 @@ namespace Veilborne.Terrain
         }
         public int PendingSpawnObjectCount
         {
-            get => SumPendingSpawnsSafe(_pendingSpawnsByChunk);
+            get
+            {
+                lock (_pendingSpawnsLock)
+                {
+                    int pending = 0;
+                    foreach (var batch in _pendingSpawnsByChunk.Values)
+                    {
+                        if (batch?.Objects is not { } objects)
+                            continue;
+                        pending += Math.Max(0, objects.Count - batch.Cursor);
+                    }
+                    return pending;
+                }
+            }
         }
 
         private static int SumLoadedEntitiesSafe(Dictionary<(int cx, int cz), List<Entity>> entitiesByChunk)
@@ -83,28 +97,6 @@ namespace Veilborne.Terrain
                     foreach (var entities in entitiesByChunk.Values.ToArray())
                         count += entities.Count;
                     return count;
-                }
-                catch (InvalidOperationException)
-                {
-                    // Collection changed while snapshotting; retry.
-                }
-                catch (ArgumentException)
-                {
-                    // Collection resized while copying; retry.
-                }
-            }
-        }
-
-        private static int SumPendingSpawnsSafe(Dictionary<(int cx, int cz), PendingSpawnBatch> pendingByChunk)
-        {
-            while (true)
-            {
-                try
-                {
-                    int pending = 0;
-                    foreach (var batch in pendingByChunk.Values.ToArray())
-                        pending += Math.Max(0, batch.Objects.Count - batch.Cursor);
-                    return pending;
                 }
                 catch (InvalidOperationException)
                 {
@@ -269,7 +261,8 @@ namespace Veilborne.Terrain
             {
                 _loadedChunks.Remove(key);
                 _biomeByChunk.Remove(key);
-                _pendingSpawnsByChunk.Remove(key);
+                lock (_pendingSpawnsLock)
+                    _pendingSpawnsByChunk.Remove(key);
                 lock (_biomeBlendByChunk)
                     _biomeBlendByChunk.Remove(key);
                 if (_entitiesByChunk.TryGetValue(key, out var entities))
@@ -311,13 +304,16 @@ namespace Veilborne.Terrain
                 _entitiesByChunk[item.key] = new List<Entity>(item.objects?.Count ?? 0);
                 if (item.objects is { Count: > 0 })
                 {
-                    _pendingSpawnsByChunk[item.key] = new PendingSpawnBatch
+                    lock (_pendingSpawnsLock)
                     {
-                        Objects = item.objects,
-                        Biome = item.biome,
-                        Cursor = 0
-                    };
-                    _pendingSpawnOrder.Enqueue(item.key);
+                        _pendingSpawnsByChunk[item.key] = new PendingSpawnBatch
+                        {
+                            Objects = item.objects,
+                            Biome = item.biome,
+                            Cursor = 0
+                        };
+                        _pendingSpawnOrder.Enqueue(item.key);
+                    }
                 }
                 installs++;
                 if (installs >= maxInstallsPerFrame) break;
@@ -330,30 +326,36 @@ namespace Veilborne.Terrain
 
         private void ProcessPendingObjectSpawns(int budget)
         {
-            int remaining = Math.Max(0, budget);
-            while (remaining > 0 && _pendingSpawnOrder.Count > 0)
+            lock (_pendingSpawnsLock)
             {
-                var key = _pendingSpawnOrder.Dequeue();
-                if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch))
-                    continue;
-                if (!_entitiesByChunk.TryGetValue(key, out var entities))
+                int remaining = Math.Max(0, budget);
+                while (remaining > 0 && _pendingSpawnOrder.Count > 0)
                 {
-                    _pendingSpawnsByChunk.Remove(key);
-                    continue;
-                }
+                    var key = _pendingSpawnOrder.Dequeue();
+                    if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch) || batch.Objects is not { } objects)
+                    {
+                        _pendingSpawnsByChunk.Remove(key);
+                        continue;
+                    }
+                    if (!_entitiesByChunk.TryGetValue(key, out var entities))
+                    {
+                        _pendingSpawnsByChunk.Remove(key);
+                        continue;
+                    }
 
-                int spawnCount = Math.Min(8, remaining);
-                while (spawnCount-- > 0 && batch.Cursor < batch.Objects.Count)
-                {
-                    var obj = batch.Objects[batch.Cursor++];
-                    entities.Add(CreateWorldObjectEntity(obj, key, 1, batch.Biome.Id));
-                    remaining--;
-                }
+                    int spawnCount = Math.Min(8, remaining);
+                    while (spawnCount-- > 0 && batch.Cursor < objects.Count)
+                    {
+                        var obj = objects[batch.Cursor++];
+                        entities.Add(CreateWorldObjectEntity(obj, key, 1, batch.Biome.Id));
+                        remaining--;
+                    }
 
-                if (batch.Cursor < batch.Objects.Count)
-                    _pendingSpawnOrder.Enqueue(key);
-                else
-                    _pendingSpawnsByChunk.Remove(key);
+                    if (batch.Cursor < objects.Count)
+                        _pendingSpawnOrder.Enqueue(key);
+                    else
+                        _pendingSpawnsByChunk.Remove(key);
+                }
             }
         }
 

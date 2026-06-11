@@ -95,7 +95,20 @@ namespace Veilborne.Terrain
         public int GeneratingChunkCount => _generating.Count;
         public int PendingSpawnObjectCount
         {
-            get => SumPendingSpawnsSafe(_pendingSpawnsByChunk);
+            get
+            {
+                lock (_lock)
+                {
+                    int pending = 0;
+                    foreach (var batch in _pendingSpawnsByChunk.Values)
+                    {
+                        if (batch?.Objects is not { } objects)
+                            continue;
+                        pending += Math.Max(0, objects.Count - batch.Cursor);
+                    }
+                    return pending;
+                }
+            }
         }
         public int LoadedEntityCount
         {
@@ -112,28 +125,6 @@ namespace Veilborne.Terrain
                     foreach (var entities in entitiesByChunk.Values.ToArray())
                         count += entities.Count;
                     return count;
-                }
-                catch (InvalidOperationException)
-                {
-                    // Collection changed while snapshotting; retry.
-                }
-                catch (ArgumentException)
-                {
-                    // Collection resized while copying; retry.
-                }
-            }
-        }
-
-        private static int SumPendingSpawnsSafe(Dictionary<(int cx, int cz), PendingSpawnBatch> pendingByChunk)
-        {
-            while (true)
-            {
-                try
-                {
-                    int pending = 0;
-                    foreach (var batch in pendingByChunk.Values.ToArray())
-                        pending += Math.Max(0, batch.Objects.Count - batch.Cursor);
-                    return pending;
                 }
                 catch (InvalidOperationException)
                 {
@@ -275,8 +266,8 @@ namespace Veilborne.Terrain
                 RecomputeSplatmapForChunk(result.Key, ref newChunk);
                 _loadedChunks[result.Key] = newChunk;
 
-                _entitiesByChunk[result.Key] = new List<Entity>(result.Objects.Count);
-                if (result.Objects.Count > 0)
+                _entitiesByChunk[result.Key] = new List<Entity>(result.Objects?.Count ?? 0);
+                if (result.Objects is { Count: > 0 })
                 {
                     _pendingSpawnsByChunk[result.Key] = new PendingSpawnBatch
                     {
@@ -1028,8 +1019,11 @@ namespace Veilborne.Terrain
             while (remaining > 0 && _pendingSpawnOrder.Count > 0)
             {
                 var key = _pendingSpawnOrder.Dequeue();
-                if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch))
+                if (!_pendingSpawnsByChunk.TryGetValue(key, out var batch) || batch.Objects is not { } objects)
+                {
+                    _pendingSpawnsByChunk.Remove(key);
                     continue;
+                }
                 if (!_entitiesByChunk.TryGetValue(key, out var entities))
                 {
                     _pendingSpawnsByChunk.Remove(key);
@@ -1037,14 +1031,14 @@ namespace Veilborne.Terrain
                 }
 
                 int spawnCount = Math.Min(6, remaining);
-                while (spawnCount-- > 0 && batch.Cursor < batch.Objects.Count)
+                while (spawnCount-- > 0 && batch.Cursor < objects.Count)
                 {
-                    var obj = batch.Objects[batch.Cursor++];
+                    var obj = objects[batch.Cursor++];
                     entities.Add(CreateWorldObjectEntity(obj, key, 0, batch.BiomeId));
                     remaining--;
                 }
 
-                if (batch.Cursor < batch.Objects.Count)
+                if (batch.Cursor < objects.Count)
                     _pendingSpawnOrder.Enqueue(key);
                 else
                     _pendingSpawnsByChunk.Remove(key);
