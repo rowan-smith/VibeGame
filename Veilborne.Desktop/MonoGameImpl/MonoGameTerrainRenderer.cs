@@ -421,9 +421,9 @@ namespace Veilborne.MonoGameImpl
 
             if (reuseBuffers)
             {
-                vb = old.Vb;
+                vb = old!.Vb!;
                 vb.SetData(vertices, 0, vertexCount);
-                ib = old.Ib;
+                ib = old.Ib!;
                 // Index topology is fixed for same-size chunks; no need to re-upload indices
             }
             else
@@ -562,10 +562,10 @@ namespace Veilborne.MonoGameImpl
                 var lc = chunk.LayerConfig;
                 chunk.LayerMode = ChunkData.LayerBlendMode.SurfaceToSubsurface;
                 float rockCoverage = EstimateRockCoverage(chunk);
-                string? primaryTextureId = rockCoverage > 0.28f && !string.IsNullOrWhiteSpace(lc.SlopeTextureId)
+                string? layeredPrimaryId = rockCoverage > 0.28f && !string.IsNullOrWhiteSpace(lc.SlopeTextureId)
                     ? lc.SlopeTextureId
                     : lc.SurfaceTextureId;
-                chunk.PrimaryTexture = LoadTexture(primaryTextureId) ?? GetFallbackTexture();
+                chunk.PrimaryTexture = LoadTexture(layeredPrimaryId) ?? GetFallbackTexture();
                 chunk.SecondaryTexture = LoadTexture(lc.SubsurfaceTextureId);
                 // Keep lighting consistent across chunk state transitions.
                 chunk.PrimaryLightingModifier = 1f;
