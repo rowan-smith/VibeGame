@@ -63,7 +63,7 @@ namespace Veilborne.GameFlow
             terrainStreaming.ProcessPendingMeshBuilds();
 
             // Drain async install queues aggressively during warmup (one pump/frame stalls at ~94%).
-            const int maxPumpRounds = 8;
+            const int maxPumpRounds = 12;
             for (int round = 0; round < maxPumpRounds; round++)
             {
                 if (PumpTask is { IsCompleted: false })
@@ -73,6 +73,7 @@ namespace Veilborne.GameFlow
 
                 int loadedBefore = terrainStreaming.GetLoadingProgress().LoadedChunks;
                 PumpTask = terrainStreaming.PumpAsyncJobs();
+                terrainStreaming.ProcessPendingMeshBuilds();
                 int loadedAfter = terrainStreaming.GetLoadingProgress().LoadedChunks;
                 if (loadedBefore == loadedAfter && round > 0)
                     break;

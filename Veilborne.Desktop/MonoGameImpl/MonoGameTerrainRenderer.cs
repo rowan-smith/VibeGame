@@ -348,12 +348,13 @@ namespace Veilborne.MonoGameImpl
                 ? ChunkData.LayerBlendMode.SurfaceToSubsurface
                 : ChunkData.LayerBlendMode.None;
 
-            // Per-vertex biome merge weights from world-position sampling (organic transitions).
+            // Corner-interpolated biome merge weights (4 samples) — fast enough for loading warmup.
             float[,]? mergeMap = null;
             IBiome? mergeBiome = null;
             if (_biomeProvider is SimpleBiomeProvider simple)
             {
-                (mergeMap, mergeBiome, _) = BiomeSampling.BuildVertexMergeMap(
+                mergeMap = BiomeSampling.BuildVertexBlendMap(simple, null!, origin, width, depth, tileSize);
+                (_, _, _, _, _, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
                     simple, null!, origin, width, depth, tileSize);
             }
             bool hasBiomeMerge = mergeMap != null;

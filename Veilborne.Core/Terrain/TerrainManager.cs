@@ -755,7 +755,7 @@ namespace Veilborne.Terrain
         public void ProcessBuildQueueOnly()
         {
             int budget = _isWarmupMode
-                ? Math.Max(1, _cfg.MaxMeshBuildsPerFrame * 3)
+                ? Math.Max(12, _cfg.MaxMeshBuildsPerFrame * 4)
                 : Math.Max(1, _cfg.MaxMeshBuildsPerFrame);
             _renderer.ProcessBuildQueue(budget);
         }
