@@ -42,7 +42,7 @@ namespace Veilborne.Terrain
         private const int MaxTerrainEditsQueued = 16;
         private const int MaxEditableChunkInstallsPerFrame = 1;
         private const int MaxEditableConcurrentJobs = 2;
-        private const int MaxEditableConcurrentJobsWarmup = 6;
+        private const int MaxEditableConcurrentJobsWarmup = 12;
         private readonly object _lock = new();
         private int _lastDesiredChunkCount;
         private bool _isWarmupMode;
@@ -376,9 +376,7 @@ namespace Veilborne.Terrain
 
             float[,]? mergeMap = null;
             if (hasMerge && _biomeProvider is SimpleBiomeProvider simple)
-            {
-                (mergeMap, _, _) = BiomeSampling.BuildVertexMergeMap(simple, _terrainGen, chunk.Origin, w, h, TileSize);
-            }
+                mergeMap = BiomeSampling.BuildVertexBlendMap(simple, _terrainGen, chunk.Origin, w, h, TileSize);
 
             for (int z = 0; z < h; z++)
             for (int x = 0; x < w; x++)

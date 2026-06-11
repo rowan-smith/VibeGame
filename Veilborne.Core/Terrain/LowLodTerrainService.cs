@@ -196,7 +196,7 @@ namespace Veilborne.Terrain
             _lastDesiredChunkCount = _desiredKeysScratch.Count;
         }
 
-        public async Task PumpAsyncJobs(int maxInstallsPerFrame = int.MaxValue)
+        public Task PumpAsyncJobs(int maxInstallsPerFrame = int.MaxValue, bool warmupMode = false)
         {
             int installs = 0;
             while (_completed.TryDequeue(out var item))
@@ -221,9 +221,10 @@ namespace Veilborne.Terrain
                 };
                 _biomeByChunk[item.key] = item.biome;
                 installs++;
-                if (installs >= maxInstallsPerFrame) break;
-                await Task.Yield();
+                if (!warmupMode && installs >= maxInstallsPerFrame)
+                    break;
             }
+            return Task.CompletedTask;
         }
 
         public void Render(CameraComponent camera, HashSet<(int cx, int cz)>? exclude = null)
@@ -314,10 +315,14 @@ namespace Veilborne.Terrain
             float[,]? mergeMap = null;
             if (_biomeProvider is SimpleBiomeProvider simpleProvider)
             {
-                (mergeMap, var mergeBiome, effectiveMaxMerge) = BiomeSampling.BuildVertexMergeMap(
+                var (_, _, _, _, maxMerge, mergeBiome) = BiomeSampling.ResolveCornerCrossfade(
                     simpleProvider, _terrainGen, origin, w, h, TileSize);
-                if (mergeBiome is not null && effectiveMaxMerge > 0.001f)
+                if (mergeBiome is not null && maxMerge > 0.001f)
+                {
                     effectiveMerge = mergeBiome.Data;
+                    effectiveMaxMerge = maxMerge;
+                }
+                mergeMap = BiomeSampling.BuildVertexBlendMap(simpleProvider, _terrainGen, origin, w, h, TileSize);
             }
 
             bool hasMerge = effectiveMerge != null && effectiveMaxMerge > 0.001f && mergeMap != null;

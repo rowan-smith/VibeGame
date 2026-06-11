@@ -22,8 +22,8 @@
                            "MaxLowLodChunkUpdatesPerFrame":  2,
                            "MaxReadOnlyInstallsPerFrame":  2,
                            "MaxLowLodInstallsPerFrame":  2,
-                           "MaxReadOnlyConcurrentJobs":  6,
-                           "MaxLowLodConcurrentJobs":  6,
+                           "MaxReadOnlyConcurrentJobs":  10,
+                           "MaxLowLodConcurrentJobs":  8,
                            "MaxTerrainDrawDistance":  900.0,
                            "SecondaryPassDistanceScale":  0.30
                        },

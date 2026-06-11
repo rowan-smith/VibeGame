@@ -539,7 +539,7 @@ namespace Veilborne.Terrain
             // During warmup (loading screen), allow 3x budget to converge faster.
             int uploadBudget = _cfg.MaxMeshBuildsPerFrame;
             if (_isWarmupMode)
-                uploadBudget = Math.Max(uploadBudget, uploadBudget * 3);
+                uploadBudget = Math.Max(uploadBudget * 4, 12);
             else if (perfDeficit > 0.10f)
                 uploadBudget = Math.Max(1, uploadBudget - 1);
             if (!_isWarmupMode && anyEditableDirty && perfDeficit < 0.20f)
@@ -748,7 +748,7 @@ namespace Veilborne.Terrain
                 int lodInstallBudget = _isWarmupMode
                     ? int.MaxValue
                     : Math.Max(1, _cfg.MaxLowLodInstallsPerFrame);
-                await _lowLodRing.PumpAsyncJobs(lodInstallBudget);
+                await _lowLodRing.PumpAsyncJobs(lodInstallBudget, _isWarmupMode);
             }
         }
 
@@ -785,12 +785,18 @@ namespace Veilborne.Terrain
             int desiredPlayable = desiredEditable + desiredReadOnly;
             int loadedPlayable = loadedEditable + loadedReadOnly;
 
+            // Treat in-flight generation as partial progress so the bar does not stall at ~94%
+            // when entity spawning finishes before the last playable chunks land.
+            float effectiveLoaded = loadedPlayable + generatingPlayable * 0.9f;
             float chunkProgress = desiredPlayable > 0
-                ? Math.Clamp(loadedPlayable / (float)desiredPlayable, 0f, 1f)
+                ? Math.Clamp(effectiveLoaded / (float)desiredPlayable, 0f, 1f)
                 : 1f;
-            float entityProgress = pendingSpawnObjects <= 0 ? 1f : 0f;
-            float progress = chunkProgress * 0.88f + entityProgress * 0.12f;
-            if (generatingPlayable == 0 && pendingSpawnObjects == 0 && loadedPlayable >= desiredPlayable)
+            bool playableReady = generatingPlayable == 0 && loadedPlayable >= desiredPlayable;
+            float entityProgress = !playableReady
+                ? 0f
+                : (pendingSpawnObjects <= 0 ? 1f : 0.6f);
+            float progress = chunkProgress * 0.92f + entityProgress * 0.08f;
+            if (playableReady && pendingSpawnObjects == 0)
                 progress = 1f;
 
             string stage;
@@ -830,6 +836,16 @@ namespace Veilborne.Terrain
         public void SetWarmupMode(bool enabled)
         {
             _isWarmupMode = enabled;
+            int roJobs = enabled
+                ? Math.Max(12, _cfg.MaxReadOnlyConcurrentJobs * 2)
+                : Math.Max(1, _cfg.MaxReadOnlyConcurrentJobs);
+            _readOnlyRing.MaxConcurrentJobs = roJobs;
+            if (_lowLodRing is not null)
+            {
+                _lowLodRing.MaxConcurrentJobs = enabled
+                    ? Math.Max(10, _cfg.MaxLowLodConcurrentJobs * 2)
+                    : Math.Max(1, _cfg.MaxLowLodConcurrentJobs);
+            }
         }
 
         public IEnumerable<(Vector3 center, Vector3 size, Vector4 color)> EnumerateDebugChunkBounds()
