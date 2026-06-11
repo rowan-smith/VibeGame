@@ -33,9 +33,55 @@
                                                   "CraterDepth":  2.5,
                                                   "CraterRimHeight":  1.0,
                                                   "OverhangStrength":  0.3,
-                                                  "OverhangFrequency":  1.5
+                                                  "OverhangFrequency":  1.5,
+                                                  "MicroDetailFrequency":  2.8,
+                                                  "MicroDetailAmplitude":  0.12
                                               }
                        },
+    "NoiseLayers":  [
+                        {
+                            "Type":  "Billow",
+                            "Frequency":  0.4,
+                            "Amplitude":  0.3,
+                            "Octaves":  3,
+                            "Persistence":  0.45,
+                            "Lacunarity":  2.0,
+                            "BlendMode":  "Add",
+                            "Seed":  14,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Ridge",
+                            "Frequency":  2.5,
+                            "Amplitude":  0.45,
+                            "Octaves":  3,
+                            "Persistence":  0.55,
+                            "Lacunarity":  2.6,
+                            "BlendMode":  "Max",
+                            "Seed":  26,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Value",
+                            "Frequency":  3.2,
+                            "Amplitude":  0.1,
+                            "Octaves":  2,
+                            "Persistence":  0.35,
+                            "BlendMode":  "Screen",
+                            "Seed":  38,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Perlin",
+                            "Frequency":  0.8,
+                            "Amplitude":  0.2,
+                            "Octaves":  2,
+                            "Persistence":  0.4,
+                            "BlendMode":  "Add",
+                            "Seed":  52,
+                            "Enabled":  true
+                        }
+                    ],
     "ColorPalette":  {
                          "Primary":  {
                                          "R":  15,

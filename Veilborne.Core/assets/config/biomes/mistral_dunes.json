@@ -34,6 +34,49 @@
                                                   "MicroDetailAmplitude":  0.15
                                               }
                        },
+    "NoiseLayers":  [
+                        {
+                            "Type":  "Billow",
+                            "Frequency":  1.5,
+                            "Amplitude":  0.5,
+                            "Octaves":  3,
+                            "Persistence":  0.35,
+                            "Lacunarity":  1.8,
+                            "BlendMode":  "Add",
+                            "Seed":  12,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Value",
+                            "Frequency":  4.5,
+                            "Amplitude":  0.12,
+                            "Octaves":  2,
+                            "Persistence":  0.3,
+                            "Lacunarity":  2.0,
+                            "BlendMode":  "Add",
+                            "Seed":  28,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Perlin",
+                            "Frequency":  0.9,
+                            "Amplitude":  0.25,
+                            "Octaves":  3,
+                            "Persistence":  0.35,
+                            "BlendMode":  "Screen",
+                            "Seed":  44,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Worley",
+                            "Frequency":  0.8,
+                            "Amplitude":  0.35,
+                            "Octaves":  1,
+                            "BlendMode":  "Max",
+                            "Seed":  62,
+                            "Enabled":  true
+                        }
+                    ],
     "ColorPalette":  {
                          "Primary":  {
                                          "R":  237,

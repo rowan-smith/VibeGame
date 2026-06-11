@@ -22,9 +22,72 @@
                                                   "Frequency":  0.7,
                                                   "Persistence":  0.3,
                                                   "Lacunarity":  1.8,
-                                                  "Detail":  0.35
+                                                  "Detail":  0.35,
+                                                  "RidgeWeight":  0.45,
+                                                  "WarpStrength":  0.35,
+                                                  "WarpFrequency":  0.5,
+                                                  "DuneFrequency":  2.0,
+                                                  "DuneAmplitude":  1.2,
+                                                  "DuneDirection":  120,
+                                                  "ErosionStrength":  0.4,
+                                                  "MicroDetailFrequency":  4.0,
+                                                  "MicroDetailAmplitude":  0.18
                                               }
                        },
+    "NoiseLayers":  [
+                        {
+                            "Type":  "Billow",
+                            "Frequency":  1.2,
+                            "Amplitude":  0.45,
+                            "Octaves":  3,
+                            "Persistence":  0.35,
+                            "Lacunarity":  1.9,
+                            "BlendMode":  "Add",
+                            "Seed":  16,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Ridge",
+                            "Frequency":  2.2,
+                            "Amplitude":  0.4,
+                            "Octaves":  3,
+                            "Persistence":  0.45,
+                            "Lacunarity":  2.4,
+                            "BlendMode":  "Max",
+                            "Seed":  32,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Perlin",
+                            "Frequency":  0.5,
+                            "Amplitude":  0.2,
+                            "Octaves":  2,
+                            "Persistence":  0.3,
+                            "Lacunarity":  1.7,
+                            "BlendMode":  "Add",
+                            "Seed":  48,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Worley",
+                            "Frequency":  0.7,
+                            "Amplitude":  0.5,
+                            "Octaves":  1,
+                            "BlendMode":  "Max",
+                            "Seed":  64,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Value",
+                            "Frequency":  5.0,
+                            "Amplitude":  0.14,
+                            "Octaves":  2,
+                            "Persistence":  0.35,
+                            "BlendMode":  "Screen",
+                            "Seed":  80,
+                            "Enabled":  true
+                        }
+                    ],
     "ColorPalette":  {
                          "Primary":  {
                                          "R":  238,

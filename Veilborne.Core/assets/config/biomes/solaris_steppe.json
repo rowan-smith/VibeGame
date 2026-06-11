@@ -44,6 +44,47 @@
                             "Offset":  0.0,
                             "Seed":  42,
                             "Enabled":  true
+                        },
+                        {
+                            "Type":  "Perlin",
+                            "Frequency":  0.6,
+                            "Amplitude":  0.3,
+                            "Octaves":  3,
+                            "Persistence":  0.4,
+                            "Lacunarity":  2.0,
+                            "BlendMode":  "Add",
+                            "Seed":  18,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Value",
+                            "Frequency":  4.0,
+                            "Amplitude":  0.1,
+                            "Octaves":  2,
+                            "Persistence":  0.35,
+                            "BlendMode":  "Screen",
+                            "Seed":  36,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Ridge",
+                            "Frequency":  1.2,
+                            "Amplitude":  0.15,
+                            "Octaves":  2,
+                            "Persistence":  0.4,
+                            "Lacunarity":  2.1,
+                            "BlendMode":  "Add",
+                            "Seed":  54,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Worley",
+                            "Frequency":  0.5,
+                            "Amplitude":  0.25,
+                            "Octaves":  1,
+                            "BlendMode":  "Max",
+                            "Seed":  72,
+                            "Enabled":  true
                         }
                     ],
     "ColorPalette":  {

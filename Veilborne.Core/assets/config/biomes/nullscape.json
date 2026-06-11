@@ -22,9 +22,56 @@
                                                   "Frequency":  0.3,
                                                   "Persistence":  0.2,
                                                   "Lacunarity":  1.5,
-                                                  "Detail":  0.15
+                                                  "Detail":  0.15,
+                                                  "RidgeWeight":  0.7,
+                                                  "WarpStrength":  0.8,
+                                                  "WarpFrequency":  1.2,
+                                                  "TerracingStrength":  0.6,
+                                                  "TerracingSteps":  4
                                               }
                        },
+    "NoiseLayers":  [
+                        {
+                            "Type":  "Worley",
+                            "Frequency":  0.6,
+                            "Amplitude":  1.2,
+                            "Octaves":  1,
+                            "BlendMode":  "Max",
+                            "Seed":  0,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Value",
+                            "Frequency":  5.0,
+                            "Amplitude":  0.35,
+                            "Octaves":  3,
+                            "Persistence":  0.5,
+                            "Lacunarity":  2.5,
+                            "BlendMode":  "Add",
+                            "Seed":  99,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Ridge",
+                            "Frequency":  2.5,
+                            "Amplitude":  0.4,
+                            "Octaves":  2,
+                            "Persistence":  0.4,
+                            "BlendMode":  "Screen",
+                            "Seed":  77,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Perlin",
+                            "Frequency":  1.5,
+                            "Amplitude":  -0.5,
+                            "Octaves":  2,
+                            "Persistence":  0.3,
+                            "BlendMode":  "Min",
+                            "Seed":  88,
+                            "Enabled":  true
+                        }
+                    ],
     "ColorPalette":  {
                          "Primary":  {
                                          "R":  0,

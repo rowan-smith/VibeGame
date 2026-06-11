@@ -26,9 +26,62 @@
                                                   "RidgeWeight":  0.85,
                                                   "WarpStrength":  0.3,
                                                   "WarpFrequency":  0.5,
-                                                  "ErosionStrength":  0.15
+                                                  "ErosionStrength":  0.15,
+                                                  "OverhangStrength":  0.55,
+                                                  "OverhangFrequency":  1.8,
+                                                  "TerracingStrength":  0.25,
+                                                  "TerracingSteps":  5,
+                                                  "ValleyDepthBias":  -0.3,
+                                                  "MicroDetailFrequency":  2.5,
+                                                  "MicroDetailAmplitude":  0.15
                                               }
                        },
+    "NoiseLayers":  [
+                        {
+                            "Type":  "Ridge",
+                            "Frequency":  1.8,
+                            "Amplitude":  0.85,
+                            "Octaves":  5,
+                            "Persistence":  0.65,
+                            "Lacunarity":  2.8,
+                            "BlendMode":  "Max",
+                            "Seed":  15,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Value",
+                            "Frequency":  1.0,
+                            "Amplitude":  -0.25,
+                            "Octaves":  3,
+                            "Persistence":  0.45,
+                            "Lacunarity":  2.0,
+                            "BlendMode":  "Min",
+                            "Offset":  0.1,
+                            "Seed":  27,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Perlin",
+                            "Frequency":  0.6,
+                            "Amplitude":  0.35,
+                            "Octaves":  3,
+                            "Persistence":  0.5,
+                            "Lacunarity":  2.2,
+                            "BlendMode":  "Add",
+                            "Seed":  39,
+                            "Enabled":  true
+                        },
+                        {
+                            "Type":  "Ridge",
+                            "Frequency":  3.0,
+                            "Amplitude":  0.2,
+                            "Octaves":  2,
+                            "Persistence":  0.4,
+                            "BlendMode":  "Screen",
+                            "Seed":  55,
+                            "Enabled":  true
+                        }
+                    ],
     "ColorPalette":  {
                          "Primary":  {
                                          "R":  192,
