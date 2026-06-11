@@ -144,6 +144,8 @@ namespace Veilborne.Ecs
             {
                 _perfMonitor.RecordCustomMetric("Chunks", mtr.LastChunksDrawn);
                 _perfMonitor.RecordCustomMetric("DrawCalls", mtr.LastDrawCalls);
+                _perfMonitor.RecordCustomMetric("TexBatches", mtr.LastTextureBatches);
+                _perfMonitor.RecordCustomMetric("EffectApply", mtr.LastEffectApplies);
                 _perfMonitor.RecordCustomMetric("2ndPass", mtr.LastSecondaryPasses);
                 _perfMonitor.RecordCustomMetric("MeshBuilds", mtr.LastMeshBuilds);
                 _perfMonitor.RecordCustomMetric("Cached", mtr.TotalCachedChunks);
